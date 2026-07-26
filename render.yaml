@@ -132,6 +132,25 @@ services:
           name: fatexia-redis
           type: keyvalue
           property: connectionString
+      # The tracker never validates a JWT — it serves /click redirects and
+      # server-to-server postbacks. These are here because env.ts runs
+      # assertSecureProductionSecrets() at module load, and tracking.ts imports env,
+      # so without them the service dies at boot with "Refusing to start in
+      # production with missing or default secret(s)".
+      #
+      # Pulled from the API rather than generated separately: two independently
+      # generated pairs would work today only because nothing here reads a token, and
+      # would break silently the moment /postback needs to.
+      - key: JWT_ACCESS_SECRET
+        fromService:
+          name: fatexia-api
+          type: web
+          envVarKey: JWT_ACCESS_SECRET
+      - key: JWT_REFRESH_SECRET
+        fromService:
+          name: fatexia-api
+          type: web
+          envVarKey: JWT_REFRESH_SECRET
       # The hop count, not "true" — and it matters more here than on the API. req.ip
       # on this service feeds the geo lookup, the stored click row and the
       # datacenter/ASN fraud score. Trusting the full X-Forwarded-For chain would let
