@@ -32,7 +32,10 @@ services:
   - type: web
     name: fatexia-api
     runtime: node
-    plan: starter            # NOT free: see the note on realtime below
+    # Free while the deployment is being wired up. Free web services sleep after
+    # ~15 minutes idle and take up to a minute to wake, so the first admin request
+    # after a quiet spell is slow — acceptable for a panel, not for redirects.
+    plan: free
     rootDir: backend
     # `--include=dev` is required, not optional. NODE_ENV=production is set below and
     # Render exposes env vars during the build, so a plain `npm ci` would omit
@@ -95,14 +98,18 @@ services:
   # ---------------------------------------------------------------------------
   # Tracker — the public /click redirect path.
   #
-  # Deliberately never on the free plan. Free services sleep after ~15 minutes of
-  # inactivity and take up to a minute to wake; a click redirect that stalls that
-  # long is a lost conversion and, at volume, a lost advertiser relationship.
+  # >>> MUST BE MOVED TO `starter` BEFORE ANY REAL CLICK TRAFFIC. <<<
+  #
+  # Free services sleep after ~15 minutes of inactivity and take up to a minute to
+  # wake. A click redirect that stalls that long is a lost conversion and, at volume,
+  # a lost advertiser relationship. Free is only tolerable right now because nothing
+  # can convert yet — /sl and /postback are not built, so no affiliate is sending
+  # traffic. The day that changes, this line has to change with it.
   # ---------------------------------------------------------------------------
   - type: web
     name: fatexia-tracker
     runtime: node
-    plan: starter
+    plan: free
     rootDir: backend
     # `--include=dev` is required, not optional. NODE_ENV=production is set below and
     # Render exposes env vars during the build, so a plain `npm ci` would omit
