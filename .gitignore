@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Environment / secrets — never commit these
+.env
+.env.*
+!.env.example
+
+# MaxMind GeoLite2 databases.
+#
+# Excluded for two reasons, both hard blockers:
+#   1. Licence — the GeoLite2 EULA does not permit redistribution, so these must not
+#      sit in a repository, public or private.
+#   2. Size — GeoLite2-City.mmdb alone is ~57 MB. GitHub warns above 50 MB and
+#      rejects above 100 MB, and because the files are replaced every month the
+#      history would grow by that much each time.
+#
+# They are fetched at build time instead, using a MaxMind licence key held as a
+# secret. See DEPLOYMENT.md. Their absence degrades gracefully — geo/ASN lookups
+# return unknown rather than crashing (see geo-source.ts).
+# A pattern containing a slash is anchored to this file's directory, so `data/geoip/`
+# alone would NOT match `backend/data/geoip/` — which is exactly where they live. The
+# `**/` prefix matches at any depth, and the bare `*.mmdb` (no slash, so also any
+# depth) is the backstop that catches a database downloaded anywhere else.
+**/data/geoip/
+*.mmdb
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editor / OS
+.claude/settings.local.json
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Test + tooling artefacts
+coverage/
+playwright-report/
+test-results/
+*.png
+!frontend/apps/public/public/**/*.png
+
+# Local credentials scratch file
+credentails.md

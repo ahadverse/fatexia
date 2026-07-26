@@ -1,0 +1,149 @@
+/* Theme tokens — locked here, derive every color from these. HSL triples (no
+   `hsl()` wrapper) so Tailwind can apply alpha via `hsl(var(--x) / <alpha-value>)`.
+   Dark is the primary design direction (see PLAN-admin.md: "Trakaff-style dark
+   dashboard"); the .light block below exists only so the theme toggle isn't a
+   no-op, not as an equally-designed alternative.
+
+   The --primary/--ring hue (243, indigo/violet) is a placeholder — swap for
+   Fatexia's real brand color once one exists; nothing else depends on this
+   specific hue. */
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
+:root {
+  --background: 240 10% 6%;
+  --foreground: 220 14% 92%;
+
+  --card: 240 8% 10%;
+  --card-foreground: 220 14% 92%;
+
+  --popover: 240 8% 11%;
+  --popover-foreground: 220 14% 92%;
+
+  --border: 240 6% 18%;
+  --input: 240 6% 18%;
+  --ring: 243 75% 65%;
+
+  --primary: 243 75% 65%;
+  --primary-foreground: 240 10% 98%;
+
+  --secondary: 240 6% 16%;
+  --secondary-foreground: 220 14% 92%;
+
+  --muted: 240 6% 14%;
+  --muted-foreground: 220 9% 60%;
+
+  --accent: 240 6% 16%;
+  --accent-foreground: 220 14% 92%;
+
+  --destructive: 0 72% 60%;
+  --destructive-foreground: 240 10% 98%;
+
+  --success: 142 64% 45%;
+  --success-foreground: 240 10% 98%;
+
+  --warning: 38 92% 55%;
+  --warning-foreground: 240 10% 10%;
+
+  --info: 199 89% 55%;
+  --info-foreground: 240 10% 98%;
+
+  /* Data-visualisation series colors. Literal hex rather than HSL triples because
+     these are exact validated values, not derived shades — the pair was checked
+     against the real card surface for lightness band, chroma, colorblind
+     separation, normal-vision separation and 3:1 contrast, in both modes. Re-run
+     that validation before changing either value; do not hand-tune them. */
+  --chart-1: #3987e5;
+  --chart-2: #d95926;
+
+  --radius: 0.5rem;
+}
+
+.light {
+  --background: 0 0% 100%;
+  --foreground: 240 10% 12%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 12%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 12%;
+
+  --border: 240 6% 88%;
+  --input: 240 6% 88%;
+  --ring: 243 75% 55%;
+
+  --primary: 243 75% 55%;
+  --primary-foreground: 240 10% 98%;
+
+  --secondary: 240 6% 95%;
+  --secondary-foreground: 240 10% 12%;
+
+  --muted: 240 6% 95%;
+  --muted-foreground: 220 9% 40%;
+
+  --accent: 240 6% 93%;
+  --accent-foreground: 240 10% 12%;
+
+  --destructive: 0 72% 50%;
+  --destructive-foreground: 240 10% 98%;
+
+  --success: 142 64% 35%;
+  --success-foreground: 240 10% 98%;
+
+  --warning: 38 92% 45%;
+  --warning-foreground: 240 10% 10%;
+
+  --info: 199 89% 45%;
+  --info-foreground: 240 10% 98%;
+
+  /* Same two hues re-stepped for the light surface — not an automatic flip of the
+     dark values. Validated separately against #ffffff. */
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--border));
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.5);
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

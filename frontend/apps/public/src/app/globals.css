@@ -1,0 +1,395 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  The shared @fatexia/ui theme.css sets `html, body, #root { height:100%; overflow:hidden }`
+  because the dashboard apps scroll inside their own AppShell. This is a marketing site —
+  the document itself must scroll. theme.css is imported before this file in layout.tsx,
+  so these overrides win at equal specificity.
+*/
+/* !important so this always beats theme.css's `overflow:hidden`, regardless of how
+   Next's dev HMR or the production bundler orders the two stylesheets. */
+html {
+  height: auto !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  scroll-behavior: smooth;
+  /* Offset anchor jumps for the sticky header. */
+  scroll-padding-top: 5rem;
+}
+
+body {
+  height: auto !important;
+  min-height: 100%;
+  overflow: visible !important;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: hsl(var(--primary) / 0.28);
+  color: hsl(var(--foreground));
+}
+
+/* Keep browser-autofilled fields on the dark theme instead of the default light fill
+   (Chrome/Safari force a pale yellow/blue background otherwise). */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-text-fill-color: hsl(var(--foreground)) !important;
+  -webkit-box-shadow: 0 0 0 1000px hsl(var(--background)) inset !important;
+  caret-color: hsl(var(--foreground));
+  border-color: hsl(var(--border));
+  /* Delay the fill transition effectively forever so the dark box-shadow sticks. */
+  transition: background-color 100000s ease-in-out 0s;
+}
+
+@layer components {
+  /* Page-width container used by every section. */
+  .container-page {
+    @apply mx-auto w-full max-w-6xl px-6;
+  }
+
+  /* Small uppercase label above section headings. */
+  .eyebrow {
+    @apply inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium uppercase tracking-wider text-muted-foreground backdrop-blur;
+  }
+}
+
+:root {
+  /* Brand is GREEN on the public site. The shared @fatexia/ui theme ships an indigo
+     --primary (the dashboards keep it); we override it here only, so text-primary,
+     rings, tags, focus states etc. all read green and match the gradient. */
+  /* !important so these beat theme.css's indigo :root tokens regardless of how the two
+     stylesheets are ordered in the bundle (same reason the scroll fix needs it). */
+  --primary: 152 68% 42% !important;
+  --primary-foreground: 150 40% 98% !important;
+  --ring: 152 68% 45% !important;
+
+  /* Signature brand gradient — teal → emerald → lime. The one advanced multi-stop
+     gradient everything else derives from, so the whole site reads as one system. */
+  --grad-brand: linear-gradient(115deg, hsl(170 82% 40%) 0%, hsl(150 76% 43%) 45%, hsl(96 66% 48%) 100%);
+  --grad-brand-bright: linear-gradient(115deg, hsl(170 88% 46%) 0%, hsl(148 84% 50%) 45%, hsl(96 74% 55%) 100%);
+}
+
+@layer utilities {
+  /* Gradient text used on hero/section headlines. */
+  .text-gradient {
+    background-image: linear-gradient(120deg, hsl(var(--foreground)) 0%, hsl(150 25% 96%) 45%, hsl(150 70% 72%) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .text-gradient-primary {
+    background-image: var(--grad-brand-bright);
+    background-size: 220% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: gradient-pan 7s linear infinite;
+  }
+
+  .text-brand {
+    background-image: var(--grad-brand-bright);
+    background-size: 220% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: gradient-pan 7s linear infinite;
+  }
+
+  /* Solid brand-gradient fill (buttons, accent tiles). */
+  .bg-brand {
+    background-image: var(--grad-brand);
+  }
+
+  /* Full-perimeter gradient border via mask compositing. */
+  .border-brand {
+    position: relative;
+  }
+  .border-brand::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: var(--grad-brand);
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0.55;
+    pointer-events: none;
+  }
+
+  /* Top-lit sheen so cards read as raised surfaces, not flat rectangles. */
+  .sheen {
+    background-image: linear-gradient(180deg, hsl(0 0% 100% / 0.05) 0%, hsl(0 0% 100% / 0.01) 22%, transparent 55%);
+  }
+
+  /* Aurora backdrop — layered multi-colour radial glows for section/hero depth. */
+  .aurora {
+    background:
+      radial-gradient(45% 55% at 15% 20%, hsl(168 82% 40% / 0.30), transparent 70%),
+      radial-gradient(40% 50% at 85% 15%, hsl(146 78% 42% / 0.24), transparent 70%),
+      radial-gradient(50% 60% at 60% 90%, hsl(96 80% 46% / 0.20), transparent 70%);
+  }
+
+  /* Gradient hairline divider. */
+  .rule-gradient {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--primary) / 0.6), transparent);
+  }
+
+  /* Subtle grid overlay for section backgrounds. */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, hsl(var(--border) / 0.5) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--border) / 0.5) 1px, transparent 1px);
+    background-size: 56px 56px;
+  }
+
+  .bg-dots {
+    background-image: radial-gradient(hsl(var(--border) / 0.8) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+
+  /* Fade a decorative layer out toward the edges. */
+  .mask-fade {
+    -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 40%, transparent 100%);
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 40%, transparent 100%);
+  }
+
+  /* Card that lifts and glows on hover. */
+  .card-hover {
+    @apply transition-all duration-300;
+  }
+  .card-hover:hover {
+    transform: translateY(-4px);
+    border-color: hsl(var(--primary) / 0.5);
+    box-shadow: 0 20px 45px -20px hsl(var(--primary) / 0.45);
+  }
+
+  /* Thin gradient border ring for feature/pricing cards. */
+  .ring-gradient {
+    position: relative;
+  }
+  .ring-gradient::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(140deg, hsl(var(--primary) / 0.6), transparent 40%);
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+}
+
+/* Reveal is a no-op for visibility — content is always fully rendered. (Kept as a
+   hook so the <Reveal> wrapper doesn't need removing everywhere; a future entrance
+   effect must never gate visibility again.) */
+.reveal {
+  opacity: 1 !important;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.animate-marquee {
+  animation: marquee 32s linear infinite;
+}
+
+/* Vertical marquee for the hero tracker feed. */
+@keyframes marquee-y {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
+  }
+}
+.animate-marquee-y {
+  animation: marquee-y 22s linear infinite;
+}
+
+/* Breathing bars for the hero mini-chart. */
+@keyframes bar-breathe {
+  0%,
+  100% {
+    transform: scaleY(0.55);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+.animate-bar {
+  transform-origin: bottom;
+  animation: bar-breathe 2.8s ease-in-out infinite;
+}
+
+/* Slow conic sweep behind the hero visual. */
+@keyframes spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.animate-spin-slow {
+  animation: spin-slow 24s linear infinite;
+}
+
+/* Moving sheen across brand-gradient text. */
+@keyframes gradient-pan {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 220% 50%;
+  }
+}
+
+/* Slow drifting/breathing aurora backdrop. */
+.aurora {
+  animation: aurora-drift 20s ease-in-out infinite alternate;
+}
+@keyframes aurora-drift {
+  from {
+    transform: translate3d(-2%, -1%, 0) scale(1);
+    opacity: 0.85;
+  }
+  to {
+    transform: translate3d(2%, 2%, 0) scale(1.08);
+    opacity: 1;
+  }
+}
+
+/* Light sweep across buttons on hover. */
+.btn-shine::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 30%, hsl(0 0% 100% / 0.22) 50%, transparent 70%);
+  transform: translateX(-130%);
+  pointer-events: none;
+}
+.btn-shine:hover::after {
+  transform: translateX(130%);
+  transition: transform 0.75s ease;
+}
+
+/* Pulsing halo on the eyebrow dot. */
+.dot-pulse {
+  animation: dot-pulse 2.4s ease-in-out infinite;
+}
+@keyframes dot-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 5px hsl(var(--primary) / 0);
+  }
+}
+
+/* Ambient falling colorful dollar signs (see DotRain.tsx). Fixed layer behind all
+   content. Each $ glows in its own colour, with an upward text-shadow trail so it
+   reads as a falling comet of money. */
+.dot-rain__drop {
+  position: absolute;
+  top: 0;
+  font-weight: 800;
+  line-height: 1;
+  user-select: none;
+  color: hsl(var(--dot-color));
+  text-shadow: 0 0 8px hsl(var(--dot-color) / 0.85);
+  animation-name: dot-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+}
+
+/* Comet tail — a fading streak trailing above each falling $ (opposite its motion). */
+.dot-rain__drop::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 45%;
+  width: 2px;
+  height: var(--tail-h, 30px);
+  transform: translateX(-50%);
+  background: linear-gradient(to top, hsl(var(--dot-color) / 0.75), transparent);
+  border-radius: 9999px;
+}
+@keyframes dot-fall {
+  0% {
+    transform: translate3d(0, -12vh, 0);
+    opacity: 0;
+  }
+  8% {
+    opacity: var(--dot-op, 0.7);
+  }
+  92% {
+    opacity: var(--dot-op, 0.7);
+  }
+  100% {
+    transform: translate3d(var(--dot-drift, 0), 112vh, 0);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .reveal,
+  .reveal.is-visible {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+  }
+  .animate-float,
+  .animate-marquee,
+  .animate-marquee-y,
+  .animate-bar,
+  .animate-spin-slow,
+  .aurora,
+  .dot-pulse,
+  .text-brand,
+  .text-gradient-primary {
+    animation: none !important;
+  }
+  .btn-shine:hover::after {
+    transition: none !important;
+  }
+  .dot-rain {
+    display: none !important;
+  }
+}

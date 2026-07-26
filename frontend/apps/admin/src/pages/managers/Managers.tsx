@@ -1,0 +1,287 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Button,
+  DataTable,
+  FilterBar,
+  FilterField,
+  Input,
+  Modal,
+  PageHeader,
+  Select,
+  TableSkeleton,
+  Textarea,
+  type DataTableColumn,
+} from '@fatexia/ui';
+import type { Manager, ManagerRole, UserStatus } from '@fatexia/types';
+import { getManagers, updateManager, updateManagerStatus } from '../../lib/managers-api';
+import { runAction, useAsync } from '../../hooks/useAsync';
+import { date, dateTime } from '../../lib/format';
+import { StatusPill } from '../../components/StatusPill';
+
+const ROLE_LABELS: Record<ManagerRole, string> = {
+  GENERAL: 'General manager',
+  ACCOUNT: 'Account manager',
+  AFFILIATE: 'Affiliate manager',
+};
+
+interface EditState {
+  id: string;
+  fullName: string;
+  phone: string;
+  skype: string;
+  managerRole: ManagerRole;
+  defaultCommissionPercent: string;
+  reportsToId: string;
+  notes: string;
+}
+
+export interface ManagersProps {
+  /** Pins the list to one role — the nav has a page per manager type. */
+  role?: ManagerRole;
+  title?: string;
+  description?: string;
+}
+
+export function Managers({
+  role,
+  title = 'Managers',
+  description = 'Staff who share this portal at a lesser privilege than admin. Managers are scoped to their own affiliates and cannot reach integrations, staff management, payout batches or network settings.',
+}: ManagersProps) {
+  const navigate = useNavigate();
+  const [status, setStatus] = useState<UserStatus | ''>('');
+  const [search, setSearch] = useState('');
+  const [edit, setEdit] = useState<EditState | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const managers = useAsync(
+    () => getManagers({ managerRole: role, status: status || undefined, search: search || undefined }),
+    [role, status, search],
+  );
+
+  const managerName = (id: string | null) =>
+    id ? ((managers.data ?? []).find((manager) => manager.id === id)?.fullName ?? 'Unknown') : '—';
+
+  async function setManagerStatus(manager: Manager, next: UserStatus) {
+    await runAction(() => updateManagerStatus(manager.id, next), {
+      success: `${manager.fullName ?? manager.email} is now ${next.toLowerCase()}`,
+      onDone: managers.reload,
+    });
+  }
+
+  async function saveEdit() {
+    if (!edit) return;
+    setSaving(true);
+    const result = await runAction(
+      () =>
+        updateManager(edit.id, {
+          fullName: edit.fullName,
+          phone: edit.phone || undefined,
+          skype: edit.skype || undefined,
+          managerRole: edit.managerRole,
+          defaultCommissionPercent: Number(edit.defaultCommissionPercent) || 0,
+          reportsToId: edit.reportsToId || null,
+          notes: edit.notes || undefined,
+        }),
+      { success: 'Manager updated', onDone: managers.reload },
+    );
+    setSaving(false);
+    if (result) setEdit(null);
+  }
+
+  const columns: DataTableColumn<Manager>[] = [
+    {
+      key: 'name',
+      header: 'Manager',
+      render: (row) => (
+        <div>
+          <p className="text-card-foreground">{row.fullName ?? '—'}</p>
+          <p className="text-xs text-muted-foreground">{row.email}</p>
+        </div>
+      ),
+    },
+    { key: 'role', header: 'Role', render: (row) => ROLE_LABELS[row.managerRole] },
+    { key: 'reportsTo', header: 'Reports to', render: (row) => managerName(row.reportsToId) },
+    { key: 'affiliates', header: 'Affiliates', render: (row) => String(row.assignedAffiliateCount) },
+    { key: 'commission', header: 'Default commission', render: (row) => `${row.defaultCommissionPercent}%` },
+    { key: 'status', header: 'Status', render: (row) => <StatusPill status={row.status} /> },
+    { key: 'lastLogin', header: 'Last login', render: (row) => dateTime(row.lastLogin) },
+    { key: 'createdAt', header: 'Added', render: (row) => date(row.createdAt) },
+    {
+      key: 'actions',
+      header: '',
+      render: (row) => (
+        <div className="flex flex-wrap gap-1.5">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              setEdit({
+                id: row.id,
+                fullName: row.fullName ?? '',
+                phone: row.phone ?? '',
+                skype: row.skype ?? '',
+                managerRole: row.managerRole,
+                defaultCommissionPercent: String(row.defaultCommissionPercent),
+                reportsToId: row.reportsToId ?? '',
+                notes: row.notes ?? '',
+              })
+            }
+          >
+            Edit
+          </Button>
+          {row.status === 'ACTIVE' ? (
+            <Button size="sm" variant="destructive" onClick={() => setManagerStatus(row, 'BLOCKED')}>
+              Suspend
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => setManagerStatus(row, 'ACTIVE')}>
+              Reactivate
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title={title}
+        description={description}
+        actions={<Button onClick={() => navigate('/managers/create')}>Create manager</Button>}
+      />
+
+      <FilterBar>
+        <FilterField label="Search">
+          <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name or email" className="w-56" />
+        </FilterField>
+        <FilterField label="Status">
+          <Select value={status} onChange={(event) => setStatus(event.target.value as UserStatus | '')} className="w-40">
+            <option value="">All statuses</option>
+            <option value="ACTIVE">Active</option>
+            <option value="BLOCKED">Suspended</option>
+            <option value="INACTIVE">Inactive</option>
+          </Select>
+        </FilterField>
+      </FilterBar>
+
+      {managers.error && <p className="text-sm text-destructive">{managers.error}</p>}
+
+      {managers.loading ? (
+        <TableSkeleton columns={9} />
+      ) : (
+        <DataTable
+          columns={columns}
+          rows={managers.data ?? []}
+          getRowKey={(row) => row.id}
+          emptyMessage="No managers match these filters."
+        />
+      )}
+
+      <Modal open={!!edit} onOpenChange={(open) => !open && setEdit(null)} title="Edit manager" className="max-w-2xl">
+        {edit && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="text-xs font-medium text-muted-foreground">Full name</span>
+              <Input value={edit.fullName} onChange={(event) => setEdit({ ...edit, fullName: event.target.value })} className="mt-1" />
+            </label>
+            <label className="block">
+              <span className="text-xs font-medium text-muted-foreground">Role</span>
+              <Select
+                value={edit.managerRole}
+                onChange={(event) => setEdit({ ...edit, managerRole: event.target.value as ManagerRole })}
+                className="mt-1"
+              >
+                {(Object.keys(ROLE_LABELS) as ManagerRole[]).map((option) => (
+                  <option key={option} value={option}>
+                    {ROLE_LABELS[option]}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <label className="block">
+              <span className="text-xs font-medium text-muted-foreground">Phone</span>
+              <Input value={edit.phone} onChange={(event) => setEdit({ ...edit, phone: event.target.value })} className="mt-1" />
+            </label>
+            <label className="block">
+              <span className="text-xs font-medium text-muted-foreground">Skype</span>
+              <Input value={edit.skype} onChange={(event) => setEdit({ ...edit, skype: event.target.value })} className="mt-1" />
+            </label>
+            <label className="block">
+              <span className="text-xs font-medium text-muted-foreground">Default commission %</span>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                value={edit.defaultCommissionPercent}
+                onChange={(event) => setEdit({ ...edit, defaultCommissionPercent: event.target.value })}
+                className="mt-1"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-medium text-muted-foreground">Reports to</span>
+              <Select
+                value={edit.reportsToId}
+                onChange={(event) => setEdit({ ...edit, reportsToId: event.target.value })}
+                className="mt-1"
+              >
+                <option value="">Nobody</option>
+                {(managers.data ?? [])
+                  // A manager reporting to themselves would make the org chart cyclic.
+                  .filter((manager) => manager.id !== edit.id)
+                  .map((manager) => (
+                    <option key={manager.id} value={manager.id}>
+                      {manager.fullName ?? manager.email}
+                    </option>
+                  ))}
+              </Select>
+            </label>
+            <label className="block sm:col-span-2">
+              <span className="text-xs font-medium text-muted-foreground">Notes</span>
+              <Textarea rows={3} value={edit.notes} onChange={(event) => setEdit({ ...edit, notes: event.target.value })} className="mt-1" />
+            </label>
+            <div className="flex justify-end gap-2 sm:col-span-2">
+              <Button variant="outline" onClick={() => setEdit(null)}>
+                Cancel
+              </Button>
+              <Button disabled={saving} onClick={saveEdit}>
+                {saving ? 'Saving…' : 'Save changes'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+export function AffiliateManagers() {
+  return (
+    <Managers
+      role="AFFILIATE"
+      title="Affiliate managers"
+      description="Staff who own affiliate relationships — recruiting, approving applications and answering their messages."
+    />
+  );
+}
+
+export function AccountManagers() {
+  return (
+    <Managers
+      role="ACCOUNT"
+      title="Account managers"
+      description="Staff who own advertiser relationships and the offers those advertisers run."
+    />
+  );
+}
+
+export function GeneralManagers() {
+  return (
+    <Managers
+      role="GENERAL"
+      title="General managers"
+      description="Senior staff the other manager roles report to."
+    />
+  );
+}
