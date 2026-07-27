@@ -53,11 +53,15 @@ export function AllOffers() {
     return true;
   });
 
-  async function togglePause(offer: Offer) {
-    const next: OfferStatus = offer.status === 'PAUSED' ? 'APPROVED' : 'PAUSED';
+  async function handleStatusChange(offer: Offer, next: OfferStatus) {
+    if (next === offer.status) return;
+    if (next === 'DELETED') {
+      setConfirmTarget(offer);
+      return;
+    }
     try {
       await updateOfferStatus(offer.id, next);
-      toast.success(next === 'PAUSED' ? 'Offer paused' : 'Offer resumed');
+      toast.success(`Offer status updated to ${next}`);
       load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to update offer status');
@@ -109,10 +113,19 @@ export function AllOffers() {
           <button type="button" onClick={() => navigate(`/offers/${o.id}/edit`)} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent">
             Edit
           </button>
-          {(o.status === 'APPROVED' || o.status === 'PAUSED') && (
-            <button type="button" onClick={() => togglePause(o)} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent">
-              {o.status === 'PAUSED' ? 'Resume' : 'Pause'}
-            </button>
+          {o.status !== 'DELETED' && (
+            <select
+              value={o.status}
+              onChange={(e) => handleStatusChange(o, e.target.value as OfferStatus)}
+              className="h-7 rounded-md border border-border bg-background px-1.5 text-xs text-foreground"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {STATUS_OPTIONS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
           )}
           {o.status !== 'DELETED' && (
             <button type="button" onClick={() => setConfirmTarget(o)} className="rounded-md border border-destructive/50 px-2 py-1 text-xs text-destructive">
