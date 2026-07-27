@@ -9,6 +9,8 @@ import { AffiliateCrOptimizer, OfferCrOptimizer } from './pages/CrOptimizer';
 
 import { AllOffers } from './pages/offers/AllOffers';
 import { CreateOffer } from './pages/offers/CreateOffer';
+import { EditOffer } from './pages/offers/EditOffer';
+import { OfferDetails } from './pages/offers/OfferDetails';
 import { Categories } from './pages/offers/Categories';
 import { SmartLinks } from './pages/offers/SmartLinks';
 import { AccessRequests, OfferApprovals } from './pages/offers/AccessRequests';
@@ -99,6 +101,8 @@ function App() {
           <Route path="/offers/smart-links" element={<SmartLinks />} />
           <Route path="/offers/approvals" element={<OfferApprovals />} />
           <Route path="/offers/access-requests" element={<AccessRequests />} />
+          <Route path="/offers/:id" element={<OfferDetails />} />
+          <Route path="/offers/:id/edit" element={<EditOffer />} />
 
           <Route path="/affiliates" element={<Navigate to="/affiliates/all" replace />} />
           <Route path="/affiliates/all" element={<AllAffiliates />} />

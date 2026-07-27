@@ -13,6 +13,10 @@ export function createOffer(input: CreateOfferInput): Promise<Offer> {
   return apiFetch<Offer>('/offers', { method: 'POST', body: JSON.stringify(input) });
 }
 
+export function updateOffer(id: string, input: CreateOfferInput): Promise<Offer> {
+  return apiFetch<Offer>(`/offers/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
+}
+
 export function updateOfferStatus(id: string, status: OfferStatus): Promise<Offer> {
   return apiFetch<Offer>(`/offers/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
 }

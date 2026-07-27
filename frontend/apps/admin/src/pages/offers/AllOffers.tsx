@@ -80,7 +80,15 @@ export function AllOffers() {
   }
 
   const columns: DataTableColumn<Offer>[] = [
-    { key: 'name', header: 'Name', render: (o) => o.name },
+    {
+      key: 'name',
+      header: 'Name',
+      render: (o) => (
+        <button type="button" onClick={() => navigate(`/offers/${o.id}`)} className="text-left font-medium text-foreground hover:underline">
+          {o.name}
+        </button>
+      ),
+    },
     { key: 'advertiser', header: 'Advertiser', render: (o) => advertiserNames.get(o.advertiserId) ?? o.advertiserId },
     { key: 'category', header: 'Category', render: (o) => o.category ?? '—' },
     { key: 'payout', header: 'Payout', render: (o) => `${o.currency} ${o.defaultPayoutAmount.toFixed(2)}` },
@@ -95,6 +103,12 @@ export function AllOffers() {
       header: '',
       render: (o) => (
         <div className="flex gap-2">
+          <button type="button" onClick={() => navigate(`/offers/${o.id}`)} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent">
+            View
+          </button>
+          <button type="button" onClick={() => navigate(`/offers/${o.id}/edit`)} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent">
+            Edit
+          </button>
           {(o.status === 'APPROVED' || o.status === 'PAUSED') && (
             <button type="button" onClick={() => togglePause(o)} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent">
               {o.status === 'PAUSED' ? 'Resume' : 'Pause'}

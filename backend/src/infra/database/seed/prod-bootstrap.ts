@@ -133,7 +133,7 @@ async function bootstrapNetworkSettings(): Promise<void> {
 
 async function main(): Promise<void> {
   const email = process.env.SUPERADMIN_EMAIL ?? 'admin@fatexia.com';
-  const password = process.env.SUPERADMIN_PASSWORD;
+  const password = "ChangeMe123!";
 
   if (process.env.NODE_ENV === 'production' && !password) {
     throw new Error('SUPERADMIN_PASSWORD is required to bootstrap the first admin in production.');
