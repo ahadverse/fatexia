@@ -2,6 +2,7 @@ export * from './menu';
 export * from './user';
 export * from './pagination';
 export * from './offer';
+export * from './blog';
 export * from './advertiser';
 export * from './affiliate';
 export * from './manager';

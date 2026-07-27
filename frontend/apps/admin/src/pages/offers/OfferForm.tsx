@@ -37,6 +37,14 @@ const EMPTY_RULE: PayoutRuleInput = {
   commissionPercent: 0,
 };
 
+// 24 random bytes (192 bits) as hex, "sk_"-prefixed so it reads unambiguously as a
+// secret rather than some other id when it shows up in logs or the postback URL.
+function generatePostbackSecret(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `sk_${hex}`;
+}
+
 function isoDateOnly(value?: string): string {
   return value ? value.slice(0, 10) : '';
 }
@@ -172,6 +180,10 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, onSu
   }
 
   function addPayoutRule() {
+    if (draftRule.amount <= 0) {
+      toast.error('Payout Amount is required to add a payout rule');
+      return;
+    }
     setPayoutRules((rules) => [...rules, draftRule]);
     setDraftRule(EMPTY_RULE);
   }
@@ -366,16 +378,25 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, onSu
         title="Destination & Postback"
         hint="Where the Tracker sends clicks, and the credentials the advertiser uses to report conversions back. All three are required before this offer can go Approved."
       >
-        <Field label="Destination URL">
+        <Field label="Destination URL" required>
           <Input value={destinationUrl} onChange={(e) => setDestinationUrl(e.target.value)} placeholder="https://advertiser-landing-page.com?click_id={click_id}" />
           <p className="text-xs text-muted-foreground">Must contain the {'{click_id}'} macro.</p>
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Postback Secret">
-            <Input value={postbackSecret} onChange={(e) => setPostbackSecret(e.target.value)} placeholder="Shared secret the advertiser sends back on /postback" />
+          <Field label="Postback Secret" required>
+            <div className="flex gap-2">
+              <Input value={postbackSecret} onChange={(e) => setPostbackSecret(e.target.value)} placeholder="Shared secret the advertiser sends back on /postback" />
+              <button
+                type="button"
+                onClick={() => setPostbackSecret(generatePostbackSecret())}
+                className="shrink-0 rounded-md border border-border px-3 text-sm hover:bg-accent"
+              >
+                Generate
+              </button>
+            </div>
           </Field>
-          <Field label="Allowed Postback IPs">
+          <Field label="Allowed Postback IPs" required>
             <Input value={allowedPostbackIps} onChange={(e) => setAllowedPostbackIps(e.target.value)} placeholder="Comma-separated IPs allowed to call /postback" />
           </Field>
         </div>
@@ -450,7 +471,7 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, onSu
               ))}
             </select>
           </Field>
-          <Field label="Payout Amount">
+          <Field label="Payout Amount" required>
             <Input type="number" step="0.01" value={draftRule.amount || ''} onChange={(e) => setDraftRule((r) => ({ ...r, amount: Number(e.target.value) }))} />
           </Field>
           <Field label="Revenue Model">

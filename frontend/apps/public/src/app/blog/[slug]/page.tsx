@@ -3,25 +3,26 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { GlowBackdrop, ButtonLink } from '@/components/marketing';
-import { POSTS, getPostBySlug } from '@/lib/posts';
+import { getPostBySlug, getPublishedPosts } from '@/lib/posts';
 
-export function generateStaticParams() {
-  return POSTS.map((post) => ({ slug: post.slug }));
-}
+// No generateStaticParams — posts are admin-managed and can change at any time, so
+// this route renders dynamically per-request (getPostBySlug fetches with no-store)
+// rather than freezing a slug list at build time.
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const post = getPostBySlug(slug);
+  const post = await getPostBySlug(slug);
   if (!post) return {};
   return { title: post.title, description: post.excerpt };
 }
 
 export default async function BlogPostPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const post = getPostBySlug(slug);
+  const post = await getPostBySlug(slug);
   if (!post) notFound();
 
-  const others = POSTS.filter((p) => p.slug !== post.slug).slice(0, 2);
+  const allPosts = await getPublishedPosts();
+  const others = allPosts.filter((p) => p.slug !== post.slug).slice(0, 2);
 
   return (
     <>

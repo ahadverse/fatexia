@@ -52,6 +52,15 @@ export const adminMenu: MenuConfig = {
             { label: 'Pending', path: '/advertisers/pending' },
           ],
         },
+        {
+          label: 'Blogs',
+          path: '/blogs',
+          icon: 'news',
+          children: [
+            { label: 'Create Post', path: '/blogs/create' },
+            { label: 'All Posts', path: '/blogs/all' },
+          ],
+        },
         // Managers is hidden for now. Its pages, routes and API all still exist —
         // restoring it is uncommenting this block and the matching routes in
         // App.tsx. Manager *assignment* is unaffected either way: the affiliate and

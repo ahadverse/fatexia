@@ -18,6 +18,7 @@ import { subscriptionRoutes } from './modules/subscriptions/subscription.routes'
 import { messageRoutes } from './modules/messages/message.routes';
 import { notificationRoutes } from './modules/notifications/notification.routes';
 import { newsRoutes } from './modules/news/news.routes';
+import { blogRoutes } from './modules/blog/blog.routes';
 import { emailTemplateRoutes } from './modules/email-templates/email-template.routes';
 import { networkSettingRoutes } from './modules/network-settings/network-setting.routes';
 import { integrationRoutes } from './modules/integrations/integration.routes';
@@ -51,6 +52,7 @@ export function mountMainRoutes(app: Express): void {
   app.use('/messages', messageRoutes);
   app.use('/notifications', notificationRoutes);
   app.use('/news', newsRoutes);
+  app.use('/blogs', blogRoutes);
   app.use('/email-templates', emailTemplateRoutes);
 
   app.use('/network-settings', networkSettingRoutes);

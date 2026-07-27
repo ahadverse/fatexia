@@ -22,6 +22,7 @@ import { Subscription } from '../../modules/subscriptions/subscription.entity';
 import { Message } from '../../modules/messages/message.entity';
 import { Notification } from '../../modules/notifications/notification.entity';
 import { NewsPost } from '../../modules/news/news-post.entity';
+import { BlogPost } from '../../modules/blog/blog-post.entity';
 import { EmailTemplate } from '../../modules/email-templates/email-template.entity';
 import { NetworkSetting } from '../../modules/network-settings/network-setting.entity';
 import { Integration } from '../../modules/integrations/integration.entity';
@@ -66,6 +67,7 @@ export const AppDataSource = new DataSource({
     Message,
     Notification,
     NewsPost,
+    BlogPost,
     EmailTemplate,
     NetworkSetting,
     Integration,

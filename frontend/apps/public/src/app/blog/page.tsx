@@ -3,15 +3,15 @@ import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { PageHero, Section } from '@/components/marketing';
 import { Reveal } from '@/components/Reveal';
-import { POSTS } from '@/lib/posts';
+import { getPublishedPosts } from '@/lib/posts';
 
 export const metadata: Metadata = {
   title: 'Blog',
   description: 'Notes on CPA tracking, fraud detection, and how Fatexia is built.',
 };
 
-export default function BlogIndexPage() {
-  const posts = POSTS.slice().reverse();
+export default async function BlogIndexPage() {
+  const posts = (await getPublishedPosts()).slice().reverse();
   const [featured, ...rest] = posts;
 
   return (

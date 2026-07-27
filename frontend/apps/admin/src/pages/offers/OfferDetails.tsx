@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { Copy } from 'lucide-react';
 import type { Advertiser, Offer, OfferStatus } from '@fatexia/types';
 import { StatusBadge, toast } from '@fatexia/ui';
 import { getAdvertisers } from '../../lib/advertisers-api';
@@ -18,6 +19,38 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
     <div className="flex justify-between gap-4 border-b border-border/50 py-2 text-sm last:border-0">
       <span className="text-muted-foreground">{label}</span>
       <span className="text-right font-medium text-foreground">{value ?? '—'}</span>
+    </div>
+  );
+}
+
+// For long copyable values (URLs) — truncates with an ellipsis instead of wrapping
+// or overflowing the card, and a click copies the untruncated value.
+function CopyableRow({ label, value }: { label: string; value: string }) {
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success('Copied to clipboard');
+    } catch {
+      toast.error('Failed to copy');
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-border/50 py-2 text-sm last:border-0">
+      <span className="shrink-0 text-muted-foreground">{label}</span>
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+        <span className="min-w-0 truncate font-medium text-foreground" title={value}>
+          {value}
+        </span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="shrink-0 rounded-md border border-border p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+          aria-label={`Copy ${label}`}
+        >
+          <Copy className="size-3.5" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -110,7 +143,13 @@ export function OfferDetails() {
         <Row label="Postback Secret" value={offer.postbackSecret ? '••••••••' : undefined} />
         <Row label="Allowed Postback IPs" value={offer.allowedPostbackIps} />
         <Row label="Blocked Traffic Redirect" value={offer.blockedRedirectUrl ?? 'Network default'} />
-        <Row label="Tracking Link" value={<span className="break-all">{offer.trackingLink}</span>} />
+        <CopyableRow label="Tracking Link" value={offer.trackingLink} />
+        {offer.postbackUrl ? (
+          <CopyableRow label="Postback URL" value={offer.postbackUrl} />
+        ) : (
+          <Row label="Postback URL" value="Set a Postback Secret to generate this" />
+        )}
+        <Row label="Postback Verified" value={offer.postbackVerifiedAt ? new Date(offer.postbackVerifiedAt).toLocaleString() : 'Not yet verified'} />
       </Section>
 
       <Section title="Payout Rules">

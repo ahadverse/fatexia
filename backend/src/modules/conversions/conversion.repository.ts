@@ -66,6 +66,16 @@ export const conversionRepository = {
     return repository.findOne({ where: { id } });
   },
 
+  // Duplicate-postback detection — a second postback for the same click_id is the
+  // most common accidental double-fire (advertiser retry, reloaded pixel).
+  findByClickId(clickId: string): Promise<Conversion | null> {
+    return repository.findOne({ where: { clickId } });
+  },
+
+  create(data: Partial<Conversion>): Promise<Conversion> {
+    return repository.save(repository.create(data));
+  },
+
   async update(id: string, fields: Partial<Conversion>): Promise<void> {
     await repository.update({ id }, fields);
   },

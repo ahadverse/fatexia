@@ -16,6 +16,11 @@ import { SmartLinks } from './pages/offers/SmartLinks';
 import { AccessRequests, OfferApprovals } from './pages/offers/AccessRequests';
 import { AffiliateOfferCr } from './pages/offers/AffiliateOfferCr';
 
+import { AllBlogs } from './pages/blogs/AllBlogs';
+import { CreateBlog } from './pages/blogs/CreateBlog';
+import { EditBlog } from './pages/blogs/EditBlog';
+import { BlogDetails } from './pages/blogs/BlogDetails';
+
 import { AllAffiliates, PendingAffiliates } from './pages/affiliates/AllAffiliates';
 import { CreateAffiliate } from './pages/affiliates/CreateAffiliate';
 import { AffiliateGroups } from './pages/affiliates/AffiliateGroups';
@@ -103,6 +108,12 @@ function App() {
           <Route path="/offers/access-requests" element={<AccessRequests />} />
           <Route path="/offers/:id" element={<OfferDetails />} />
           <Route path="/offers/:id/edit" element={<EditOffer />} />
+
+          <Route path="/blogs" element={<Navigate to="/blogs/all" replace />} />
+          <Route path="/blogs/all" element={<AllBlogs />} />
+          <Route path="/blogs/create" element={<CreateBlog />} />
+          <Route path="/blogs/:id" element={<BlogDetails />} />
+          <Route path="/blogs/:id/edit" element={<EditBlog />} />
 
           <Route path="/affiliates" element={<Navigate to="/affiliates/all" replace />} />
           <Route path="/affiliates/all" element={<AllAffiliates />} />

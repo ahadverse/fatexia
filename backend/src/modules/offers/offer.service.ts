@@ -20,9 +20,18 @@ import {
   type UpdateOfferStatusDto,
 } from './offer.dto';
 
-// PENDING/PAUSED → APPROVED requires all four gate conditions: destinationUrl (with
-// the {click_id} macro), postbackSecret, allowedPostbackIps, and a verified test/live
-// postback (postbackVerifiedAt, stamped once the Tracker/postback tooling exists).
+// PENDING/PAUSED → APPROVED requires destinationUrl (with the {click_id} macro),
+// postbackSecret and allowedPostbackIps — the three fields needed for the Tracker to
+// send traffic and receive conversions at all.
+//
+// postbackVerifiedAt is deliberately NOT a precondition here, even though it exists on
+// the entity. It used to be: that produced an unsatisfiable cycle, because /click (the
+// only thing that ever mints a click_id) refuses to run for an offer that isn't already
+// APPROVED (see click.service.ts), and a verified postback requires a real click_id —
+// so no offer could ever reach APPROVED. postbackVerifiedAt is now stamped the first
+// time a real, secret+IP-authenticated postback is received for the offer (see
+// modules/postback/postback.service.ts) — an observational signal an admin can check
+// on the offer, not a gate blocking approval.
 function assertActivationGate(offer: Offer): void {
   if (!offer.destinationUrl || !offer.destinationUrl.includes('{click_id}')) {
     throw new ValidationError(
@@ -34,9 +43,6 @@ function assertActivationGate(offer: Offer): void {
   }
   if (!offer.allowedPostbackIps) {
     throw new ValidationError('allowedPostbackIps must be set before approving this offer');
-  }
-  if (!offer.postbackVerifiedAt) {
-    throw new ValidationError('a verified test postback is required before approving this offer');
   }
 }
 

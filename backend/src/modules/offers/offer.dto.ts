@@ -166,6 +166,11 @@ export interface OfferDto {
   destinationUrl: string | null;
   postbackSecret: string | null;
   allowedPostbackIps: string | null;
+  // Computed, not stored — null until postbackSecret is set, since the secret is part
+  // of the URL. Never appears on AffiliateOfferDto; it's the credential that lets
+  // someone create conversions, not something to hand to a traffic source.
+  postbackUrl: string | null;
+  postbackVerifiedAt: string | null;
   blockedRedirectUrl: string | null;
 }
 
@@ -247,6 +252,15 @@ function affiliateTrackingLinkFor(offerId: string, affiliateId: string): string 
   return `${env.PUBLIC_TRACKING_URL}/click?offerId=${offerId}&affiliateId=${affiliateId}`;
 }
 
+// What the admin copies and hands to the advertiser to paste into their own tracking
+// platform's conversion-postback setting. {click_id} stays a macro — the advertiser's
+// platform substitutes it per conversion, the same way ours substitutes it into
+// destinationUrl per click.
+function postbackUrlFor(offerId: string, postbackSecret: string | null): string | null {
+  if (!postbackSecret) return null;
+  return `${env.PUBLIC_TRACKING_URL}/postback?offerId=${offerId}&click_id={click_id}&secret=${postbackSecret}`;
+}
+
 export function toAffiliateOfferDto(offer: Offer, affiliateId?: string): AffiliateOfferDto {
   return {
     id: offer.id,
@@ -306,6 +320,8 @@ export function toOfferDto(offer: Offer): OfferDto {
     destinationUrl: offer.destinationUrl,
     postbackSecret: offer.postbackSecret,
     allowedPostbackIps: offer.allowedPostbackIps,
+    postbackUrl: postbackUrlFor(offer.id, offer.postbackSecret),
+    postbackVerifiedAt: offer.postbackVerifiedAt?.toISOString() ?? null,
     blockedRedirectUrl: offer.blockedRedirectUrl,
   };
 }

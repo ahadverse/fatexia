@@ -51,6 +51,10 @@ export const clickRepository = {
     return repository.save(repository.create(data));
   },
 
+  findById(id: string): Promise<Click | null> {
+    return repository.findOne({ where: { id } });
+  },
+
   findLogs(filters: ClickLogFiltersDto): Promise<[Click[], number]> {
     const qb = applyFilters(repository.createQueryBuilder('click'), filters);
     return qb

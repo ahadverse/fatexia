@@ -64,6 +64,8 @@ export interface Offer {
   destinationUrl: string | null;
   postbackSecret: string | null;
   allowedPostbackIps: string | null;
+  postbackUrl: string | null;
+  postbackVerifiedAt: string | null;
   blockedRedirectUrl: string | null;
 }
 
