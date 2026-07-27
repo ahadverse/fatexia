@@ -49,6 +49,7 @@ export interface AffiliateGroupedReport {
 export interface AffiliateDashboard {
   summary: {
     clicks: number;
+    uniqueClicks: number;
     conversions: number;
     approvedConversions: number;
     pendingConversions: number;

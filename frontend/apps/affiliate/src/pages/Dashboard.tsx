@@ -42,6 +42,7 @@ export function Dashboard() {
         <>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatCard label="Clicks" value={number(data.summary.clicks)} />
+            <StatCard label="Unique Clicks" value={number(data.summary.uniqueClicks)} />
             <StatCard label="Conversions" value={number(data.summary.conversions)} />
             <StatCard label="Conversion rate" value={percent(data.summary.conversionRate)} />
             <StatCard label="EPC" value={money(data.summary.epc)} />

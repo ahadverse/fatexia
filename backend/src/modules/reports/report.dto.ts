@@ -210,6 +210,7 @@ export type AffiliateGroupedReportDto = z.infer<typeof affiliateGroupedReportSch
 export interface AffiliateDashboardDto {
   summary: {
     clicks: number;
+    uniqueClicks: number;
     conversions: number;
     approvedConversions: number;
     pendingConversions: number;

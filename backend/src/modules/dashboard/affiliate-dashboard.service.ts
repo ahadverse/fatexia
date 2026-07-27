@@ -55,11 +55,12 @@ export const affiliateDashboardService = {
     const totals = trend.reduce(
       (acc, row) => ({
         clicks: acc.clicks + row.clicks,
+        uniqueClicks: acc.uniqueClicks + row.uniqueClicks,
         conversions: acc.conversions + row.conversions,
         approved: acc.approved + row.approvedConversions,
         payout: acc.payout + row.payout,
       }),
-      { clicks: 0, conversions: 0, approved: 0, payout: 0 },
+      { clicks: 0, uniqueClicks: 0, conversions: 0, approved: 0, payout: 0 },
     );
 
     const points = pointBalances.find((row) => row.affiliateId === affiliateId);
@@ -67,6 +68,7 @@ export const affiliateDashboardService = {
     return {
       summary: {
         clicks: totals.clicks,
+        uniqueClicks: totals.uniqueClicks,
         conversions: totals.conversions,
         approvedConversions: totals.approved,
         pendingConversions,
