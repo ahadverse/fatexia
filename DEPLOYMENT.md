@@ -77,15 +77,38 @@ They run at start, not at build: Render's build step has no database access. `mi
 
 Only `fatexia-api` migrates. The tracker deliberately does not: two services racing to migrate the same database during a simultaneous deploy is how you get a half-applied migration.
 
-### Creating the first admin
+### Bootstrapping a fresh database
 
-Once deployed, from the Render shell on `fatexia-api`:
+The Render shell is a paid feature, so on the free plan run this from a laptop with
+`DATABASE_URL` pointed at the production database. `DATABASE_SSL=true` is required
+because it defaults to on only when `NODE_ENV=production`, and the data source
+overrides `?sslmode=require` in the URL rather than honouring it:
 
 ```bash
-ADMIN_EMAIL=you@yourdomain.com ADMIN_PASSWORD='<strong>' npm run seed:prod
+cd backend
+DATABASE_SSL=true DATABASE_URL='<prod pooled string>' npm run migration:run
+DATABASE_SSL=true DATABASE_URL='<prod pooled string>' \
+  SUPERADMIN_EMAIL=you@yourdomain.com SUPERADMIN_PASSWORD='<strong>' npm run seed:prod
 ```
 
-`seed:prod` creates only the first admin and never overwrites an existing one. **Do not run `npm run seed`** — the dev seed refuses to run with `NODE_ENV=production`, but it is worth knowing why: it would insert 2,400 fake clicks and demo affiliates into your live database.
+Migrations come first — `seed:prod` fails on a missing `users` table. Leave `NODE_ENV`
+unset: setting it to `production` makes importing `env.ts` fire
+`assertSecureProductionSecrets()`, so you would have to supply `JWT_*` and `CORS_ORIGIN`
+just to seed. An inline `DATABASE_URL` beats `backend/.env` because `dotenv` never
+overrides an already-set variable, so this cannot hit the wrong database by accident.
+
+`seed:prod` is idempotent and inserts no business data — no offers, affiliates, clicks
+or conversions. It creates the first admin (never overwriting an existing one), the
+`network_settings` singleton from the entity's column defaults, and the rows the Admin
+portal can edit but not create: the 7 `integrations` (no credentials) and 8
+`email_templates`. Those two tables expose only `PATCH /:id`, so without them the
+Integrations page renders an empty list — and since the provider keys deliberately have
+no env fallback, proxy detection could never be switched on at all.
+
+Every step is insert-if-missing rather than `save()`, so re-running cannot erase a key
+an admin typed into the Integrations page or revert their edited email copy.
+
+**Do not run `npm run seed`** — the dev seed refuses to run with `NODE_ENV=production`, but it is worth knowing why: it would insert 2,400 fake clicks and demo affiliates into your live database. Note that guard keys off `NODE_ENV`, not the database host, so it does **not** protect a production database reached from a laptop where `NODE_ENV` is `development`.
 
 ### Two constraints worth knowing now
 
