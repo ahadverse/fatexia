@@ -2,6 +2,7 @@ import { logger } from '../../common/logger';
 import { redis } from '../../infra/redis/redis-client';
 import { IntegrationProvider } from '../integrations/integration.entity';
 import { getIntegrationApiKey } from '../integrations/integration-credentials';
+import { isPrivateOrLoopback, normalizeIp } from '../geo-source/geo-source';
 
 // Cascading free-tier residential-proxy detection (PLAN-tracker.md Step 5): IPHub →
 // ipapi.is → IPQS, each with its own quota, falling through to the next when one is
@@ -124,8 +125,18 @@ async function checkProvider(
 // null = never resolved (all providers unconfigured/exhausted/failed) — the caller
 // treats this as UNSCORED, not "clean".
 export async function checkResidentialProxy(ip: string): Promise<boolean | null> {
+  const normalized = normalizeIp(ip);
+  // A private/loopback address is never a residential proxy — it's the Tracker's own
+  // network (or a misconfigured TRUST_PROXY handing back an internal hop instead of the
+  // real client). Providers have no way to classify it either way, so this must be
+  // checked before spending quota, not left to fail through and burn a real API call on
+  // an address that can never resolve to a useful answer — that's what was happening.
+  if (!normalized || isPrivateOrLoopback(normalized)) {
+    return null;
+  }
+
   try {
-    const cached = await redis.get(`${CACHE_KEY_PREFIX}${ip}`);
+    const cached = await redis.get(`${CACHE_KEY_PREFIX}${normalized}`);
     if (cached !== null) {
       return cached === '1';
     }
@@ -134,16 +145,16 @@ export async function checkResidentialProxy(ip: string): Promise<boolean | null>
   }
 
   const result =
-    (await checkProvider(IntegrationProvider.IPHUB, ip, 'iphub:daily', DAILY_LIMIT, startOfNextDay())) ??
-    (await checkProvider(IntegrationProvider.IPAPI_IS, ip, 'ipapiIs:daily', DAILY_LIMIT, startOfNextDay())) ??
-    (await checkProvider(IntegrationProvider.IPQS, ip, 'ipqs:monthly', MONTHLY_LIMIT, startOfNextMonth()));
+    (await checkProvider(IntegrationProvider.IPHUB, normalized, 'iphub:daily', DAILY_LIMIT, startOfNextDay())) ??
+    (await checkProvider(IntegrationProvider.IPAPI_IS, normalized, 'ipapiIs:daily', DAILY_LIMIT, startOfNextDay())) ??
+    (await checkProvider(IntegrationProvider.IPQS, normalized, 'ipqs:monthly', MONTHLY_LIMIT, startOfNextMonth()));
 
   if (result === null) {
     return null;
   }
 
   try {
-    await redis.set(`${CACHE_KEY_PREFIX}${ip}`, result ? '1' : '0', 'EX', CACHE_TTL_SECONDS);
+    await redis.set(`${CACHE_KEY_PREFIX}${normalized}`, result ? '1' : '0', 'EX', CACHE_TTL_SECONDS);
   } catch (err) {
     logger.warn({ err }, 'Redis cache write failed');
   }

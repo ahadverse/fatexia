@@ -102,8 +102,19 @@ export function matchPreset(value: DateRange): DatePresetId {
 
 // The API treats dateTo as an upper bound on a timestamp, so a bare YYYY-MM-DD would
 // cut the selected end day off at midnight and silently drop that day's rows.
+//
+// range.dateFrom/dateTo are LOCAL calendar dates (see isoDate above). Appending a
+// literal "Z" here would reinterpret "midnight in the browser's timezone" as "midnight
+// UTC" — for anyone east of UTC that shifts the queried window later than the local
+// day actually starts, silently excluding early-morning local rows (and, symmetrically,
+// pulling in rows from just after local midnight the next day). Going through
+// parseIsoDate + toISOString converts the real local-day boundaries to their correct
+// UTC instants instead.
 export function toApiRange(range: DateRange): { dateFrom: string; dateTo: string } {
-  return { dateFrom: `${range.dateFrom}T00:00:00.000Z`, dateTo: `${range.dateTo}T23:59:59.999Z` };
+  const from = parseIsoDate(range.dateFrom);
+  const to = parseIsoDate(range.dateTo);
+  to.setHours(23, 59, 59, 999);
+  return { dateFrom: from.toISOString(), dateTo: to.toISOString() };
 }
 
 const DISPLAY: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' };
