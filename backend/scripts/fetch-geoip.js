@@ -12,7 +12,7 @@
  * signal. The click path itself never depends on this.
  */
 const { execFileSync } = require('node:child_process');
-const { existsSync, mkdirSync, readdirSync, renameSync, rmSync } = require('node:fs');
+const { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } = require('node:fs');
 const { join } = require('node:path');
 const { tmpdir } = require('node:os');
 
@@ -53,7 +53,9 @@ for (const edition of EDITIONS) {
     const source = join(scratch, extractedDir, `${edition}.mmdb`);
     if (!existsSync(source)) throw new Error(`${edition}.mmdb missing from archive`);
 
-    renameSync(source, join(targetDir, `${edition}.mmdb`));
+    // copyFileSync (not renameSync): scratch lives on os.tmpdir(), which on Render
+    // is a different filesystem than the target dir, so a rename hits EXDEV.
+    copyFileSync(source, join(targetDir, `${edition}.mmdb`));
     console.log(`[geoip] installed ${edition}.mmdb`);
   } catch (err) {
     // A failed fetch is a downgrade, not an outage — same rationale as a missing

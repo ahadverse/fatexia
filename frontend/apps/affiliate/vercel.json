@@ -6,7 +6,6 @@
   "framework": "vite",
   "rewrites": [
     {
-      "comment": "Client-side routing — see the admin app's vercel.json for why this is required.",
       "source": "/((?!assets/).*)",
       "destination": "/index.html"
     }

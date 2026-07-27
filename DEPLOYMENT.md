@@ -134,7 +134,30 @@ Three separate Vercel projects, all pointing at the same repo, each with a diffe
 | `fatexia-admin` | `frontend/apps/admin` | Vite |
 | `fatexia-affiliate` | `frontend/apps/affiliate` | Vite |
 
-For the Next.js project, set the install command in project settings to `cd ../.. && pnpm install --frozen-lockfile` and the build command to `cd ../.. && pnpm --filter public-site build`.
+All three now carry their own `vercel.json` with those commands, so nothing needs setting in
+project settings beyond the Root Directory. Note the workspace root is `frontend/`, not the
+repository root — that is why each config does `cd ../..` rather than relying on Vercel's
+monorepo auto-detection, which looks for `pnpm-workspace.yaml` at the repo root and will not
+find it here.
+
+**`vercel.json` cannot hold comments.** The schema sets `additionalProperties: false` at the
+root and on every `rewrites`/`headers` entry, so a `comment` key fails the deploy with
+"Invalid vercel.json" before the build starts. That is why the reasoning behind each rule
+lives here instead:
+
+- **The SPA rewrite** — see the section below.
+- **`/assets/(.*)` cached immutable for a year** — Vite hashes asset filenames, so the name
+  changes whenever the content does and a stale copy can never be served.
+- **`/index.html` never cached** — it is the file that points at the current asset hashes, so
+  a cached copy pins users to a deleted build. This pairing is why the two rules must both
+  exist; either one alone is wrong.
+- **`X-Frame-Options: DENY` on admin and affiliate** — both handle money and credentials and
+  are never meant to be framed. The public marketing site omits it deliberately.
+
+The public app needs no `outputDirectory`: Next.js writes `.next` where Vercel already looks.
+It also needs no `transpilePackages`, even though `@fatexia/ui` exports raw TypeScript from
+`src/index.ts` — Next compiles workspace-linked source directly. Verified by a local
+`pnpm --filter public-site build`.
 
 ### Environment variables
 

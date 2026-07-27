@@ -6,24 +6,20 @@
   "framework": "vite",
   "rewrites": [
     {
-      "comment": "Client-side routing. React Router owns every path, but the browser asks the server for /reports/performance first — without this rewrite a refresh or a pasted deep link 404s, because no such file exists on disk.",
       "source": "/((?!assets/).*)",
       "destination": "/index.html"
     }
   ],
   "headers": [
     {
-      "comment": "Hashed asset filenames change whenever their content does, so they are safe to cache permanently.",
       "source": "/assets/(.*)",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
     },
     {
-      "comment": "index.html must never be cached — it is the file that points at the current asset hashes, so a stale copy pins users to a deleted build.",
       "source": "/index.html",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
     },
     {
-      "comment": "This panel handles money and credentials and is never meant to be framed.",
       "source": "/(.*)",
       "headers": [
         { "key": "X-Frame-Options", "value": "DENY" },
