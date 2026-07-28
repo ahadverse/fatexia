@@ -10,6 +10,11 @@ import { mountTrackingRoutes } from './tracking-routes';
 // from a browser page).
 async function bootstrap(): Promise<void> {
   await AppDataSource.initialize();
+  // No automatic GeoLite2 fetch here on purpose — see infra/geoip/ensure-geoip.ts.
+  // The .mmdb files are only ever downloaded when an admin triggers
+  // POST /internal/geoip/fetch (proxied from the Admin panel). geo-source.ts already
+  // degrades to "unknown" geo/ASN when the files aren't present yet, so the click path
+  // is unaffected either way.
 
   const app = createApp({ json: false, cors: false });
 

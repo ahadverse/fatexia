@@ -63,21 +63,37 @@ export function isPrivateOrLoopback(ip: string): boolean {
 // MaxMind's GeoLite2 .mmdb files require a free account (see .env.example). Missing
 // files are expected on a fresh checkout — this degrades to "unknown" geo/ASN rather
 // than crashing the click hot path, so the Tracker is usable before that setup step.
-async function ensureInitialized(): Promise<void> {
-  if (initialized) return;
-  initialized = true;
-
+async function openReaders(): Promise<void> {
   try {
     cityReader = await open<CityResponse>(path.join(env.GEOIP_DB_DIR, 'GeoLite2-City.mmdb'));
   } catch {
+    cityReader = null;
     logger.warn(`GeoLite2-City.mmdb not found in ${env.GEOIP_DB_DIR} — country lookups disabled`);
   }
 
   try {
     asnReader = await open<AsnResponse>(path.join(env.GEOIP_DB_DIR, 'GeoLite2-ASN.mmdb'));
   } catch {
+    asnReader = null;
     logger.warn(`GeoLite2-ASN.mmdb not found in ${env.GEOIP_DB_DIR} — ASN lookups disabled`);
   }
+}
+
+async function ensureInitialized(): Promise<void> {
+  if (initialized) return;
+  initialized = true;
+  await openReaders();
+}
+
+// `open()` reads the file into memory once — a background refetch (see
+// infra/geoip/ensure-geoip.ts) that replaces the .mmdb files on disk would otherwise
+// go completely unnoticed, still serving whatever was loaded at first use (or staying
+// permanently disabled if no file existed yet at that point). Called after every
+// refetch attempt so a first-time-successful download also takes effect immediately,
+// without waiting for the next click to trigger the lazy path above.
+export async function reloadGeoipReaders(): Promise<void> {
+  initialized = true;
+  await openReaders();
 }
 
 export const geoSource = {

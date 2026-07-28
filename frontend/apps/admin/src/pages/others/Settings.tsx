@@ -1,8 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, PageHeader, Skeleton, Toggle, toast } from '@fatexia/ui';
+import { Button, Input, PageHeader, Skeleton, StatusBadge, Toggle, toast } from '@fatexia/ui';
 import type { NetworkSettings } from '@fatexia/types';
-import { getNetworkSettings, updateNetworkSettings } from '../../lib/platform-api';
-import { useAsync } from '../../hooks/useAsync';
+import {
+  fetchGeoipNow,
+  getGeoipStatus,
+  getNetworkSettings,
+  updateNetworkSettings,
+  type GeoipEditionKey,
+} from '../../lib/platform-api';
+import { useAsync, runAction } from '../../hooks/useAsync';
+import { dateTime } from '../../lib/format';
 
 function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -32,6 +39,61 @@ function Field({
       <div className="mt-1">{children}</div>
       {hint && <span className="mt-1 block text-xs text-muted-foreground">{hint}</span>}
     </label>
+  );
+}
+
+const GEOIP_EDITION_LABELS: Record<GeoipEditionKey, string> = {
+  'GeoLite2-City': 'City / country database',
+  'GeoLite2-ASN': 'ASN database',
+};
+
+// Never downloaded automatically — build and Tracker-startup auto-fetch were both
+// removed because Render's ephemeral filesystem meant every deploy/restart either
+// re-downloaded (build) or wasted a startup attempt (boot), and either way risked
+// MaxMind's rate limit. This is the only place a fetch is ever triggered from.
+function GeoipSection() {
+  const status = useAsync(() => getGeoipStatus(), []);
+  const [fetching, setFetching] = useState(false);
+
+  async function refresh() {
+    setFetching(true);
+    const result = await runAction(() => fetchGeoipNow(), { success: 'GeoIP fetch attempted', onDone: status.reload });
+    if (result) {
+      const skipped = Object.entries(result.editions).filter(([, s]) => s === 'skipped-cooldown');
+      if (skipped.length > 0) {
+        toast.error(`${skipped.map(([edition]) => edition).join(', ')} skipped — already fetched within the last 24h`);
+      }
+    }
+    setFetching(false);
+  }
+
+  return (
+    <Section
+      title="GeoIP Database"
+      hint="Used by the Tracker for country/ASN lookups. Never downloaded automatically — trigger a fetch here when it's missing or stale. Limited to one attempt per database per 24h (MaxMind's rate limit)."
+    >
+      <div className="sm:col-span-2 space-y-2">
+        {status.loading && <Skeleton className="h-16 w-full" />}
+        {status.error && <p className="text-sm text-destructive">{status.error}</p>}
+        {status.data &&
+          (Object.entries(status.data) as [GeoipEditionKey, { present: boolean; updatedAt: string | null }][]).map(
+            ([edition, info]) => (
+              <div key={edition} className="flex items-center justify-between rounded-md border border-border p-3">
+                <div>
+                  <p className="text-sm text-card-foreground">{GEOIP_EDITION_LABELS[edition]}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {info.present ? `Last downloaded ${dateTime(info.updatedAt)}` : 'Not downloaded yet'}
+                  </p>
+                </div>
+                <StatusBadge variant={info.present ? 'success' : 'warning'}>{info.present ? 'Present' : 'Missing'}</StatusBadge>
+              </div>
+            ),
+          )}
+        <Button variant="secondary" disabled={fetching} onClick={refresh}>
+          {fetching ? 'Fetching…' : 'Refresh now'}
+        </Button>
+      </div>
+    </Section>
   );
 }
 
@@ -211,6 +273,8 @@ export function Settings() {
           />
         </Field>
       </Section>
+
+      <GeoipSection />
 
       <Section title="Email delivery" hint="The SMTP password lives on the Integrations page, never here.">
         <Field label="SMTP host">

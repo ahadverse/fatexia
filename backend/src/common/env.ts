@@ -34,15 +34,23 @@ interface Env {
   // backend/README or PLAN-tracker.md. Absent files degrade gracefully (geo/ASN
   // fields are just left unknown), never crash the click hot path.
   GEOIP_DB_DIR: string;
+  // Used by the Tracker, on admin-triggered demand only (see
+  // infra/geoip/ensure-geoip.ts and modules/geoip), to fetch the GeoLite2 databases.
+  // Optional: missing means geo/ASN lookups just degrade to unknown, same as a
+  // missing .mmdb file.
+  MAXMIND_LICENSE_KEY: string | undefined;
+  // Shared secret between the API and Tracker services, checked on the Tracker's
+  // internal /internal/geoip/* routes (see modules/geoip/geoip-internal.routes.ts).
+  // The Tracker never validates admin JWTs (see render.yaml) — the API validates the
+  // logged-in admin, then forwards the request to the Tracker with this header
+  // instead. Same value must be set on both services. Optional in dev; required in
+  // production (enforced below) since it gates a network-wide config change.
+  GEOIP_ADMIN_SECRET: string | undefined;
   // Deliberately absent: the residential-proxy provider keys (IPHub, ipapi.is, IPQS).
   // Those are runtime credentials and live only in the `integrations` table, entered
   // through the Admin Integrations page — see integration-credentials.ts. Declaring
   // them here too would give an operator two places to look and one of them would
   // eventually be wrong.
-  //
-  // MAXMIND_LICENSE_KEY is not here either, but for a different reason: it is used
-  // only by the build script that downloads the .mmdb files, never by a running
-  // process, so it is a build input rather than an application credential.
 }
 
 // Shipped dev defaults — public in the repo, safe only for local development.
@@ -140,6 +148,8 @@ export const env: Env = {
   CORS_ORIGIN: parseCorsOrigins(process.env.CORS_ORIGIN),
   PUBLIC_TRACKING_URL: stripTrailingSlash(readRequired('PUBLIC_TRACKING_URL', 'http://localhost:4001')),
   GEOIP_DB_DIR: readRequired('GEOIP_DB_DIR', 'data/geoip'),
+  MAXMIND_LICENSE_KEY: process.env.MAXMIND_LICENSE_KEY || undefined,
+  GEOIP_ADMIN_SECRET: process.env.GEOIP_ADMIN_SECRET || undefined,
 };
 
 // In production the JWT secrets must be real, unique values — never the shipped dev

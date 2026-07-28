@@ -20,7 +20,7 @@
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/infra/database/data-source.ts",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/infra/database/data-source.ts",
     "migration:run:prod": "typeorm migration:run -d dist/infra/database/data-source.js",
-    "geoip:fetch": "node scripts/fetch-geoip.js",
+    "geoip:fetch": "tsx src/infra/geoip/ensure-geoip.ts",
     "seed": "tsx src/infra/database/seed/run-seed.ts",
     "seed:prod": "tsx src/infra/database/seed/prod-bootstrap.ts"
   },

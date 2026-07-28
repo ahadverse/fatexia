@@ -41,7 +41,7 @@ services:
     # Render exposes env vars during the build, so a plain `npm ci` would omit
     # devDependencies — and `typescript` (for `npm run build`) and `tsx` (for
     # `seed:prod`) both live there. Without it the build fails on "tsc: not found".
-    buildCommand: npm ci --include=dev && npm run build && npm run geoip:fetch
+    buildCommand: npm ci --include=dev && npm run build
     # Migrations run at start, not during build, because the build step has no
     # access to the database on Render. `migration:run` is idempotent — already
     # applied migrations are skipped — so re-running on every boot is safe.
@@ -73,27 +73,38 @@ services:
       # Express sits behind Render's proxy, so req.ip must come from the forwarded
       # header — otherwise every login is attributed to the proxy's own address.
       #
-      # The HOP COUNT, never "true". Render puts exactly one proxy in front of the
-      # service, so "1" makes Express take the second-from-right X-Forwarded-For
-      # entry — the address Render itself observed. With "true" Express walks the
-      # whole chain and takes the left-most entry, which is entirely client-supplied.
+      # The HOP COUNT, never "true". With "true" Express walks the whole
+      # X-Forwarded-For chain and takes the left-most entry, which is entirely
+      # client-supplied.
+      #
+      # This is "3", not "1" — verified against a real production request's
+      # X-Forwarded-For chain: "<client>, <Cloudflare edge>, <Render's internal
+      # router>". Both this domain and the tracker's are Cloudflare-proxied before
+      # reaching Render, so there are three hops in front of the app (Cloudflare +
+      # Render's router + the direct internal connection into the container), not
+      # one. "1" was resolving req.ip to Render's own internal address.
       - key: TRUST_PROXY
-        value: "1"
+        value: "3"
       # Must list every browser origin that calls this API. The app refuses to boot
       # in production with this empty rather than silently allowing any origin.
       - key: CORS_ORIGIN
         sync: false
       - key: PUBLIC_TRACKING_URL
         sync: false
-      - key: GEOIP_DB_DIR
-        value: data/geoip
-      # MaxMind licence key — used only at build time to download the databases.
-      - key: MAXMIND_LICENSE_KEY
-        sync: false
+      # No GEOIP_DB_DIR/MAXMIND_LICENSE_KEY here — this service never reads the
+      # .mmdb files. Only the Tracker's click path calls geoSource.lookup(); the API
+      # only imports pure helpers (normalizeIp/isPrivateOrLoopback) from that module.
       # No IPHUB_API_KEY/IPAPI_IS_API_KEY/IPQS_API_KEY here on purpose. Those are
       # runtime credentials entered in the Admin portal under Integrations and read
       # from the database — see integration-credentials.ts. Setting them here as well
       # would give an operator two places to look, and one would eventually be stale.
+      #
+      # This service DOES need GEOIP_ADMIN_SECRET even though it never downloads
+      # anything itself: /geoip/fetch (admin-guarded) forwards the request to the
+      # Tracker's /internal/geoip/fetch with this header — see
+      # modules/geoip/geoip.service.ts. Must be the identical value on both services.
+      - key: GEOIP_ADMIN_SECRET
+        sync: false
 
   # ---------------------------------------------------------------------------
   # Tracker — the public /click redirect path.
@@ -115,7 +126,7 @@ services:
     # Render exposes env vars during the build, so a plain `npm ci` would omit
     # devDependencies — and `typescript` (for `npm run build`) and `tsx` (for
     # `seed:prod`) both live there. Without it the build fails on "tsc: not found".
-    buildCommand: npm ci --include=dev && npm run build && npm run geoip:fetch
+    buildCommand: npm ci --include=dev && npm run build
     # No migrations here — the API service owns the schema. Two services racing to
     # migrate the same database on a simultaneous deploy is how you get a half
     # applied migration.
@@ -163,8 +174,11 @@ services:
       # datacenter/ASN fraud score. Trusting the full X-Forwarded-For chain would let
       # an affiliate pick their own country and score their own traffic clean just by
       # sending a header on the click URL.
+      #
+      # "3", matching the API service — see that service's TRUST_PROXY comment for
+      # how this was verified against a real production X-Forwarded-For chain.
       - key: TRUST_PROXY
-        value: "1"
+        value: "3"
       # The tracker serves 302 redirects and server-to-server postbacks, never
       # browser fetches, so it needs no CORS allowlist. It still needs a non-empty
       # value because the production guard checks it unconditionally.
@@ -173,9 +187,23 @@ services:
       # PUBLIC_TRACKING_URL is deliberately absent here. Only the API builds tracking
       # links (offer.dto.ts, smart-link.dto.ts); the tracker just serves /click and
       # never needs to know its own public address.
+      #
+      # GEOIP_DB_DIR/MAXMIND_LICENSE_KEY: never fetched automatically — neither at
+      # build time nor at boot (see infra/geoip/ensure-geoip.ts). Both approaches used
+      # to re-download on every single deploy/restart against Render's ephemeral
+      # filesystem and eventually hit MaxMind's rate limit. Instead an admin triggers
+      # POST /geoip/fetch from the Admin panel on demand, which lands here at
+      # /internal/geoip/fetch. Without a persistent Disk mounted at this path (not yet
+      # attached — requires a paid plan), a restart still wipes the files and geo/ASN
+      # degrade to unknown until the next manual trigger — same graceful degradation
+      # as a missing file always had.
       - key: GEOIP_DB_DIR
         value: data/geoip
       - key: MAXMIND_LICENSE_KEY
+        sync: false
+      # Shared secret checked by /internal/geoip/* — see geoip-internal.routes.ts.
+      # Must be the identical value entered on the API service above.
+      - key: GEOIP_ADMIN_SECRET
         sync: false
       # Provider keys are entered in the Admin portal, not here — see the note on the
       # API service above.

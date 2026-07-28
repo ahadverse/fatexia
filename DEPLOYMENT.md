@@ -20,13 +20,13 @@ Everything below assumes the repo is on GitHub — **both platforms deploy from 
 
 `backend/data/geoip/` holds ~70 MB of GeoLite2 data. Committing it breaks two things at once: the GeoLite2 licence forbids redistribution, and `GeoLite2-City.mmdb` (57 MB) trips GitHub's 50 MB warning — with a fresh copy every month, history would grow by that much each time.
 
-The root `.gitignore` now excludes them. They are downloaded during each build by `backend/scripts/fetch-geoip.js` using `MAXMIND_LICENSE_KEY`. Verify before pushing:
+The root `.gitignore` now excludes them. They are never fetched automatically — neither at build time nor at Tracker startup (both used to re-download on every deploy/restart against Render's ephemeral filesystem and previously hit MaxMind's download rate limit). Instead, an admin fetches them on demand from the Admin panel (Settings → GeoIP Database → "Refresh now"), which calls `POST /geoip/fetch` on the API, which forwards to `POST /internal/geoip/fetch` on the Tracker (see `backend/src/modules/geoip/` and `backend/src/infra/geoip/ensure-geoip.ts`). A Redis-backed cooldown (independent of the container filesystem, since Redis is its own service) refuses a re-download within 24 hours of the last attempt per edition, regardless of how many times it's triggered in that window — this exists to respect MaxMind's own rate limit, not to gate the admin action itself. A persistent Disk mounted at `GEOIP_DB_DIR` lets the downloaded files survive restarts; without one, a restart wipes them and geo/ASN lookups degrade to unknown until the next manual trigger. Verify before pushing:
 
 ```bash
 git status --porcelain | grep -i mmdb   # must print nothing
 ```
 
-If the key is absent the build still succeeds — geo/ASN lookups return unknown, which disables the datacenter fraud filter but breaks nothing else.
+If `MAXMIND_LICENSE_KEY` is absent, the Tracker still boots — geo/ASN lookups return unknown, which disables the datacenter fraud filter but breaks nothing else. Only the Tracker service needs `GEOIP_DB_DIR`/`MAXMIND_LICENSE_KEY`; the API never reads the `.mmdb` files, but does need `GEOIP_ADMIN_SECRET` to authorize the proxied fetch request (see below).
 
 ### 2. Remove the credentials file from the working tree
 
@@ -38,13 +38,14 @@ If the key is absent the build still succeeds — geo/ASN lookups return unknown
 
 `render.yaml` at the repo root is a Blueprint describing both services, Postgres and Redis. In the Render dashboard: **New → Blueprint → select this repo**.
 
-Then set the four values marked `sync: false` (Render will not invent them):
+Then set the values marked `sync: false` (Render will not invent them):
 
 | Variable | Set on | Value |
 |---|---|---|
 | `CORS_ORIGIN` | both | `https://admin.fatexia.com,https://affiliates.fatexia.com,https://fatexia.com` |
 | `PUBLIC_TRACKING_URL` | **API only** | `https://track.fatexia.com` |
-| `MAXMIND_LICENSE_KEY` | both | from your MaxMind account |
+| `MAXMIND_LICENSE_KEY` | **Tracker only** | from your MaxMind account |
+| `GEOIP_ADMIN_SECRET` | **both** | any long random string — must be the *same* value on both services |
 
 **The proxy-provider keys are not environment variables.** IPHub, ipapi.is and IPQS
 are entered in the Admin portal under **Integrations** after the first deploy, and read
@@ -54,8 +55,10 @@ both directions: a key only in env makes the Integrations page look unconfigured
 the provider is being billed, and a key only in the UI appears broken if a stale env
 value shadows it. Rotating a key is a form submission, not a redeploy.
 
-`MAXMIND_LICENSE_KEY` stays an env var because it is a *build* input — the script that
-downloads the `.mmdb` files uses it; no running process ever reads it.
+`MAXMIND_LICENSE_KEY` is read by the Tracker only when an admin triggers a fetch (see
+`ensure-geoip.ts`) — never at build time or startup. Kept a plain env var rather than an
+Integrations-table credential like the proxy providers because rotating it is rare
+enough that a redeploy to pick up a new value isn't a real cost.
 
 `CORS_ORIGIN` must be an exact origin list — scheme and host, **no trailing slash**. The app deliberately refuses to boot in production with it empty rather than defaulting to "allow any origin".
 

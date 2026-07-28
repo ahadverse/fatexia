@@ -192,6 +192,32 @@ export function updateNetworkSettings(input: Partial<NetworkSettings>): Promise<
   return apiFetch<NetworkSettings>('/network-settings', { method: 'PATCH', body: JSON.stringify(input) });
 }
 
+// GeoIP database — the Tracker's MaxMind .mmdb files. Never downloaded
+// automatically (build or startup); an admin triggers it here. The API proxies to
+// the Tracker service, which owns the files — see backend/src/modules/geoip.
+
+export type GeoipEditionKey = 'GeoLite2-City' | 'GeoLite2-ASN';
+
+export interface GeoipEditionStatus {
+  present: boolean;
+  updatedAt: string | null;
+}
+
+export type GeoipStatus = Record<GeoipEditionKey, GeoipEditionStatus>;
+
+export interface GeoipFetchResult {
+  attempted: boolean;
+  editions: Record<GeoipEditionKey, 'downloaded' | 'skipped-cooldown' | 'failed'>;
+}
+
+export function getGeoipStatus(): Promise<GeoipStatus> {
+  return apiFetch<GeoipStatus>('/geoip/status');
+}
+
+export function fetchGeoipNow(): Promise<GeoipFetchResult> {
+  return apiFetch<GeoipFetchResult>('/geoip/fetch', { method: 'POST' });
+}
+
 // Integrations
 
 export function getIntegrations(): Promise<Integration[]> {
