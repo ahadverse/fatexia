@@ -96,7 +96,6 @@ export const adminMenu: MenuConfig = {
             { label: 'Advertiser Reports', path: '/reports/advertiser' },
             { label: 'Conversion Reports', path: '/reports/conversion' },
             { label: 'Advanced Reports', path: '/reports/advanced' },
-            { label: 'Click Logs', path: '/reports/click-logs' },
           ],
         },
       ],

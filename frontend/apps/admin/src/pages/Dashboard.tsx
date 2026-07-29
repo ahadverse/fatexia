@@ -103,10 +103,10 @@ export function Dashboard() {
               <button type="button" onClick={() => navigate('/affiliates/messages')} className="text-left">
                 <StatCard label="Unread messages" value={number(data.summary.unreadMessages)} />
               </button>
-              <button type="button" onClick={() => navigate('/reports/click-logs')} className="text-left">
+              <button type="button" onClick={() => navigate('/reports/clicks')} className="text-left">
                 <StatCard label="Blocked clicks" value={number(data.summary.blockedClicks)} />
               </button>
-              <button type="button" onClick={() => navigate('/reports/click-logs')} className="text-left">
+              <button type="button" onClick={() => navigate('/reports/clicks')} className="text-left">
                 <StatCard label="Suspect clicks" value={number(data.summary.suspectClicks)} />
               </button>
             </div>

@@ -49,7 +49,6 @@ import {
 import { ClickLogs } from './pages/reports/ClickLogs';
 import { Conversions } from './pages/reports/Conversions';
 import { PostbackLogs } from './pages/reports/PostbackLogs';
-import { ReportView } from './components/ReportView';
 
 import { Notifications } from './pages/others/Notifications';
 import { Settings } from './pages/others/Settings';
@@ -61,19 +60,6 @@ import { EmailTemplates } from './pages/others/EmailTemplates';
 import { News } from './pages/others/News';
 import { Integrations } from './pages/others/Integrations';
 import { Profile } from './pages/others/Profile';
-
-// Reports → Clicks is the aggregate view (volume and quality over time); Reports →
-// Click Logs is the row-level table. Two different questions, so two pages.
-function ClicksReport() {
-  return (
-    <ReportView
-      title="Clicks"
-      description="Click volume over time, and how it breaks down by geo, device and source."
-      selectableDimensions={['date', 'country', 'city', 'device', 'os', 'browser', 'offer', 'affiliate']}
-      showTrend
-    />
-  );
-}
 
 function App() {
   const { status } = useSession();
@@ -141,7 +127,7 @@ function App() {
 
           <Route path="/reports" element={<Navigate to="/reports/performance" replace />} />
           <Route path="/reports/performance" element={<PerformanceReport />} />
-          <Route path="/reports/clicks" element={<ClicksReport />} />
+          <Route path="/reports/clicks" element={<ClickLogs />} />
           <Route path="/reports/conversions" element={<Conversions />} />
           <Route path="/reports/sub-id-tracking" element={<SubIdReport />} />
           <Route path="/reports/postback-logs" element={<PostbackLogs />} />
@@ -150,7 +136,9 @@ function App() {
           <Route path="/reports/advertiser" element={<AdvertiserReport />} />
           <Route path="/reports/conversion" element={<ConversionReport />} />
           <Route path="/reports/advanced" element={<AdvancedReport />} />
-          <Route path="/reports/click-logs" element={<ClickLogs />} />
+          {/* Click Logs was folded into Clicks (same row-level table) — kept as a redirect
+              so old links and the dashboard's stat-card shortcuts still land somewhere. */}
+          <Route path="/reports/click-logs" element={<Navigate to="/reports/clicks" replace />} />
 
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/settings" element={<Settings />} />

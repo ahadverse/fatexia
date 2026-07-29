@@ -103,7 +103,12 @@ export const clickService = {
         regionCode,
         // UAParser already returns the vendor and both version strings — the previous
         // version parsed them and then dropped them on the floor.
-        deviceType: ua?.device.type ?? null,
+        //
+        // ua-parser-js only sets device.type for mobile/tablet/console/smarttv/wearable/
+        // embedded — a regular desktop browser leaves it undefined by design (there's no
+        // "desktop" entry in its taxonomy). Without this fallback every desktop click showed
+        // a blank Device column, in the drawer and in the device-grouped reports alike.
+        deviceType: ua?.device.type ?? (req.userAgent ? 'desktop' : null),
         deviceBrand: ua?.device.vendor ?? null,
         os: ua?.os.name ?? null,
         osVersion: ua?.os.version ?? null,
