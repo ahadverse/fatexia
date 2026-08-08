@@ -1,8 +1,13 @@
 import type { EntityManager } from 'typeorm';
 import { AppDataSource } from '../../infra/database/data-source';
 import { NotFoundError, ValidationError } from '../../common/errors';
+import { logger } from '../../common/logger';
 import { Advertiser } from '../advertisers/advertiser.entity';
 import { affiliateRepository } from '../affiliates/affiliate.repository';
+import { offerAccessRequestRepository } from '../offer-access-requests/offer-access-request.repository';
+import { AccessRequestStatus } from '../offer-access-requests/offer-access-request.entity';
+import { sendTemplateEmail, safeSendEmail } from '../../infra/email/brevo-mailer';
+import { EmailTemplateKey } from '../email-templates/email-template.entity';
 import { offerRepository } from './offer.repository';
 import { Offer, OfferStatus } from './offer.entity';
 import { PayoutRule } from './payout-rule.entity';
@@ -10,6 +15,7 @@ import { OfferCap } from './offer-cap.entity';
 import {
   toAffiliateOfferDto,
   toOfferDto,
+  affiliateTrackingLinkFor,
   type AffiliateOfferDto,
   type CreateOfferDto,
   type OfferDto,
@@ -81,6 +87,39 @@ async function assertAdvertiserExists(manager: EntityManager, advertiserId: stri
   if (!advertiser) {
     throw new ValidationError('Advertiser not found');
   }
+}
+
+// Tells affiliates who already have (or are re-gaining) access that the offer they
+// asked for can now run — not every affiliate on the network, which would spam the
+// unrelated majority for a gated offer they never requested.
+function notifyOfferLive(offer: Offer): void {
+  safeSendEmail(
+    (async () => {
+      const requests = await offerAccessRequestRepository.findAll({
+        offerId: offer.id,
+        status: AccessRequestStatus.APPROVED,
+      });
+      if (requests.length === 0) return;
+
+      const affiliates = await affiliateRepository.findByIds(requests.map((r) => r.affiliateId));
+      await Promise.all(
+        affiliates
+          .filter((affiliate) => affiliate.user?.email)
+          .map((affiliate) =>
+            sendTemplateEmail({
+              templateKey: EmailTemplateKey.OFFER_LIVE,
+              to: { email: affiliate.user.email, name: affiliate.fullName },
+              macros: {
+                affiliate_name: affiliate.fullName ?? 'there',
+                offer_name: offer.name,
+                payout: `${offer.currency} ${offer.defaultPayoutAmount}`,
+                offer_link: affiliateTrackingLinkFor(offer.id, affiliate.id),
+              },
+            }).catch((err) => logger.error({ err, affiliateId: affiliate.id }, 'Failed to send OFFER_LIVE email')),
+          ),
+      );
+    })(),
+  );
 }
 
 export const offerService = {
@@ -213,7 +252,13 @@ export const offerService = {
       assertActivationGate(offer);
     }
 
+    const wasApproved = offer.status === OfferStatus.APPROVED;
     const updated = await offerRepository.updateStatus(id, dto.status);
+
+    if (dto.status === OfferStatus.APPROVED && !wasApproved) {
+      notifyOfferLive(updated!);
+    }
+
     return toOfferDto(updated!);
   },
 };

@@ -73,4 +73,24 @@ export const affiliateController = {
       next(err);
     }
   },
+
+  async markEmailVerified(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      res.json(await affiliateService.markEmailVerified(req.params.id!));
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async impersonate(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const tokens = await affiliateService.impersonate(req.params.id!, { id: req.user!.id }, {
+        ip: req.ip ?? 'unknown',
+        userAgent: req.headers['user-agent'] ?? null,
+      });
+      res.json(tokens);
+    } catch (err) {
+      next(err);
+    }
+  },
 };

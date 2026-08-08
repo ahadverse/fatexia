@@ -46,10 +46,8 @@ export const networkSettingService = {
       ...(dto.blockedRedirectUrl !== undefined && { blockedRedirectUrl: dto.blockedRedirectUrl ?? null }),
       ...(dto.loginRateLimitPerMinute !== undefined && { loginRateLimitPerMinute: dto.loginRateLimitPerMinute }),
       ...(dto.clickRateLimitPerMinute !== undefined && { clickRateLimitPerMinute: dto.clickRateLimitPerMinute }),
-      ...(dto.smtpHost !== undefined && { smtpHost: dto.smtpHost ?? null }),
-      ...(dto.smtpPort !== undefined && { smtpPort: dto.smtpPort ?? null }),
-      ...(dto.smtpUser !== undefined && { smtpUser: dto.smtpUser ?? null }),
-      ...(dto.smtpFromEmail !== undefined && { smtpFromEmail: dto.smtpFromEmail ?? null }),
+      ...(dto.senderEmail !== undefined && { senderEmail: dto.senderEmail ?? null }),
+      ...(dto.senderName !== undefined && { senderName: dto.senderName ?? null }),
     });
 
     // The tracker caches the fraud bands and the blocked-redirect URL for a short TTL

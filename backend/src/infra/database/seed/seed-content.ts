@@ -33,10 +33,8 @@ export async function seedContent(dataSource: DataSource, core: CoreSeedResult):
       fraudBlockThreshold: 70,
       loginRateLimitPerMinute: 10,
       clickRateLimitPerMinute: 600,
-      smtpHost: null,
-      smtpPort: 587,
-      smtpUser: null,
-      smtpFromEmail: 'no-reply@fatexia.com',
+      senderEmail: 'no-reply@fatexia.com',
+      senderName: 'Fatexia',
     }),
   );
 

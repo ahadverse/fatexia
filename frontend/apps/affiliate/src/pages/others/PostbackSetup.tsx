@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, PageHeader, Skeleton, toast } from '@fatexia/ui';
+import { Button, ConfirmModal, Input, PageHeader, Skeleton, toast } from '@fatexia/ui';
 import type { Affiliate } from '@fatexia/types';
 import { getOwnProfile, updateOwnProfile } from '../../lib/portal-api';
 import { useAsync } from '../../hooks/useAsync';
@@ -18,6 +18,7 @@ export function PostbackSetup() {
   const profile = useAsync<Affiliate>(() => getOwnProfile(), []);
   const [postbackUrl, setPostbackUrl] = useState('');
   const [saving, setSaving] = useState(false);
+  const [confirmSave, setConfirmSave] = useState(false);
 
   useEffect(() => {
     if (profile.data) setPostbackUrl(profile.data.postbackUrl ?? '');
@@ -29,6 +30,7 @@ export function PostbackSetup() {
       await updateOwnProfile({ postbackUrl: postbackUrl.trim() });
       toast.success('Postback URL saved');
       profile.reload();
+      setConfirmSave(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save postback URL');
     } finally {
@@ -63,7 +65,7 @@ export function PostbackSetup() {
           />
         </label>
         <div className="mt-4 flex justify-end">
-          <Button disabled={saving} onClick={save}>
+          <Button disabled={saving} onClick={() => setConfirmSave(true)}>
             {saving ? 'Saving…' : 'Save postback URL'}
           </Button>
         </div>
@@ -100,6 +102,16 @@ export function PostbackSetup() {
           <li>• Every attempt is logged on our side, so your manager can tell you exactly what we sent and what came back.</li>
         </ul>
       </section>
+
+      <ConfirmModal
+        open={confirmSave}
+        onOpenChange={(open) => !open && setConfirmSave(false)}
+        title="Save this postback URL?"
+        description="Future conversion pings go to this URL instead of your old one — make sure it's correct or your own tracker stops receiving conversions."
+        confirmLabel="Save"
+        loading={saving}
+        onConfirm={save}
+      />
     </div>
   );
 }

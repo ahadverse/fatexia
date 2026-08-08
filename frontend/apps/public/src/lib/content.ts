@@ -414,3 +414,36 @@ export const FRAUD_LAYERS: { title: string; description: string; icon: LucideIco
     description: 'Conversions that arrive implausibly fast after a click get flagged for review instead of an automatic payout.',
   },
 ];
+
+/**
+ * Independent affiliate-network directories Fatexia is listed on.
+ *
+ * `logo` points at a file the site serves itself rather than hotlinking the
+ * directory's own asset: a remote logo URL breaks silently the day they reorganise
+ * their CDN, and it leaks a request from every visitor to a third party. Until the
+ * files exist the card falls back to a typeset wordmark, so a missing asset degrades
+ * instead of showing a broken image.
+ *
+ * Deliberately no star ratings or review counts here — Fatexia is new, and inventing
+ * social proof is exactly what the site's honesty rule rules out.
+ */
+export const LISTING_SITES: { name: string; href: string; logo: string; blurb: string }[] = [
+  {
+    name: 'AffPaying',
+    href: 'https://www.affpaying.com',
+    logo: '/brands/affpaying.png',
+    blurb: 'Affiliate network reviews written by the people running the traffic.',
+  },
+  {
+    name: 'AffHub',
+    href: 'https://affhub.com',
+    logo: '/brands/affhub.png',
+    blurb: 'Network directory and community for affiliate marketers.',
+  },
+  {
+    name: 'OfferVault',
+    href: 'https://www.offervault.com',
+    logo: '/brands/offervault.png',
+    blurb: 'One of the longest-running offer and network search engines.',
+  },
+];

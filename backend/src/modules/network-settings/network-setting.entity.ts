@@ -63,17 +63,17 @@ export class NetworkSetting {
   @Column({ type: 'int', default: 600 })
   clickRateLimitPerMinute!: number;
 
+  // Sender identity for every transactional email. Delivery runs through Brevo's HTTP
+  // API (see infra/email/brevo-mailer.ts), not an SMTP relay, so host/port/username
+  // are not part of the setup — the API key is the only credential, and it lives on
+  // the Emails → Settings page alongside these two fields.
+  //
+  // senderEmail must be a sender/domain Brevo has verified, or the send is rejected.
   @Column({ type: 'varchar', nullable: true })
-  smtpHost!: string | null;
-
-  @Column({ type: 'int', nullable: true })
-  smtpPort!: number | null;
+  senderEmail!: string | null;
 
   @Column({ type: 'varchar', nullable: true })
-  smtpUser!: string | null;
-
-  @Column({ type: 'varchar', nullable: true })
-  smtpFromEmail!: string | null;
+  senderName!: string | null;
 
   @UpdateDateColumn({ type: 'timestamp' })
   updatedAt!: Date;

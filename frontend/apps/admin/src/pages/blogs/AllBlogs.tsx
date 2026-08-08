@@ -18,11 +18,19 @@ const STATUS_VARIANT: Record<BlogStatus, 'success' | 'destructive' | 'warning' |
 
 const selectClass = 'h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground';
 
+const STATUS_CHANGE_COPY: Record<BlogStatus, (title: string) => string> = {
+  PUBLISHED: (title) => `"${title}" becomes visible on the public site immediately.`,
+  DRAFT: (title) => `"${title}" is pulled back to draft and stops appearing on the public site.`,
+  ARCHIVED: (title) => `"${title}" is archived and stops appearing on the public site.`,
+};
+
 export function AllBlogs() {
   const navigate = useNavigate();
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [statusFilter, setStatusFilter] = useState<BlogStatus | ''>('');
   const [loading, setLoading] = useState(true);
+  const [pendingStatus, setPendingStatus] = useState<{ post: BlogPost; next: BlogStatus } | null>(null);
+  const [statusSaving, setStatusSaving] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<BlogPost | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -38,14 +46,23 @@ export function AllBlogs() {
 
   const filteredPosts = posts.filter((p) => !statusFilter || p.status === statusFilter);
 
-  async function handleStatusChange(post: BlogPost, next: BlogStatus) {
+  function handleStatusChange(post: BlogPost, next: BlogStatus) {
     if (next === post.status) return;
+    setPendingStatus({ post, next });
+  }
+
+  async function confirmStatusChange() {
+    if (!pendingStatus) return;
+    setStatusSaving(true);
     try {
-      await updateBlogStatus(post.id, next);
-      toast.success(`Post status updated to ${next}`);
-      load();
+      await updateBlogStatus(pendingStatus.post.id, pendingStatus.next);
+      toast.success(`Post status updated to ${pendingStatus.next}`);
+      await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to update post status');
+    } finally {
+      setStatusSaving(false);
+      setPendingStatus(null);
     }
   }
 
@@ -144,6 +161,17 @@ export function AllBlogs() {
         destructive
         loading={deleting}
         onConfirm={handleConfirmDelete}
+      />
+
+      <ConfirmModal
+        open={!!pendingStatus}
+        onOpenChange={(open) => !open && setPendingStatus(null)}
+        title={`Change status to ${pendingStatus?.next}?`}
+        description={pendingStatus ? STATUS_CHANGE_COPY[pendingStatus.next](pendingStatus.post.title) : ''}
+        confirmLabel="Confirm"
+        destructive={pendingStatus?.next !== 'PUBLISHED'}
+        loading={statusSaving}
+        onConfirm={confirmStatusChange}
       />
     </div>
   );

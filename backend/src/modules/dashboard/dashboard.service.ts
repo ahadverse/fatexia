@@ -2,8 +2,54 @@ import { OfferStatus } from '../offers/offer.entity';
 import { UserStatus } from '../users/user.entity';
 import { ConversionStatus } from '../conversions/conversion.entity';
 import { reportService } from '../reports/report.service';
-import type { DashboardDto, ReportFiltersDto } from '../reports/report.dto';
+import type { DashboardDeltasDto, DashboardDto, ReportFiltersDto } from '../reports/report.dto';
 import { dashboardRepository } from './dashboard.repository';
+import { percentChange, previousWindow } from './period-delta';
+
+// Summing the trend rows is how the current-window totals are derived too, so the
+// baseline is measured exactly the same way as the figure it is compared against.
+function sumTrend(rows: { clicks: number; conversions: number; revenue: number; payout: number }[]) {
+  return rows.reduce(
+    (acc, row) => ({
+      clicks: acc.clicks + row.clicks,
+      conversions: acc.conversions + row.conversions,
+      revenue: acc.revenue + row.revenue,
+      payout: acc.payout + row.payout,
+    }),
+    { clicks: 0, conversions: 0, revenue: 0, payout: 0 },
+  );
+}
+
+type Totals = { clicks: number; conversions: number; revenue: number; payout: number };
+
+const NO_DELTAS: DashboardDeltasDto = {
+  clicks: null,
+  conversions: null,
+  conversionRate: null,
+  epc: null,
+  revenue: null,
+  payout: null,
+  profit: null,
+};
+
+// Derived metrics are compared as derived metrics — the previous period's rate is
+// recomputed from its own clicks/conversions, not inferred from the totals.
+function buildDeltas(current: Totals, currentProfit: number, previous: Totals | null): DashboardDeltasDto {
+  if (!previous) return NO_DELTAS;
+
+  const rate = (t: Totals) => (t.clicks === 0 ? 0 : (t.conversions / t.clicks) * 100);
+  const epc = (t: Totals) => (t.clicks === 0 ? 0 : t.payout / t.clicks);
+
+  return {
+    clicks: percentChange(current.clicks, previous.clicks),
+    conversions: percentChange(current.conversions, previous.conversions),
+    conversionRate: percentChange(rate(current), rate(previous)),
+    epc: percentChange(epc(current), epc(previous)),
+    revenue: percentChange(current.revenue, previous.revenue),
+    payout: percentChange(current.payout, previous.payout),
+    profit: percentChange(currentProfit, previous.revenue - previous.payout),
+  };
+}
 
 // Default window when the caller doesn't pass one. Long enough that a quiet day
 // doesn't render an empty dashboard, short enough to stay a "current state" view.
@@ -52,6 +98,12 @@ export const dashboardService = {
       dashboardRepository.countClicksByQuality(windowed.dateFrom ? new Date(windowed.dateFrom) : null),
     ]);
 
+    // One extra trend query for the preceding window of equal length. Fetched after
+    // the batch above rather than inside it so a comparison failure can never take the
+    // dashboard down with it — deltas are decoration, the summary is the page.
+    const previous = previousWindow(windowed);
+    const previousTotals = previous ? sumTrend(await reportService.getTrend(previous)) : null;
+
     // Traffic totals come from the trend rows so the tiles and the chart are summing
     // exactly the same data — two independent queries could disagree at a day boundary.
     const totals = trend.reduce(
@@ -88,6 +140,7 @@ export const dashboardService = {
         blockedClicks: clickQuality.blocked,
         suspectClicks: clickQuality.suspect,
       },
+      deltas: buildDeltas(totals, profit, previousTotals),
       trend,
       topOffers,
       topAffiliates,

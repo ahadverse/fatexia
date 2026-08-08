@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Input, Modal, PageHeader, Skeleton, Toggle, toast } from '@fatexia/ui';
+import { Button, ConfirmModal, Input, Modal, PageHeader, Skeleton, Toggle, toast } from '@fatexia/ui';
 import type { Integration } from '@fatexia/types';
 import { getIntegrations, testIntegration, updateIntegration } from '../../lib/platform-api';
 import { useAsync } from '../../hooks/useAsync';
@@ -10,6 +10,11 @@ interface EditState {
   integration: Integration;
   apiKey: string;
   apiSecret: string;
+}
+
+interface ToggleDecision {
+  integration: Integration;
+  enabled: boolean;
 }
 
 /**
@@ -26,14 +31,21 @@ const TESTABLE_PROVIDERS = ['IPHUB', 'IPAPI_IS', 'IPQS'];
 
 // Providers with a row here but no consumer code anywhere yet. Saving a key against
 // one of these stores it correctly and then nothing reads it — labelling that is more
-// honest than a page implying a working email or payout integration.
-const UNUSED_PROVIDERS = ['SMTP', 'PAYPAL', 'WISE', 'MAXMIND'];
+// honest than a page implying a working payout integration.
+const UNUSED_PROVIDERS = ['PAYPAL', 'WISE', 'MAXMIND'];
+
+// Brevo's credential is the same `integrations` row as every other provider, but it
+// is configured under Emails → Settings alongside the sender identity, so email setup
+// is one page instead of two menus. Hidden here to keep a single place to edit it.
+const HIDDEN_PROVIDERS = ['SMTP'];
 
 export function Integrations() {
   const integrations = useAsync<Integration[]>(() => getIntegrations(), []);
   const [edit, setEdit] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [toggleDecision, setToggleDecision] = useState<ToggleDecision | null>(null);
+  const [toggleSaving, setToggleSaving] = useState(false);
 
   // A failed test resolves rather than throwing — the error lands on the row, which
   // is more useful than a toast the admin has to remember while they fix the key.
@@ -72,17 +84,27 @@ export function Integrations() {
     }
   }
 
-  async function toggleEnabled(integration: Integration, enabled: boolean) {
+  function toggleEnabled(integration: Integration, enabled: boolean) {
     if (enabled && !integration.hasApiKey) {
       toast.error('Add an API key before enabling this provider');
       return;
     }
+    setToggleDecision({ integration, enabled });
+  }
+
+  async function confirmToggle() {
+    if (!toggleDecision) return;
+    const { integration, enabled } = toggleDecision;
+    setToggleSaving(true);
     try {
       await updateIntegration(integration.id, { status: enabled ? 'ACTIVE' : 'DISABLED' });
       toast.success(enabled ? `${integration.name} enabled` : `${integration.name} disabled`);
       integrations.reload();
+      setToggleDecision(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to update integration');
+    } finally {
+      setToggleSaving(false);
     }
   }
 
@@ -105,7 +127,7 @@ export function Integrations() {
       {integrations.error && <p className="text-sm text-destructive">{integrations.error}</p>}
 
       <div className="grid gap-4 md:grid-cols-2">
-        {(integrations.data ?? []).map((integration) => (
+        {(integrations.data ?? []).filter((integration) => !HIDDEN_PROVIDERS.includes(integration.provider)).map((integration) => (
           <div key={integration.id} className="rounded-lg border border-border bg-card p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -221,6 +243,21 @@ export function Integrations() {
           </div>
         )}
       </Modal>
+
+      <ConfirmModal
+        open={!!toggleDecision}
+        onOpenChange={(open) => !open && setToggleDecision(null)}
+        title={toggleDecision?.enabled ? `Enable ${toggleDecision.integration.name}?` : `Disable ${toggleDecision?.integration.name}?`}
+        description={
+          toggleDecision?.enabled
+            ? `The saved key starts being used on the next request.`
+            : `The saved key stops being used immediately, even though it stays stored.`
+        }
+        confirmLabel={toggleDecision?.enabled ? 'Enable' : 'Disable'}
+        destructive={!toggleDecision?.enabled}
+        loading={toggleSaving}
+        onConfirm={confirmToggle}
+      />
     </div>
   );
 }

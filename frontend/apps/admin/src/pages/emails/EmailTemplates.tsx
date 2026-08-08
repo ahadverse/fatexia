@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Input, PageHeader, Skeleton, Textarea, Toggle, toast } from '@fatexia/ui';
+import { Button, ConfirmModal, Input, PageHeader, Skeleton, Textarea, Toggle, toast } from '@fatexia/ui';
 import type { EmailTemplate } from '@fatexia/types';
 import { getEmailTemplates, updateEmailTemplate } from '../../lib/platform-api';
 import { useAsync } from '../../hooks/useAsync';
@@ -15,6 +15,8 @@ export function EmailTemplates() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
+  const [toggleTarget, setToggleTarget] = useState<{ template: EmailTemplate; enabled: boolean } | null>(null);
+  const [toggleSaving, setToggleSaving] = useState(false);
 
   const rows = templates.data ?? [];
   const selected = rows.find((template) => template.id === selectedId) ?? rows[0] ?? null;
@@ -42,13 +44,23 @@ export function EmailTemplates() {
     }
   }
 
-  async function toggleEnabled(template: EmailTemplate, enabled: boolean) {
+  function toggleEnabled(template: EmailTemplate, enabled: boolean) {
+    setToggleTarget({ template, enabled });
+  }
+
+  async function confirmToggle() {
+    if (!toggleTarget) return;
+    const { template, enabled } = toggleTarget;
+    setToggleSaving(true);
     try {
       await updateEmailTemplate(template.id, { enabled });
       toast.success(enabled ? `${template.name} enabled` : `${template.name} disabled`);
       templates.reload();
+      setToggleTarget(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to update template');
+    } finally {
+      setToggleSaving(false);
     }
   }
 
@@ -144,6 +156,21 @@ export function EmailTemplates() {
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        open={!!toggleTarget}
+        onOpenChange={(open) => !open && setToggleTarget(null)}
+        title={toggleTarget?.enabled ? `Enable ${toggleTarget.template.name}?` : `Disable ${toggleTarget?.template.name}?`}
+        description={
+          toggleTarget?.enabled
+            ? 'This transactional email starts sending again on its trigger.'
+            : "This transactional email stops sending on its trigger — the event that would have sent it still happens, the email just won't."
+        }
+        confirmLabel={toggleTarget?.enabled ? 'Enable' : 'Disable'}
+        destructive={!toggleTarget?.enabled}
+        loading={toggleSaving}
+        onConfirm={confirmToggle}
+      />
     </div>
   );
 }

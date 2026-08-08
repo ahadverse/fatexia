@@ -182,6 +182,38 @@ export function updateEmailTemplate(
   return apiFetch<EmailTemplate>(`/email-templates/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
 }
 
+// Manual send
+
+export const MAX_MANUAL_RECIPIENTS = 25;
+
+export interface SendEmailResult {
+  sent: string[];
+  failed: { email: string; error: string }[];
+}
+
+export interface ManualEmailContent {
+  subject: string;
+  body: string;
+  macros?: Record<string, string>;
+}
+
+// Resolves even when some recipients were rejected — the per-recipient breakdown is
+// the answer, so failures come back in `failed` rather than as a thrown error.
+export function sendManualEmail(input: ManualEmailContent & { recipients: string[] }): Promise<SendEmailResult> {
+  return apiFetch<SendEmailResult>('/emails/send', { method: 'POST', body: JSON.stringify(input) });
+}
+
+// Rendered by the server through the same layout the send path uses, so what this
+// shows is what actually goes out — a preview built client-side would drift.
+export function previewManualEmail(
+  input: ManualEmailContent,
+): Promise<{ subject: string; html: string; unresolved: string[] }> {
+  return apiFetch<{ subject: string; html: string; unresolved: string[] }>('/emails/preview', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
 // Network settings
 
 export function getNetworkSettings(): Promise<NetworkSettings> {

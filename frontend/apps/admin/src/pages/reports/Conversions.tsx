@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   Button,
+  ConfirmModal,
   DataTable,
   FilterBar,
   FilterField,
@@ -12,6 +13,27 @@ import {
   type DataTableColumn,
 } from '@fatexia/ui';
 import type { Conversion, ConversionStatus, Offer } from '@fatexia/types';
+
+const DECISION_COPY: Record<'APPROVED' | 'REJECTED' | 'CHARGEBACK', { title: string; description: string; confirmLabel: string; destructive: boolean }> = {
+  APPROVED: {
+    title: 'Approve this conversion?',
+    description: 'Its payout becomes eligible for the next payout batch once the hold period elapses.',
+    confirmLabel: 'Approve',
+    destructive: false,
+  },
+  REJECTED: {
+    title: 'Reject this conversion?',
+    description: 'It will not be paid out.',
+    confirmLabel: 'Reject',
+    destructive: true,
+  },
+  CHARGEBACK: {
+    title: 'Chargeback this conversion?',
+    description: 'This reverses a conversion already marked PAID — use this only when the advertiser has genuinely disputed it.',
+    confirmLabel: 'Chargeback',
+    destructive: true,
+  },
+};
 import { getConversions, updateConversionStatus } from '../../lib/reports-api';
 import { getOffers } from '../../lib/offers-api';
 import { runAction, useAsync } from '../../hooks/useAsync';
@@ -30,6 +52,8 @@ export function Conversions() {
   const [offerId, setOfferId] = useState('');
   const [status, setStatus] = useState<ConversionStatus | ''>('');
   const [page, setPage] = useState(1);
+  const [decision, setDecision] = useState<{ row: Conversion; next: 'APPROVED' | 'REJECTED' | 'CHARGEBACK' } | null>(null);
+  const [decisionSaving, setDecisionSaving] = useState(false);
 
   const apiRange = toApiRange(range);
   const filters = useMemo(
@@ -45,11 +69,15 @@ export function Conversions() {
     setPage(1);
   }
 
-  async function setConversionStatus(row: Conversion, next: ConversionStatus) {
-    await runAction(() => updateConversionStatus(row.id, next), {
-      success: `Conversion marked ${next.toLowerCase()}`,
+  async function confirmDecision() {
+    if (!decision) return;
+    setDecisionSaving(true);
+    const result = await runAction(() => updateConversionStatus(decision.row.id, decision.next), {
+      success: `Conversion marked ${decision.next.toLowerCase()}`,
       onDone: conversions.reload,
     });
+    setDecisionSaving(false);
+    if (result) setDecision(null);
   }
 
   const columns: DataTableColumn<Conversion>[] = [
@@ -67,19 +95,19 @@ export function Conversions() {
       key: 'actions',
       header: '',
       render: (row) => (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex justify-end gap-2">
           {row.status !== 'APPROVED' && row.status !== 'PAID' && (
-            <Button size="sm" variant="outline" onClick={() => setConversionStatus(row, 'APPROVED')}>
+            <Button size="sm" variant="outline" onClick={() => setDecision({ row, next: 'APPROVED' })}>
               Approve
             </Button>
           )}
           {row.status !== 'REJECTED' && row.status !== 'PAID' && (
-            <Button size="sm" variant="destructive" onClick={() => setConversionStatus(row, 'REJECTED')}>
+            <Button size="sm" variant="destructive" onClick={() => setDecision({ row, next: 'REJECTED' })}>
               Reject
             </Button>
           )}
           {row.status === 'PAID' && (
-            <Button size="sm" variant="destructive" onClick={() => setConversionStatus(row, 'CHARGEBACK')}>
+            <Button size="sm" variant="destructive" onClick={() => setDecision({ row, next: 'CHARGEBACK' })}>
               Chargeback
             </Button>
           )}
@@ -128,10 +156,10 @@ export function Conversions() {
 
       {totals && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatCard label="Conversions" value={number(totals.count)} />
-          <StatCard label="Revenue" value={compactMoney(totals.revenue)} />
-          <StatCard label="Payout" value={compactMoney(totals.payout)} />
-          <StatCard label="Profit" value={compactMoney(totals.profit)} />
+          <StatCard tone="traffic" label="Conversions" value={number(totals.count)} />
+          <StatCard tone="money" label="Revenue" value={compactMoney(totals.revenue)} />
+          <StatCard tone="money" label="Payout" value={compactMoney(totals.payout)} />
+          <StatCard tone="profit" label="Profit" value={compactMoney(totals.profit)} />
         </div>
       )}
 
@@ -148,6 +176,17 @@ export function Conversions() {
           <Pagination page={page} pageSize={PAGE_SIZE} total={conversions.data?.total ?? 0} onPageChange={setPage} />
         </>
       )}
+
+      <ConfirmModal
+        open={!!decision}
+        onOpenChange={(open) => !open && setDecision(null)}
+        title={decision ? DECISION_COPY[decision.next].title : ''}
+        description={decision ? DECISION_COPY[decision.next].description : ''}
+        confirmLabel={decision ? DECISION_COPY[decision.next].confirmLabel : ''}
+        destructive={decision ? DECISION_COPY[decision.next].destructive : false}
+        loading={decisionSaving}
+        onConfirm={confirmDecision}
+      />
     </div>
   );
 }

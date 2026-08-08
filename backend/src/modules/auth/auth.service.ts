@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import { AppDataSource } from '../../infra/database/data-source';
 import { comparePassword, compareWithDummy } from '../../common/password';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../common/jwt';
@@ -7,10 +8,30 @@ import { userProvisioningService } from '../users/user-provisioning.service';
 import { toPublicUser, type PublicUserDto } from '../users/user.dto';
 import { User, UserRole, UserStatus } from '../users/user.entity';
 import { Affiliate } from '../affiliates/affiliate.entity';
+import { affiliateRepository } from '../affiliates/affiliate.repository';
 import { loginLogService } from '../login-logs/login-log.service';
 import { notificationService } from '../notifications/notification.service';
 import { NotificationCategory, NotificationLevel } from '../notifications/notification.entity';
-import type { RegisterDto } from './auth.dto';
+import { sendTemplateEmail, safeSendEmail } from '../../infra/email/brevo-mailer';
+import { EmailTemplateKey } from '../email-templates/email-template.entity';
+import type { RegisterDto, ResendVerificationDto, VerifyEmailDto } from './auth.dto';
+
+const VERIFICATION_CODE_TTL_MS = 15 * 60 * 1000;
+const MAX_VERIFICATION_ATTEMPTS = 5;
+
+function generateVerificationCode(): string {
+  return String(randomInt(0, 1_000_000)).padStart(6, '0');
+}
+
+function sendVerificationCode(email: string, name: string | null, code: string): void {
+  safeSendEmail(
+    sendTemplateEmail({
+      templateKey: EmailTemplateKey.AFFILIATE_WELCOME,
+      to: { email, name },
+      macros: { affiliate_name: name ?? 'there', code },
+    }),
+  );
+}
 
 interface LoginContext {
   ip: string;
@@ -44,6 +65,8 @@ export const authService = {
       throw new ValidationError('Email is already registered');
     }
 
+    const verificationCode = generateVerificationCode();
+
     const user = await AppDataSource.transaction(async (manager) => {
       const createdUser = await userProvisioningService.createUser(manager, {
         email: dto.email,
@@ -51,6 +74,17 @@ export const authService = {
         role: UserRole.AFFILIATE,
         status: UserStatus.PENDING,
       });
+
+      // Verification is independent of the PENDING approval status set above (see
+      // user.entity.ts) — stored in the same transaction as the account itself.
+      await manager.getRepository(User).update(
+        { id: createdUser.id },
+        {
+          emailVerificationCode: verificationCode,
+          emailVerificationExpiresAt: new Date(Date.now() + VERIFICATION_CODE_TTL_MS),
+          emailVerificationAttempts: 0,
+        },
+      );
 
       await manager.getRepository(Affiliate).save(
         manager.getRepository(Affiliate).create({
@@ -73,8 +107,8 @@ export const authService = {
       return createdUser;
     });
 
-    // Emitted after the transaction commits, never inside it: a notification failure
-    // must not roll back a registration that genuinely succeeded.
+    // Emitted after the transaction commits, never inside it: a notification/email
+    // failure must not roll back a registration that genuinely succeeded.
     notificationService.safeNotify(
       notificationService.notifyNetwork({
         level: NotificationLevel.INFO,
@@ -84,8 +118,61 @@ export const authService = {
         link: '/affiliates/pending',
       }),
     );
+    sendVerificationCode(dto.email, dto.fullName, verificationCode);
 
     return toPublicUser(user);
+  },
+
+  /**
+   * Confirms the affiliate owns the email address — a separate concern from the
+   * PENDING → ACTIVE approval decision (see user.entity.ts). Never issues tokens:
+   * the account may still be PENDING, so login stays gated the same way it always
+   * was.
+   */
+  async verifyEmail(dto: VerifyEmailDto): Promise<{ verified: true }> {
+    const user = await userRepository.findByEmail(dto.email);
+    if (!user) {
+      throw new ValidationError('Invalid code');
+    }
+    if (user.emailVerifiedAt) {
+      return { verified: true };
+    }
+    if (!user.emailVerificationCode || !user.emailVerificationExpiresAt || user.emailVerificationExpiresAt < new Date()) {
+      throw new ValidationError('Code expired — request a new one');
+    }
+    if (user.emailVerificationAttempts >= MAX_VERIFICATION_ATTEMPTS) {
+      throw new ValidationError('Too many attempts — request a new code');
+    }
+    if (user.emailVerificationCode !== dto.code) {
+      await userRepository.updateVerification(user.id, { emailVerificationAttempts: user.emailVerificationAttempts + 1 });
+      throw new ValidationError('Invalid code');
+    }
+
+    await userRepository.updateVerification(user.id, {
+      emailVerifiedAt: new Date(),
+      emailVerificationCode: null,
+      emailVerificationExpiresAt: null,
+      emailVerificationAttempts: 0,
+    });
+    return { verified: true };
+  },
+
+  // Always resolves the same way regardless of whether the email exists or is
+  // already verified — no signal for an outside caller to probe registered emails
+  // with.
+  async resendVerification(dto: ResendVerificationDto): Promise<{ sent: true }> {
+    const user = await userRepository.findByEmail(dto.email);
+    if (user && !user.emailVerifiedAt) {
+      const code = generateVerificationCode();
+      await userRepository.updateVerification(user.id, {
+        emailVerificationCode: code,
+        emailVerificationExpiresAt: new Date(Date.now() + VERIFICATION_CODE_TTL_MS),
+        emailVerificationAttempts: 0,
+      });
+      const affiliate = await affiliateRepository.findByUserId(user.id);
+      sendVerificationCode(user.email, affiliate?.fullName ?? null, code);
+    }
+    return { sent: true };
   },
 
   async login(email: string, password: string, ctx: LoginContext): Promise<TokenPair> {

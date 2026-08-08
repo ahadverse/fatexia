@@ -62,10 +62,7 @@ export function Footer() {
       <div className="container-page pb-12">
         <div className="grid grid-cols-2 gap-8 border-t border-border pt-12 sm:grid-cols-3 lg:grid-cols-5">
           <div className="col-span-2 sm:col-span-3 lg:col-span-1">
-            <div className="flex items-center gap-2">
-              <div className="flex size-7 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground">F</div>
-              <span className="font-semibold text-foreground">Fatexia</span>
-            </div>
+            <img src="/logo.png" alt="Fatexia" className="h-7 w-auto" />
             <p className="mt-3 max-w-xs text-sm leading-relaxed text-muted-foreground">
               A CPA affiliate network built on an in-house tracker, layered no-cost fraud detection, and payouts you can verify.
             </p>

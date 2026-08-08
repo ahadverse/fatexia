@@ -1,10 +1,27 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FilterBar, PageHeader, RankedList, StatCard, StatCardSkeleton, TrendChart } from '@fatexia/ui';
+import {
+  ClipboardCheck,
+  Coins,
+  Fingerprint,
+  MessageSquare,
+  MousePointerClick,
+  Percent,
+  Sparkles,
+  Tag,
+  Target,
+  TrendingUp,
+  Wallet,
+} from 'lucide-react';
 import { getOwnDashboard } from '../lib/portal-api';
 import { useAsync } from '../hooks/useAsync';
 import { compactMoney, money, number, percent } from '../lib/format';
 import { DateRangeFilter, defaultRange, toApiRange, type DateRange } from '../components/DateRangeFilter';
+
+// The comparison window is always the period immediately before the selected one, of
+// the same length — see previousWindow() in the backend's dashboard module.
+const DELTA_LABEL = 'vs the previous period of equal length';
 
 // Payout-only by construction: the /dashboard/mine payload has no revenue, profit or
 // margin field at all, so there is nothing here to accidentally render.
@@ -41,15 +58,17 @@ export function Dashboard() {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <StatCard label="Clicks" value={number(data.summary.clicks)} />
-            <StatCard label="Unique Clicks" value={number(data.summary.uniqueClicks)} />
-            <StatCard label="Conversions" value={number(data.summary.conversions)} />
-            <StatCard label="Conversion rate" value={percent(data.summary.conversionRate)} />
-            <StatCard label="EPC" value={money(data.summary.epc)} />
-            <StatCard label="Earnings" value={compactMoney(data.summary.payout)} />
-            <StatCard label="Ready to pay" value={compactMoney(data.summary.pendingPayout)} />
-            <StatCard label="Pending review" value={number(data.summary.pendingConversions)} />
-            <StatCard label="Points" value={number(data.summary.totalPoints)} />
+            <StatCard label="Clicks" value={number(data.summary.clicks)} tone="traffic" icon={<MousePointerClick className="size-4" />} delta={data.deltas.clicks} deltaLabel={DELTA_LABEL} />
+            <StatCard label="Unique Clicks" value={number(data.summary.uniqueClicks)} tone="traffic" icon={<Fingerprint className="size-4" />} delta={data.deltas.uniqueClicks} deltaLabel={DELTA_LABEL} />
+            <StatCard label="Conversions" value={number(data.summary.conversions)} tone="traffic" icon={<Target className="size-4" />} delta={data.deltas.conversions} deltaLabel={DELTA_LABEL} />
+            <StatCard label="Conversion rate" value={percent(data.summary.conversionRate)} tone="info" icon={<Percent className="size-4" />} delta={data.deltas.conversionRate} deltaLabel={DELTA_LABEL} />
+            <StatCard label="EPC" value={money(data.summary.epc)} tone="info" icon={<Coins className="size-4" />} delta={data.deltas.epc} deltaLabel={DELTA_LABEL} />
+            <StatCard label="Earnings" value={compactMoney(data.summary.payout)} tone="money" icon={<TrendingUp className="size-4" />} delta={data.deltas.payout} deltaLabel={DELTA_LABEL} />
+            {/* The next three are current-state balances/queues, not period figures,
+                so they carry no comparison. */}
+            <StatCard label="Ready to pay" value={compactMoney(data.summary.pendingPayout)} tone="money" icon={<Wallet className="size-4" />} />
+            <StatCard label="Pending review" value={number(data.summary.pendingConversions)} tone="warning" icon={<ClipboardCheck className="size-4" />} />
+            <StatCard label="Points" value={number(data.summary.totalPoints)} tone="profit" icon={<Sparkles className="size-4" />} />
           </div>
 
           <TrendChart
@@ -69,10 +88,10 @@ export function Dashboard() {
               <h3 className="text-sm font-medium text-muted-foreground">Quick links</h3>
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <button type="button" onClick={() => navigate('/offers/browse')} className="text-left">
-                  <StatCard label="Offers available" value={number(data.summary.availableOffers)} />
+                  <StatCard label="Offers available" value={number(data.summary.availableOffers)} tone="info" icon={<Tag className="size-4" />} />
                 </button>
                 <button type="button" onClick={() => navigate('/messages')} className="text-left">
-                  <StatCard label="Unread messages" value={number(data.summary.unreadMessages)} />
+                  <StatCard label="Unread messages" value={number(data.summary.unreadMessages)} tone="info" icon={<MessageSquare className="size-4" />} />
                 </button>
               </div>
             </div>

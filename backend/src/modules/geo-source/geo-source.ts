@@ -60,7 +60,7 @@ export function isPrivateOrLoopback(ip: string): boolean {
   return false;
 }
 
-// MaxMind's GeoLite2 .mmdb files require a free account (see .env.example). Missing
+// MaxMind's GeoLite2 .mmdb files require a free account (see .env). Missing
 // files are expected on a fresh checkout — this degrades to "unknown" geo/ASN rather
 // than crashing the click hot path, so the Tracker is usable before that setup step.
 async function openReaders(): Promise<void> {

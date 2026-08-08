@@ -101,8 +101,8 @@ export function ReferralProgram() {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-            <StatCard label="Active referrers" value={number(rows.length)} />
-            <StatCard label="Affiliates referred" value={number(totalReferred)} />
+            <StatCard tone="info" label="Active referrers" value={number(rows.length)} />
+            <StatCard tone="info" label="Affiliates referred" value={number(totalReferred)} />
             <StatCard
               label="Share of all affiliates"
               value={`${(affiliates.data ?? []).length === 0 ? 0 : Math.round((totalReferred / (affiliates.data ?? []).length) * 100)}%`}

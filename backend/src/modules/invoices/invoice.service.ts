@@ -3,9 +3,12 @@ import { paginate, type Paginated } from '../../common/pagination';
 import { affiliateNames } from '../../common/entity-names';
 import { conversionRepository } from '../conversions/conversion.repository';
 import { affiliateService } from '../affiliates/affiliate.service';
+import { affiliateRepository } from '../affiliates/affiliate.repository';
 import { networkSettingService } from '../network-settings/network-setting.service';
 import { notificationService } from '../notifications/notification.service';
 import { NotificationCategory, NotificationLevel } from '../notifications/notification.entity';
+import { sendTemplateEmail, safeSendEmail } from '../../infra/email/brevo-mailer';
+import { EmailTemplateKey } from '../email-templates/email-template.entity';
 import { invoiceRepository } from './invoice.repository';
 import { InvoiceStatus } from './invoice.entity';
 import {
@@ -208,6 +211,23 @@ export const invoiceService = {
           link: '/payments',
         }),
       );
+
+      const affiliate = await affiliateRepository.findById(invoice.affiliateId);
+      if (affiliate?.user?.email) {
+        safeSendEmail(
+          sendTemplateEmail({
+            templateKey: EmailTemplateKey.PAYOUT_SENT,
+            to: { email: affiliate.user.email, name: affiliate.fullName },
+            macros: {
+              affiliate_name: affiliate.fullName ?? 'there',
+              invoice_number: invoice.invoiceNumber,
+              amount: `${Number(invoice.amount).toFixed(2)} ${invoice.currency}`,
+              period: `${invoice.periodFrom.toISOString().slice(0, 10)} to ${invoice.periodTo.toISOString().slice(0, 10)}`,
+              payment_reference: dto.paymentReference ?? '',
+            },
+          }),
+        );
+      }
     }
 
     return this.getInvoice(id);

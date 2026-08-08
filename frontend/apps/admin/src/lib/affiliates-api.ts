@@ -40,6 +40,16 @@ export function updateAffiliateStatus(id: string, status: UserStatus): Promise<A
   return apiFetch<Affiliate>(`/affiliates/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
 }
 
+// Admin override for an applicant who never completed (or lost) the emailed code —
+// approval doesn't require this, it's just visible/settable state (see PROGRESS.md).
+export function markAffiliateEmailVerified(id: string): Promise<Affiliate> {
+  return apiFetch<Affiliate>(`/affiliates/${id}/verify-email`, { method: 'PATCH' });
+}
+
+export function impersonateAffiliate(id: string): Promise<{ accessToken: string; refreshToken: string }> {
+  return apiFetch<{ accessToken: string; refreshToken: string }>(`/affiliates/${id}/impersonate`, { method: 'POST' });
+}
+
 export function getAffiliateGroups(): Promise<AffiliateGroup[]> {
   return apiFetch<AffiliateGroup[]>('/affiliate-groups');
 }

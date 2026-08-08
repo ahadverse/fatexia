@@ -219,10 +219,8 @@ export interface NetworkSettings {
   blockedRedirectUrl: string | null;
   loginRateLimitPerMinute: number;
   clickRateLimitPerMinute: number;
-  smtpHost: string | null;
-  smtpPort: number | null;
-  smtpUser: string | null;
-  smtpFromEmail: string | null;
+  senderEmail: string | null;
+  senderName: string | null;
   updatedAt: string;
 }
 

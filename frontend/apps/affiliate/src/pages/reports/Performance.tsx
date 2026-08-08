@@ -159,11 +159,11 @@ export function Performance() {
 
       {totals && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-          <StatCard label="Clicks" value={number(totals.clicks)} />
-          <StatCard label="Unique" value={number(totals.uniqueClicks)} />
-          <StatCard label="Conversions" value={number(totals.conversions)} />
-          <StatCard label="Conversion rate" value={percent(totals.conversionRate)} />
-          <StatCard label="Earnings" value={compactMoney(totals.payout)} />
+          <StatCard tone="traffic" label="Clicks" value={number(totals.clicks)} />
+          <StatCard tone="traffic" label="Unique" value={number(totals.uniqueClicks)} />
+          <StatCard tone="traffic" label="Conversions" value={number(totals.conversions)} />
+          <StatCard tone="info" label="Conversion rate" value={percent(totals.conversionRate)} />
+          <StatCard tone="money" label="Earnings" value={compactMoney(totals.payout)} />
         </div>
       )}
 

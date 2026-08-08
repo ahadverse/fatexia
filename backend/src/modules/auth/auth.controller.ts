@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { authService } from './auth.service';
-import type { LoginDto, RefreshDto, RegisterDto } from './auth.dto';
+import type { LoginDto, RefreshDto, RegisterDto, ResendVerificationDto, VerifyEmailDto } from './auth.dto';
 import type { AuthenticatedRequest } from '../../common/guards/auth.guard';
 
 export const authController = {
@@ -40,6 +40,22 @@ export const authController = {
     try {
       const user = await authService.me(req.user!.id);
       res.json(user);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async verifyEmail(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      res.json(await authService.verifyEmail(req.body as VerifyEmailDto));
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async resendVerification(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      res.json(await authService.resendVerification(req.body as ResendVerificationDto));
     } catch (err) {
       next(err);
     }

@@ -1,10 +1,14 @@
 import { randomBytes } from 'node:crypto';
 import { AppDataSource } from '../../infra/database/data-source';
 import { NotFoundError, ValidationError } from '../../common/errors';
+import { signAccessToken, signRefreshToken } from '../../common/jwt';
 import { User, UserRole, UserStatus } from '../users/user.entity';
 import { userProvisioningService } from '../users/user-provisioning.service';
+import { loginLogService } from '../login-logs/login-log.service';
 import { notificationService } from '../notifications/notification.service';
 import { NotificationCategory, NotificationLevel } from '../notifications/notification.entity';
+import { sendTemplateEmail, safeSendEmail } from '../../infra/email/brevo-mailer';
+import { EmailTemplateKey } from '../email-templates/email-template.entity';
 import { Affiliate } from './affiliate.entity';
 import { affiliateRepository } from './affiliate.repository';
 import {
@@ -45,6 +49,13 @@ const STATUS_NOTICE: Partial<Record<UserStatus, { level: NotificationLevel; titl
     title: 'Your account has been suspended',
     body: 'Traffic is no longer being accepted. Contact your manager for details.',
   },
+};
+
+// Only these two statuses have a matching email_templates row (see fixtures.ts) —
+// REJECTED has no template yet, so it stays an in-app notification only.
+const STATUS_EMAIL: Partial<Record<UserStatus, EmailTemplateKey>> = {
+  [UserStatus.ACTIVE]: EmailTemplateKey.AFFILIATE_APPROVED,
+  [UserStatus.BLOCKED]: EmailTemplateKey.AFFILIATE_SUSPENDED,
 };
 
 export const affiliateService = {
@@ -194,7 +205,67 @@ export const affiliateService = {
       );
     }
 
+    const templateKey = STATUS_EMAIL[dto.status];
+    if (templateKey && affiliate.user?.email) {
+      safeSendEmail(
+        sendTemplateEmail({
+          templateKey,
+          to: { email: affiliate.user.email, name: affiliate.fullName },
+          macros: { affiliate_name: affiliate.fullName ?? 'there', manager_name: '', portal_link: '' },
+        }),
+      );
+    }
+
     return this.getAffiliate(id);
+  },
+
+  // Admin override for an applicant who never completed (or lost) the code — see
+  // user.entity.ts. Does not touch `status`; approval is still a separate decision.
+  async markEmailVerified(id: string): Promise<AffiliateDto> {
+    const affiliate = await affiliateRepository.findById(id);
+    if (!affiliate) {
+      throw new NotFoundError('Affiliate not found');
+    }
+    await AppDataSource.getRepository(User).update(
+      { id: affiliate.userId },
+      { emailVerifiedAt: new Date(), emailVerificationCode: null, emailVerificationExpiresAt: null, emailVerificationAttempts: 0 },
+    );
+    return this.getAffiliate(id);
+  },
+
+  /**
+   * Issues a real affiliate session so an admin/manager can open the affiliate
+   * portal already logged in as this affiliate — for support/debugging, not a
+   * separate "view mode". Deliberately not gated on account status: previewing a
+   * PENDING or BLOCKED affiliate's portal is exactly when this is most useful.
+   *
+   * Logged to login-logs (the same audit trail every real login uses) so
+   * impersonation is never an untracked path to someone else's account.
+   */
+  async impersonate(
+    id: string,
+    admin: { id: string },
+    ctx: { ip: string; userAgent: string | null },
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    const affiliate = await affiliateRepository.findById(id);
+    if (!affiliate) {
+      throw new NotFoundError('Affiliate not found');
+    }
+
+    const tokens = {
+      accessToken: signAccessToken({ sub: affiliate.userId, role: UserRole.AFFILIATE }),
+      refreshToken: signRefreshToken({ sub: affiliate.userId }),
+    };
+
+    await loginLogService.record({
+      userId: affiliate.userId,
+      ip: ctx.ip,
+      userAgent: ctx.userAgent,
+      success: true,
+      reason: `Impersonated by admin/manager ${admin.id}`,
+    });
+
+    return tokens;
   },
 
   async updateOwnProfile(userId: string, dto: UpdateOwnProfileDto): Promise<AffiliateDto> {

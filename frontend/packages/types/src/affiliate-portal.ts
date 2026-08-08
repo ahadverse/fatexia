@@ -61,6 +61,16 @@ export interface AffiliateDashboard {
     totalPoints: number;
     unreadMessages: number;
   };
+  // Payout-only, matching the rest of this type — no revenue/profit delta exists for
+  // the same structural reason the summary has no revenue field.
+  deltas: {
+    clicks: number | null;
+    uniqueClicks: number | null;
+    conversions: number | null;
+    conversionRate: number | null;
+    epc: number | null;
+    payout: number | null;
+  };
   trend: AffiliateReportRow[];
   topOffers: AffiliateReportRow[];
 }

@@ -1,7 +1,8 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Toaster } from '@fatexia/ui';
 import { Shell } from './Shell';
-import { Login } from './pages/Login';
+import { Login } from './pages/auth/Login';
+import { Register } from './pages/auth/Register';
 import { useSession } from './session/SessionContext';
 
 import { Dashboard } from './pages/Dashboard';
@@ -30,12 +31,22 @@ function App() {
     return <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">Loading…</div>;
   }
 
+  // Signed-out visitors get their own small router so /register is a real, linkable
+  // URL rather than a state flag — the public site links straight to it, and a
+  // half-finished application survives a refresh of the address bar.
   if (status === 'anonymous') {
     return (
-      <>
-        <Login />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          {/* Any deep link while signed out lands on sign-in. The intended
+              destination is not preserved — that would need the login to redirect
+              back, which is a separate piece of work. */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
         <Toaster />
-      </>
+      </BrowserRouter>
     );
   }
 

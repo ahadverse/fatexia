@@ -42,6 +42,17 @@ export function createApp(options: CreateAppOptions = {}): Express {
     app.use(express.json());
   }
 
+  // Public assets — currently the logo referenced by outbound email, which a
+  // recipient's mail client fetches over plain HTTP with no auth. Long max-age
+  // because mail clients and image proxies cache aggressively anyway, and the file
+  // only changes on a rebrand.
+  app.use(
+    express.static('public', {
+      maxAge: '30d',
+      setHeaders: (res) => res.setHeader('Access-Control-Allow-Origin', '*'),
+    }),
+  );
+
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });
   });

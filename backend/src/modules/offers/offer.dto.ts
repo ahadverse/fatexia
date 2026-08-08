@@ -248,7 +248,9 @@ function trackingLinkFor(offerId: string): string {
 
 // The affiliate view substitutes the caller's own id, resolved from their JWT — so
 // the link they copy actually works. The id is never taken from the request.
-function affiliateTrackingLinkFor(offerId: string, affiliateId: string): string {
+// Exported for the email triggers (access-request approved, offer-live) that need
+// the same working link outside this DTO's own render path.
+export function affiliateTrackingLinkFor(offerId: string, affiliateId: string): string {
   return `${env.PUBLIC_TRACKING_URL}/click?offerId=${offerId}&affiliateId=${affiliateId}`;
 }
 

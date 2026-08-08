@@ -11,7 +11,7 @@ import { normalizeIp } from '../modules/geo-source/geo-source';
  * app.ts). That setting must be the **number of proxy hops**, never `true`: with `true`
  * Express walks the whole `X-Forwarded-For` chain and takes the left-most entry, which
  * is entirely client-supplied — an affiliate could then choose their own country and
- * dodge the datacenter/ASN check by sending a header. See .env.example.
+ * dodge the datacenter/ASN check by sending a header. See .env.
  */
 export function clientIp(req: Request): string {
   return normalizeIp(req.ip) ?? 'unknown';

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { AppShell, LogoMark } from '@fatexia/ui';
+import { AppShell } from '@fatexia/ui';
 import { affiliateMenu } from './menu';
 import { useSession } from './session/SessionContext';
 import { useRealtime } from './realtime/RealtimeContext';
@@ -35,8 +35,6 @@ export function Shell({ children }: { children: ReactNode }) {
       {...bell}
       onProfileClick={() => navigate('/profile')}
       onLogout={() => logout()}
-      logoMark={<LogoMark />}
-      logoText="Fatexia"
     >
       {children}
     </AppShell>

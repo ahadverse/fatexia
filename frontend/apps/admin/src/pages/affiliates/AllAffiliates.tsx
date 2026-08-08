@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Button,
+  ConfirmModal,
   DataTable,
   FilterBar,
   FilterField,
@@ -14,12 +15,24 @@ import {
 } from '@fatexia/ui';
 import { describePayout, readCryptoDetails } from '@fatexia/types';
 import type { Affiliate, UserStatus } from '@fatexia/types';
-import { getAffiliates, updateAffiliateStatus } from '../../lib/affiliates-api';
+import { getAffiliates, impersonateAffiliate, markAffiliateEmailVerified, updateAffiliateStatus } from '../../lib/affiliates-api';
 import { runAction, useAsync } from '../../hooks/useAsync';
 import { date, dateTime } from '../../lib/format';
 import { StatusPill } from '../../components/StatusPill';
 
 const STATUS_OPTIONS: UserStatus[] = ['ACTIVE', 'PENDING', 'BLOCKED', 'REJECTED', 'INACTIVE'];
+
+interface StatusDecision {
+  affiliate: Affiliate;
+  next: 'REJECTED' | 'BLOCKED';
+}
+
+const DECISION_COPY: Record<StatusDecision['next'], { title: string; verb: string }> = {
+  REJECTED: { title: 'Reject this application?', verb: 'rejected' },
+  BLOCKED: { title: 'Suspend this affiliate?', verb: 'suspended' },
+};
+
+const AFFILIATE_PORTAL_URL = (import.meta.env.VITE_AFFILIATE_URL as string | undefined) ?? 'http://localhost:5174';
 
 export interface AllAffiliatesProps {
   /** Pre-filters the list. Affiliates → Pending is this page pinned to PENDING. */
@@ -37,17 +50,71 @@ export function AllAffiliates({
   const [status, setStatus] = useState<UserStatus | ''>(defaultStatus);
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState<Affiliate | null>(null);
+  const [approving, setApproving] = useState<Affiliate | null>(null);
+  const [alsoVerify, setAlsoVerify] = useState(true);
+  const [approveSaving, setApproveSaving] = useState(false);
+  const [decision, setDecision] = useState<StatusDecision | null>(null);
+  const [decisionSaving, setDecisionSaving] = useState(false);
+  const [impersonating, setImpersonating] = useState<Affiliate | null>(null);
+  const [impersonateSaving, setImpersonateSaving] = useState(false);
 
   const affiliates = useAsync(
     () => getAffiliates({ status: status || undefined, search: search || undefined }),
     [status, search],
   );
 
-  async function setAffiliateStatus(affiliate: Affiliate, next: UserStatus) {
-    await runAction(() => updateAffiliateStatus(affiliate.id, next), {
-      success: `${affiliate.fullName ?? affiliate.email} is now ${next.toLowerCase()}`,
+  function openApprove(affiliate: Affiliate) {
+    setApproving(affiliate);
+    setAlsoVerify(true);
+  }
+
+  async function confirmApprove() {
+    if (!approving) return;
+    setApproveSaving(true);
+    const result = await runAction(
+      async () => {
+        if (alsoVerify && !approving.emailVerified) {
+          await markAffiliateEmailVerified(approving.id);
+        }
+        return updateAffiliateStatus(approving.id, 'ACTIVE');
+      },
+      { success: `${approving.fullName ?? approving.email} is now active`, onDone: affiliates.reload },
+    );
+    setApproveSaving(false);
+    if (result) setApproving(null);
+  }
+
+  async function confirmDecision() {
+    if (!decision) return;
+    setDecisionSaving(true);
+    const result = await runAction(() => updateAffiliateStatus(decision.affiliate.id, decision.next), {
+      success: `${decision.affiliate.fullName ?? decision.affiliate.email} is now ${DECISION_COPY[decision.next].verb}`,
       onDone: affiliates.reload,
     });
+    setDecisionSaving(false);
+    if (result) setDecision(null);
+  }
+
+  async function confirmImpersonate() {
+    if (!impersonating) return;
+    setImpersonateSaving(true);
+    const tokens = await runAction(() => impersonateAffiliate(impersonating.id), {
+      success: `Opening ${impersonating.fullName ?? impersonating.email}'s portal…`,
+    });
+    setImpersonateSaving(false);
+    if (tokens) {
+      // A new tab, not a redirect of this one — the admin's own session stays put.
+      window.open(`${AFFILIATE_PORTAL_URL}/?at=${tokens.accessToken}&rt=${tokens.refreshToken}`, '_blank', 'noopener');
+      setImpersonating(null);
+    }
+  }
+
+  async function markVerifiedFromDetail(affiliate: Affiliate) {
+    const result = await runAction(() => markAffiliateEmailVerified(affiliate.id), {
+      success: `${affiliate.fullName ?? affiliate.email} marked as email-verified`,
+      onDone: affiliates.reload,
+    });
+    if (result) setDetail(result);
   }
 
   const columns: DataTableColumn<Affiliate>[] = [
@@ -64,24 +131,34 @@ export function AllAffiliates({
     { key: 'company', header: 'Company', render: (row) => row.companyName ?? '—' },
     { key: 'country', header: 'Country', render: (row) => row.country ?? '—' },
     { key: 'status', header: 'Status', render: (row) => <StatusPill status={row.status} /> },
+    {
+      key: 'emailVerified',
+      header: 'Email',
+      render: (row) =>
+        row.emailVerified ? (
+          <span className="text-xs font-medium text-success">Verified</span>
+        ) : (
+          <span className="text-xs font-medium text-muted-foreground">Not verified</span>
+        ),
+    },
     { key: 'joined', header: 'Joined', render: (row) => date(row.createdAt) },
     {
       key: 'actions',
       header: '',
       render: (row) => (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex justify-end gap-2">
           {row.status !== 'ACTIVE' && (
-            <Button size="sm" variant="outline" onClick={() => setAffiliateStatus(row, 'ACTIVE')}>
+            <Button size="sm" variant="outline" onClick={() => openApprove(row)}>
               Approve
             </Button>
           )}
           {row.status === 'PENDING' && (
-            <Button size="sm" variant="destructive" onClick={() => setAffiliateStatus(row, 'REJECTED')}>
+            <Button size="sm" variant="destructive" onClick={() => setDecision({ affiliate: row, next: 'REJECTED' })}>
               Reject
             </Button>
           )}
           {row.status === 'ACTIVE' && (
-            <Button size="sm" variant="destructive" onClick={() => setAffiliateStatus(row, 'BLOCKED')}>
+            <Button size="sm" variant="destructive" onClick={() => setDecision({ affiliate: row, next: 'BLOCKED' })}>
               Suspend
             </Button>
           )}
@@ -140,6 +217,30 @@ export function AllAffiliates({
       >
         {detail && (
           <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <Button size="sm" variant="outline" onClick={() => setImpersonating(detail)}>
+                Log in as this affiliate
+              </Button>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-muted-foreground">Email verified</dt>
+              <dd className="mt-0.5 flex items-center gap-2 text-card-foreground">
+                {detail.emailVerified ? (
+                  'Yes'
+                ) : (
+                  <>
+                    No
+                    <button
+                      type="button"
+                      onClick={() => markVerifiedFromDetail(detail)}
+                      className="text-xs font-medium text-primary hover:underline"
+                    >
+                      Mark verified
+                    </button>
+                  </>
+                )}
+              </dd>
+            </div>
             {[
               ['Email', detail.email],
               ['Status', detail.status],
@@ -183,6 +284,70 @@ export function AllAffiliates({
           </dl>
         )}
       </Modal>
+
+      <Modal open={!!approving} onOpenChange={(open) => !open && setApproving(null)} title="Approve this affiliate?">
+        {approving && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              <span className="text-card-foreground">{approving.fullName ?? approving.email}</span> will be able to log
+              in and start running offers immediately.
+            </p>
+            {!approving.emailVerified && (
+              <label className="flex items-start gap-2.5 rounded-md border border-border bg-accent/40 p-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={alsoVerify}
+                  onChange={(event) => setAlsoVerify(event.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="text-card-foreground">Also mark their email as verified.</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    They haven&apos;t completed email verification yet.
+                  </span>
+                </span>
+              </label>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setApproving(null)}>
+                Cancel
+              </Button>
+              <Button disabled={approveSaving} onClick={confirmApprove}>
+                {approveSaving ? 'Approving…' : 'Approve'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <ConfirmModal
+        open={!!decision}
+        onOpenChange={(open) => !open && setDecision(null)}
+        title={decision ? DECISION_COPY[decision.next].title : ''}
+        description={
+          decision
+            ? `${decision.affiliate.fullName ?? decision.affiliate.email} will be ${DECISION_COPY[decision.next].verb}${decision.next === 'BLOCKED' ? ' and immediately lose access' : ''}.`
+            : ''
+        }
+        confirmLabel={decision?.next === 'REJECTED' ? 'Reject' : 'Suspend'}
+        destructive
+        loading={decisionSaving}
+        onConfirm={confirmDecision}
+      />
+
+      <ConfirmModal
+        open={!!impersonating}
+        onOpenChange={(open) => !open && setImpersonating(null)}
+        title="Log in as this affiliate?"
+        description={
+          impersonating
+            ? `Opens a new tab, fully authenticated as ${impersonating.fullName ?? impersonating.email} in their affiliate portal. This is recorded in their login history.`
+            : ''
+        }
+        confirmLabel="Log in as affiliate"
+        loading={impersonateSaving}
+        onConfirm={confirmImpersonate}
+      />
     </div>
   );
 }

@@ -44,6 +44,7 @@ Then set the values marked `sync: false` (Render will not invent them):
 |---|---|---|
 | `CORS_ORIGIN` | both | `https://admin.fatexia.com,https://affiliates.fatexia.com,https://fatexia.com` |
 | `PUBLIC_TRACKING_URL` | **API only** | `https://track.fatexia.com` |
+| `PUBLIC_API_URL` | **API only** | `https://fatexia-api.onrender.com` (or the API's custom domain) |
 | `MAXMIND_LICENSE_KEY` | **Tracker only** | from your MaxMind account |
 | `GEOIP_ADMIN_SECRET` | **both** | any long random string — must be the *same* value on both services |
 
@@ -59,6 +60,15 @@ value shadows it. Rotating a key is a form submission, not a redeploy.
 `ensure-geoip.ts`) — never at build time or startup. Kept a plain env var rather than an
 Integrations-table credential like the proxy providers because rotating it is rare
 enough that a redeploy to pick up a new value isn't a real cost.
+
+`EMAIL_LOGO_URL` is the wordmark shown in outbound email. It is fetched by the
+*recipient's* mail client, so it must be reachable from the public internet — a
+localhost URL (the dev default for the API) arrives as a broken image, and a `data:`
+URI does not render at all because Gmail strips it. It defaults to an image host
+rather than this API so it keeps working regardless of where the API is deployed or
+whether a free-tier service is asleep. Keep it the same artwork as
+`backend/public/logo.png`: the rendered height is derived from that local file's
+aspect ratio.
 
 `CORS_ORIGIN` must be an exact origin list — scheme and host, **no trailing slash**. The app deliberately refuses to boot in production with it empty rather than defaulting to "allow any origin".
 

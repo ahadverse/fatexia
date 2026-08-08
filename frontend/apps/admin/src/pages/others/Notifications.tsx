@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, EmptyState, FilterBar, FilterField, PageHeader, Pagination, Select, TableSkeleton } from '@fatexia/ui';
+import { Button, ConfirmModal, EmptyState, FilterBar, FilterField, PageHeader, Pagination, Select, TableSkeleton } from '@fatexia/ui';
 import { getNotifications, markAllNotificationsRead, markNotificationRead } from '../../lib/platform-api';
 import { runAction, useAsync } from '../../hooks/useAsync';
 import { useRealtime } from '../../realtime/RealtimeContext';
@@ -16,6 +16,8 @@ export function Notifications() {
   const [category, setCategory] = useState('');
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [page, setPage] = useState(1);
+  const [confirmMarkAll, setConfirmMarkAll] = useState(false);
+  const [markingAll, setMarkingAll] = useState(false);
 
   const notifications = useAsync(
     () => getNotifications({ category: category || undefined, unreadOnly: unreadOnly || undefined, page, pageSize: PAGE_SIZE }),
@@ -39,18 +41,7 @@ export function Notifications() {
         title="Notifications"
         description="Everything the network flagged for attention, newest first. Opening one takes you to the screen that resolves it."
         actions={
-          <Button
-            variant="outline"
-            onClick={() =>
-              runAction(() => markAllNotificationsRead(), {
-                success: 'All marked read',
-                onDone: () => {
-                  notifications.reload();
-                  refreshNotificationUnread();
-                },
-              })
-            }
-          >
+          <Button variant="outline" onClick={() => setConfirmMarkAll(true)}>
             Mark all read
           </Button>
         }
@@ -122,6 +113,27 @@ export function Notifications() {
           <Pagination page={page} pageSize={PAGE_SIZE} total={notifications.data?.total ?? 0} onPageChange={setPage} />
         </>
       )}
+
+      <ConfirmModal
+        open={confirmMarkAll}
+        onOpenChange={setConfirmMarkAll}
+        title="Mark all notifications read?"
+        description="Every unread notification for you is cleared. This can't be undone."
+        confirmLabel="Mark all read"
+        loading={markingAll}
+        onConfirm={async () => {
+          setMarkingAll(true);
+          const result = await runAction(() => markAllNotificationsRead(), {
+            success: 'All marked read',
+            onDone: () => {
+              notifications.reload();
+              refreshNotificationUnread();
+            },
+          });
+          setMarkingAll(false);
+          if (result) setConfirmMarkAll(false);
+        }}
+      />
     </div>
   );
 }

@@ -24,11 +24,10 @@ const SECONDARY_LINKS = [
 
 function Logo() {
   return (
-    <Link href="/" className="flex items-center gap-2">
-      <div className="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground shadow-[0_4px_16px_-4px_hsl(var(--primary)/0.8)]">
-        F
-      </div>
-      <span className="text-lg font-semibold tracking-tight text-foreground">Fatexia</span>
+    <Link href="/" className="flex items-center">
+      {/* Plain <img>, not next/image: the wordmark is a small fixed-size asset, so the
+          optimiser buys nothing and would only add a loader hop. */}
+      <img src="/logo.png" alt="Fatexia" className="h-8 w-auto" />
     </Link>
   );
 }

@@ -1,5 +1,6 @@
 import { ValidationError, NotFoundError } from '../../common/errors';
 import { probeProvider } from '../fraud/proxy-detection';
+import { probeBrevoAccount } from '../../infra/email/brevo-mailer';
 import { integrationRepository } from './integration.repository';
 import { IntegrationProvider, IntegrationStatus } from './integration.entity';
 import { invalidateIntegrationCache } from './integration-credentials';
@@ -11,6 +12,7 @@ const TESTABLE = new Set<IntegrationProvider>([
   IntegrationProvider.IPHUB,
   IntegrationProvider.IPAPI_IS,
   IntegrationProvider.IPQS,
+  IntegrationProvider.SMTP,
 ]);
 
 // A stable, publicly-known datacenter IP (Google DNS). Every provider recognises it,
@@ -83,20 +85,32 @@ export const integrationService = {
     }
 
     try {
-      const isProxy = await probeProvider(integration.provider, integration.apiKey, PROBE_IP);
-      await integrationRepository.update(id, {
-        status: IntegrationStatus.ACTIVE,
-        lastCheckedAt: new Date(),
-        lastError: null,
-        config: {
-          ...(integration.config ?? {}),
-          // Recorded so the UI can show that the answer was a real classification and
-          // not just a 200 — 8.8.8.8 is a datacenter IP, so `true` is the expected
-          // answer and `false` hints the provider is answering but not scoring.
-          lastTestIp: PROBE_IP,
-          lastTestFlagged: isProxy,
-        },
-      });
+      // Brevo has no IP to classify — it gets its own probe (hits the account
+      // endpoint) rather than being forced through the fraud-provider signature.
+      if (integration.provider === IntegrationProvider.SMTP) {
+        const account = await probeBrevoAccount(integration.apiKey);
+        await integrationRepository.update(id, {
+          status: IntegrationStatus.ACTIVE,
+          lastCheckedAt: new Date(),
+          lastError: null,
+          config: { ...(integration.config ?? {}), lastTestAccount: account },
+        });
+      } else {
+        const isProxy = await probeProvider(integration.provider, integration.apiKey, PROBE_IP);
+        await integrationRepository.update(id, {
+          status: IntegrationStatus.ACTIVE,
+          lastCheckedAt: new Date(),
+          lastError: null,
+          config: {
+            ...(integration.config ?? {}),
+            // Recorded so the UI can show that the answer was a real classification and
+            // not just a 200 — 8.8.8.8 is a datacenter IP, so `true` is the expected
+            // answer and `false` hints the provider is answering but not scoring.
+            lastTestIp: PROBE_IP,
+            lastTestFlagged: isProxy,
+          },
+        });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Connection test failed';
       await integrationRepository.update(id, {

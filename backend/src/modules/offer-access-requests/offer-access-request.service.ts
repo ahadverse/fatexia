@@ -2,9 +2,12 @@ import { In } from 'typeorm';
 import { AppDataSource } from '../../infra/database/data-source';
 import { NotFoundError, ValidationError } from '../../common/errors';
 import { Offer } from '../offers/offer.entity';
+import { affiliateTrackingLinkFor } from '../offers/offer.dto';
 import { affiliateRepository } from '../affiliates/affiliate.repository';
 import { notificationService } from '../notifications/notification.service';
 import { NotificationCategory, NotificationLevel } from '../notifications/notification.entity';
+import { sendTemplateEmail, safeSendEmail } from '../../infra/email/brevo-mailer';
+import { EmailTemplateKey } from '../email-templates/email-template.entity';
 import { offerAccessRequestRepository } from './offer-access-request.repository';
 import { AccessRequestStatus, type OfferAccessRequest } from './offer-access-request.entity';
 import {
@@ -136,6 +139,22 @@ export const offerAccessRequestService = {
         link: '/offers/browse',
       }),
     );
+
+    const affiliate = await affiliateRepository.findById(request.affiliateId);
+    if (affiliate?.user?.email) {
+      safeSendEmail(
+        sendTemplateEmail({
+          templateKey: approved ? EmailTemplateKey.ACCESS_REQUEST_APPROVED : EmailTemplateKey.ACCESS_REQUEST_REJECTED,
+          to: { email: affiliate.user.email, name: affiliate.fullName },
+          macros: {
+            affiliate_name: affiliate.fullName ?? 'there',
+            offer_name: offer?.name ?? 'the offer',
+            offer_link: offer ? affiliateTrackingLinkFor(offer.id, affiliate.id) : '',
+            decision_note: dto.decisionNote ?? '',
+          },
+        }),
+      );
+    }
 
     return (await decorate([updated!]))[0]!;
   },

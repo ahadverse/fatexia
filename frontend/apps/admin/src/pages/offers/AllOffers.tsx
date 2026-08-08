@@ -23,6 +23,14 @@ const STATUS_VARIANT: Record<OfferStatus, 'success' | 'destructive' | 'warning' 
 
 const selectClass = 'h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground';
 
+const STATUS_CHANGE_COPY: Record<OfferStatus, (name: string) => string> = {
+  APPROVED: (name) => `"${name}" goes live — affiliates can start sending traffic to it immediately.`,
+  REJECTED: (name) => `"${name}" will not go live. Affiliates with an existing tracking link can no longer convert on it.`,
+  PAUSED: (name) => `"${name}" stops accepting new clicks until it's reactivated. Existing conversions are unaffected.`,
+  PENDING: (name) => `"${name}" moves back to pending review.`,
+  DELETED: (name) => `This marks "${name}" as DELETED. It stops appearing to affiliates immediately. Historical clicks/conversions are not removed.`,
+};
+
 export function AllOffers() {
   const navigate = useNavigate();
   const [offers, setOffers] = useState<Offer[]>([]);
@@ -30,8 +38,8 @@ export function AllOffers() {
   const [statusFilter, setStatusFilter] = useState<OfferStatus | ''>('');
   const [advertiserFilter, setAdvertiserFilter] = useState('');
   const [loading, setLoading] = useState(true);
-  const [confirmTarget, setConfirmTarget] = useState<Offer | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<{ offer: Offer; next: OfferStatus } | null>(null);
+  const [statusSaving, setStatusSaving] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -53,33 +61,23 @@ export function AllOffers() {
     return true;
   });
 
-  async function handleStatusChange(offer: Offer, next: OfferStatus) {
+  function handleStatusChange(offer: Offer, next: OfferStatus) {
     if (next === offer.status) return;
-    if (next === 'DELETED') {
-      setConfirmTarget(offer);
-      return;
-    }
-    try {
-      await updateOfferStatus(offer.id, next);
-      toast.success(`Offer status updated to ${next}`);
-      load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update offer status');
-    }
+    setPendingStatus({ offer, next });
   }
 
-  async function handleConfirmDelete() {
-    if (!confirmTarget) return;
-    setDeleting(true);
+  async function confirmStatusChange() {
+    if (!pendingStatus) return;
+    setStatusSaving(true);
     try {
-      await updateOfferStatus(confirmTarget.id, 'DELETED');
-      toast.success('Offer deleted');
+      await updateOfferStatus(pendingStatus.offer.id, pendingStatus.next);
+      toast.success(pendingStatus.next === 'DELETED' ? 'Offer deleted' : `Offer status updated to ${pendingStatus.next}`);
       await load();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete offer');
+      toast.error(err instanceof Error ? err.message : 'Failed to update offer status');
     } finally {
-      setDeleting(false);
-      setConfirmTarget(null);
+      setStatusSaving(false);
+      setPendingStatus(null);
     }
   }
 
@@ -128,7 +126,11 @@ export function AllOffers() {
             </select>
           )}
           {o.status !== 'DELETED' && (
-            <button type="button" onClick={() => setConfirmTarget(o)} className="rounded-md border border-destructive/50 px-2 py-1 text-xs text-destructive">
+            <button
+              type="button"
+              onClick={() => setPendingStatus({ offer: o, next: 'DELETED' })}
+              className="rounded-md border border-destructive/50 px-2 py-1 text-xs text-destructive"
+            >
               Delete
             </button>
           )}
@@ -168,14 +170,14 @@ export function AllOffers() {
       {loading ? <p className="text-sm text-muted-foreground">Loading…</p> : <DataTable columns={columns} rows={filteredOffers} getRowKey={(o) => o.id} emptyMessage="No offers match these filters." />}
 
       <ConfirmModal
-        open={!!confirmTarget}
-        onOpenChange={(open) => !open && setConfirmTarget(null)}
-        title="Delete this offer?"
-        description={confirmTarget ? `This marks "${confirmTarget.name}" as DELETED. It stops appearing to affiliates immediately. Historical clicks/conversions are not removed.` : ''}
-        confirmLabel="Delete"
-        destructive
-        loading={deleting}
-        onConfirm={handleConfirmDelete}
+        open={!!pendingStatus}
+        onOpenChange={(open) => !open && setPendingStatus(null)}
+        title={pendingStatus?.next === 'APPROVED' ? 'Approve this offer?' : `Change status to ${pendingStatus?.next}?`}
+        description={pendingStatus ? STATUS_CHANGE_COPY[pendingStatus.next](pendingStatus.offer.name) : ''}
+        confirmLabel={pendingStatus?.next === 'DELETED' ? 'Delete' : 'Confirm'}
+        destructive={pendingStatus?.next === 'DELETED' || pendingStatus?.next === 'REJECTED' || pendingStatus?.next === 'PAUSED'}
+        loading={statusSaving}
+        onConfirm={confirmStatusChange}
       />
     </div>
   );

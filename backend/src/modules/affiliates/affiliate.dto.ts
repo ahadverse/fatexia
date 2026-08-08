@@ -170,6 +170,7 @@ export interface AffiliateDto {
   email: string;
   status: UserStatus;
   fullName: string | null;
+  emailVerified: boolean;
   country: string | null;
   messengerType: AffiliateMessenger | null;
   messengerHandle: string | null;
@@ -200,6 +201,7 @@ export function toAffiliateDto(affiliate: Affiliate): AffiliateDto {
     email: affiliate.user?.email ?? '',
     status: affiliate.user?.status ?? UserStatus.PENDING,
     fullName: affiliate.fullName,
+    emailVerified: Boolean(affiliate.user?.emailVerifiedAt),
     country: affiliate.country,
     messengerType: affiliate.messengerType,
     messengerHandle: affiliate.messengerHandle,

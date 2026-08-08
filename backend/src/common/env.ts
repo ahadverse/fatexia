@@ -29,6 +29,17 @@ interface Env {
   // Public base URL of the Tracker service — used only to compute the shareable offer
   // trackingLink DTO field, never for routing.
   PUBLIC_TRACKING_URL: string;
+  // Public base URL of this API. Used for absolute links back to the app.
+  PUBLIC_API_URL: string;
+  // Absolute URL of the wordmark shown in outbound email.
+  //
+  // Its own setting rather than derived from PUBLIC_API_URL, because the recipient's
+  // mail client fetches this from their machine: pointed at a localhost API (the dev
+  // default) every email ships a broken image, and even in production an image proxy
+  // reaching a sleeping free-tier service is a slower, less reliable path than a
+  // dedicated image host. A relative path or a data: URI will not render at all —
+  // Gmail strips the latter outright.
+  EMAIL_LOGO_URL: string;
   // Directory containing MaxMind GeoLite2 .mmdb files (GeoLite2-City.mmdb,
   // GeoLite2-ASN.mmdb). Requires a free MaxMind account + license key — see
   // backend/README or PLAN-tracker.md. Absent files degrade gracefully (geo/ASN
@@ -147,6 +158,8 @@ export const env: Env = {
   TRUST_PROXY: parseTrustProxy(process.env.TRUST_PROXY),
   CORS_ORIGIN: parseCorsOrigins(process.env.CORS_ORIGIN),
   PUBLIC_TRACKING_URL: stripTrailingSlash(readRequired('PUBLIC_TRACKING_URL', 'http://localhost:4001')),
+  PUBLIC_API_URL: stripTrailingSlash(readRequired('PUBLIC_API_URL', 'http://localhost:4000')),
+  EMAIL_LOGO_URL: readRequired('EMAIL_LOGO_URL', 'https://i.ibb.co.com/gbhCjYwD/logo.png'),
   GEOIP_DB_DIR: readRequired('GEOIP_DB_DIR', 'data/geoip'),
   MAXMIND_LICENSE_KEY: process.env.MAXMIND_LICENSE_KEY || undefined,
   GEOIP_ADMIN_SECRET: process.env.GEOIP_ADMIN_SECRET || undefined,

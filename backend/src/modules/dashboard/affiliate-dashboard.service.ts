@@ -9,6 +9,46 @@ import { invoiceService } from '../invoices/invoice.service';
 import { offerService } from '../offers/offer.service';
 import { reportService } from '../reports/report.service';
 import type { AffiliateDashboardDto, ReportFiltersDto } from '../reports/report.dto';
+import { percentChange, previousWindow } from './period-delta';
+
+type Totals = { clicks: number; uniqueClicks: number; conversions: number; payout: number };
+
+function sumTrend(rows: { clicks: number; uniqueClicks: number; conversions: number; payout: number }[]): Totals {
+  return rows.reduce(
+    (acc, row) => ({
+      clicks: acc.clicks + row.clicks,
+      uniqueClicks: acc.uniqueClicks + row.uniqueClicks,
+      conversions: acc.conversions + row.conversions,
+      payout: acc.payout + row.payout,
+    }),
+    { clicks: 0, uniqueClicks: 0, conversions: 0, payout: 0 },
+  );
+}
+
+const NO_DELTAS = {
+  clicks: null,
+  uniqueClicks: null,
+  conversions: null,
+  conversionRate: null,
+  epc: null,
+  payout: null,
+};
+
+function buildDeltas(current: Totals, previous: Totals | null): AffiliateDashboardDto['deltas'] {
+  if (!previous) return NO_DELTAS;
+
+  const rate = (t: Totals) => (t.clicks === 0 ? 0 : (t.conversions / t.clicks) * 100);
+  const epc = (t: Totals) => (t.clicks === 0 ? 0 : t.payout / t.clicks);
+
+  return {
+    clicks: percentChange(current.clicks, previous.clicks),
+    uniqueClicks: percentChange(current.uniqueClicks, previous.uniqueClicks),
+    conversions: percentChange(current.conversions, previous.conversions),
+    conversionRate: percentChange(rate(current), rate(previous)),
+    epc: percentChange(epc(current), epc(previous)),
+    payout: percentChange(current.payout, previous.payout),
+  };
+}
 
 /**
  * The affiliate portal's dashboard.
@@ -63,6 +103,12 @@ export const affiliateDashboardService = {
       { clicks: 0, uniqueClicks: 0, conversions: 0, approved: 0, payout: 0 },
     );
 
+    // One extra trend query for the preceding window of equal length. Run after the
+    // batch above so a comparison failure can never take the dashboard down with it —
+    // deltas are decoration, the summary is the page.
+    const previous = previousWindow(windowed);
+    const previousTotals = previous ? sumTrend(await reportService.getAffiliateTrend(affiliateId, previous)) : null;
+
     const points = pointBalances.find((row) => row.affiliateId === affiliateId);
 
     return {
@@ -80,6 +126,7 @@ export const affiliateDashboardService = {
         totalPoints: Number(points?.totalPoints ?? 0),
         unreadMessages,
       },
+      deltas: buildDeltas(totals, previousTotals),
       trend,
       topOffers,
     };

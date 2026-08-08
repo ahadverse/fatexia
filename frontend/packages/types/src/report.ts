@@ -115,8 +115,24 @@ export interface DashboardSummary {
   suspectClicks: number;
 }
 
+/**
+ * Percent change vs the immediately preceding window of equal length. `null` means
+ * there was no baseline (the previous period was zero), and the UI renders no
+ * indicator at all rather than an invented "+100%".
+ */
+export interface DashboardDeltas {
+  clicks: number | null;
+  conversions: number | null;
+  conversionRate: number | null;
+  epc: number | null;
+  revenue: number | null;
+  payout: number | null;
+  profit: number | null;
+}
+
 export interface Dashboard {
   summary: DashboardSummary;
+  deltas: DashboardDeltas;
   trend: ReportRow[];
   topOffers: ReportRow[];
   topAffiliates: ReportRow[];

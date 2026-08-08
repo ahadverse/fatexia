@@ -62,8 +62,8 @@ export function ReferralProgram() {
           )}
         </div>
 
-        <StatCard label="Affiliates referred" value={number(rows.length)} />
-        <StatCard label="Currently active" value={number(active)} />
+        <StatCard tone="info" label="Affiliates referred" value={number(rows.length)} />
+        <StatCard tone="info" label="Currently active" value={number(active)} />
       </div>
 
       {referrals.error && <p className="text-sm text-destructive">{referrals.error}</p>}

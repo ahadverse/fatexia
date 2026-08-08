@@ -135,10 +135,10 @@ export function Billing() {
       />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Ready to pay" value={compactMoney(payableTotal)} />
-        <StatCard label="Below threshold" value={compactMoney(heldTotal)} />
-        <StatCard label="Affiliates with a balance" value={number((balances.data ?? []).length)} />
-        <StatCard label="Invoices" value={number(invoices.data?.total ?? 0)} />
+        <StatCard tone="money" label="Ready to pay" value={compactMoney(payableTotal)} />
+        <StatCard tone="warning" label="Below threshold" value={compactMoney(heldTotal)} />
+        <StatCard tone="info" label="Affiliates with a balance" value={number((balances.data ?? []).length)} />
+        <StatCard tone="info" label="Invoices" value={number(invoices.data?.total ?? 0)} />
       </div>
 
       <Tabs

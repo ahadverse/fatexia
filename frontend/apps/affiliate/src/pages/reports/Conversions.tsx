@@ -94,8 +94,8 @@ export function Conversions() {
 
       {totals && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-2">
-          <StatCard label="Conversions" value={number(totals.count)} />
-          <StatCard label="Total payout" value={compactMoney(totals.payout)} />
+          <StatCard tone="traffic" label="Conversions" value={number(totals.count)} />
+          <StatCard tone="money" label="Total payout" value={compactMoney(totals.payout)} />
         </div>
       )}
 

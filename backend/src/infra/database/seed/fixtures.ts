@@ -552,9 +552,9 @@ export const EMAIL_TEMPLATES: EmailTemplateFixture[] = [
   {
     templateKey: EmailTemplateKey.AFFILIATE_WELCOME,
     name: 'Affiliate welcome',
-    subject: 'Welcome to {network_name}, {affiliate_name}',
-    body: 'Hi {affiliate_name},\n\nThanks for applying to {network_name}. Your application is under review and we usually respond within one business day.\n\n— The {network_name} team',
-    availableMacros: ['{affiliate_name}', '{network_name}', '{support_email}'],
+    subject: 'Verify your email for {network_name}',
+    body: 'Hi {affiliate_name},\n\nThanks for applying to {network_name}. First, verify your email with the code below — it expires in 15 minutes.\n\n{code}\n\nOnce verified, your application moves to review and we usually respond within one business day.\n\n— The {network_name} team',
+    availableMacros: ['{affiliate_name}', '{network_name}', '{support_email}', '{code}'],
   },
   {
     templateKey: EmailTemplateKey.PASSWORD_RESET,
@@ -581,7 +581,7 @@ export const EMAIL_TEMPLATES: EmailTemplateFixture[] = [
     templateKey: EmailTemplateKey.AFFILIATE_APPROVED,
     name: 'Account approved',
     subject: 'Your {network_name} account is live',
-    body: 'Hi {affiliate_name},\n\nYour account is approved and you can log in now. Your manager is {manager_name}.\n\n{portal_link}',
+    body: 'Hi {affiliate_name},\n\nYour account is approved — you can log in now and start sending traffic.\n\n{portal_link}\n\nA few things worth doing first:\n\n- Browse the offers you have access to and grab a tracking link\n- Set your payout method under Profile\n- Add your postback URL so your own tracker stays in sync\n\nYour manager is **{manager_name}**, and they are the person to ask about caps, payout bumps or new offers.',
     availableMacros: ['{affiliate_name}', '{network_name}', '{manager_name}', '{portal_link}'],
   },
   {
@@ -595,14 +595,14 @@ export const EMAIL_TEMPLATES: EmailTemplateFixture[] = [
     templateKey: EmailTemplateKey.PAYOUT_SENT,
     name: 'Payout sent',
     subject: 'Payment {invoice_number} sent - {amount}',
-    body: 'Hi {affiliate_name},\n\nWe have sent {amount} for invoice {invoice_number}, covering {period}.\n\nReference: {payment_reference}',
+    body: 'Hi {affiliate_name},\n\nYour payout has been sent. Here are the details:\n\n- Amount: **{amount}**\n- Invoice: {invoice_number}\n- Period: {period}\n- Reference: {payment_reference}\n\nDepending on your payout method it can take a few business days to arrive.',
     availableMacros: ['{affiliate_name}', '{invoice_number}', '{amount}', '{period}', '{payment_reference}'],
   },
   {
     templateKey: EmailTemplateKey.OFFER_LIVE,
     name: 'Offer is live',
     subject: '{offer_name} is now live',
-    body: 'Hi {affiliate_name},\n\n{offer_name} has passed postback verification and is live at {payout} per conversion.\n\n{offer_link}',
+    body: 'Hi {affiliate_name},\n\n**{offer_name}** is live and ready for traffic, paying **{payout}** per conversion.\n\n{offer_link}\n\nCheck the offer page for the current caps and geo targeting before you scale.',
     availableMacros: ['{affiliate_name}', '{offer_name}', '{payout}', '{offer_link}'],
   },
 ];
@@ -643,9 +643,9 @@ export const INTEGRATIONS: IntegrationFixture[] = [
   },
   {
     provider: IntegrationProvider.SMTP,
-    name: 'SMTP',
-    description: 'Outbound mail relay for every transactional email template.',
-    config: { host: '', port: 587, secure: true },
+    name: 'Brevo',
+    description: 'Sends every transactional email template through the Brevo transactional email API.',
+    config: {},
   },
   {
     provider: IntegrationProvider.PAYPAL,

@@ -73,3 +73,16 @@ export const refreshSchema = z.object({
 });
 
 export type RefreshDto = z.infer<typeof refreshSchema>;
+
+export const verifyEmailSchema = z.object({
+  email: z.string().email(),
+  code: z.string().trim().length(6).regex(/^\d{6}$/, 'Code must be 6 digits'),
+});
+
+export type VerifyEmailDto = z.infer<typeof verifyEmailSchema>;
+
+export const resendVerificationSchema = z.object({
+  email: z.string().email(),
+});
+
+export type ResendVerificationDto = z.infer<typeof resendVerificationSchema>;

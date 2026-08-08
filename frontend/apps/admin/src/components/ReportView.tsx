@@ -199,11 +199,11 @@ export function ReportView({ title, description, dimension, selectableDimensions
 
       {totals && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-          <StatCard label="Clicks" value={number(totals.clicks)} />
-          <StatCard label="Unique" value={number(totals.uniqueClicks)} />
-          <StatCard label="Conversions" value={number(totals.conversions)} />
-          <StatCard label="Payout" value={compactMoney(totals.payout)} />
-          <StatCard label="Profit" value={compactMoney(totals.profit)} />
+          <StatCard tone="traffic" label="Clicks" value={number(totals.clicks)} />
+          <StatCard tone="traffic" label="Unique" value={number(totals.uniqueClicks)} />
+          <StatCard tone="traffic" label="Conversions" value={number(totals.conversions)} />
+          <StatCard tone="money" label="Payout" value={compactMoney(totals.payout)} />
+          <StatCard tone="profit" label="Profit" value={compactMoney(totals.profit)} />
         </div>
       )}
 

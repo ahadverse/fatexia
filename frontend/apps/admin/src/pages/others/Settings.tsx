@@ -275,25 +275,6 @@ export function Settings() {
       </Section>
 
       <GeoipSection />
-
-      <Section title="Email delivery" hint="The SMTP password lives on the Integrations page, never here.">
-        <Field label="SMTP host">
-          <Input value={form.smtpHost ?? ''} onChange={(event) => set('smtpHost', event.target.value)} />
-        </Field>
-        <Field label="SMTP port">
-          <Input
-            type="number"
-            value={form.smtpPort ?? ''}
-            onChange={(event) => set('smtpPort', event.target.value ? Number(event.target.value) : null)}
-          />
-        </Field>
-        <Field label="SMTP username">
-          <Input value={form.smtpUser ?? ''} onChange={(event) => set('smtpUser', event.target.value)} />
-        </Field>
-        <Field label="From address">
-          <Input value={form.smtpFromEmail ?? ''} onChange={(event) => set('smtpFromEmail', event.target.value)} />
-        </Field>
-      </Section>
     </div>
   );
 }

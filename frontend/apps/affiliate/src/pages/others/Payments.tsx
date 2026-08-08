@@ -94,10 +94,10 @@ export function Payments() {
         balance.data && (
           <>
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-              <StatCard label="Ready to pay" value={money(balance.data.eligibleAmount)} />
-              <StatCard label="Eligible conversions" value={number(balance.data.eligibleConversions)} />
-              <StatCard label="Paid to date" value={money(paidTotal)} />
-              <StatCard label="Points" value={number(points.data?.totalPoints ?? 0)} />
+              <StatCard tone="money" label="Ready to pay" value={money(balance.data.eligibleAmount)} />
+              <StatCard tone="traffic" label="Eligible conversions" value={number(balance.data.eligibleConversions)} />
+              <StatCard tone="money" label="Paid to date" value={money(paidTotal)} />
+              <StatCard tone="profit" label="Points" value={number(points.data?.totalPoints ?? 0)} />
             </div>
             {!balance.data.meetsThreshold && balance.data.eligibleAmount > 0 && (
               <p className="text-xs text-muted-foreground">

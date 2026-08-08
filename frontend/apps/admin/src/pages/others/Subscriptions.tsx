@@ -127,10 +127,10 @@ export function Subscriptions() {
       />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Subscriptions" value={number(rows.length)} />
-        <StatCard label="Active" value={number(rows.filter((row) => row.status === 'ACTIVE').length)} />
-        <StatCard label="Past due" value={number(rows.filter((row) => row.status === 'PAST_DUE').length)} />
-        <StatCard label="Monthly run-rate" value={compactMoney(monthlyRunRate)} />
+        <StatCard tone="info" label="Subscriptions" value={number(rows.length)} />
+        <StatCard tone="info" label="Active" value={number(rows.filter((row) => row.status === 'ACTIVE').length)} />
+        <StatCard tone="warning" label="Past due" value={number(rows.filter((row) => row.status === 'PAST_DUE').length)} />
+        <StatCard tone="money" label="Monthly run-rate" value={compactMoney(monthlyRunRate)} />
       </div>
 
       <FilterBar>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Button,
+  ConfirmModal,
   DataTable,
   FilterBar,
   FilterField,
@@ -18,6 +19,31 @@ import { getAdvertisers, updateAdvertiser, updateAdvertiserStatus } from '../../
 import { runAction, useAsync } from '../../hooks/useAsync';
 import { date } from '../../lib/format';
 import { StatusPill } from '../../components/StatusPill';
+
+interface StatusDecision {
+  advertiser: Advertiser;
+  next: AdvertiserStatus;
+}
+
+const DECISION_COPY: Record<AdvertiserStatus, { title: string; description: (name: string) => string; confirmLabel: string; destructive?: boolean }> = {
+  ACTIVE: {
+    title: 'Activate this advertiser?',
+    description: (name) => `${name}'s offers become eligible to go live.`,
+    confirmLabel: 'Activate',
+  },
+  SUSPENDED: {
+    title: 'Suspend this advertiser?',
+    description: (name) => `${name}'s offers stop accepting new traffic immediately.`,
+    confirmLabel: 'Suspend',
+    destructive: true,
+  },
+  PENDING: {
+    title: 'Move this advertiser back to pending?',
+    description: (name) => `${name} will need to be activated again before their offers can run.`,
+    confirmLabel: 'Move to pending',
+    destructive: true,
+  },
+};
 
 interface EditState {
   id: string;
@@ -46,17 +72,23 @@ export function AllAdvertisers({
   const [search, setSearch] = useState('');
   const [edit, setEdit] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
+  const [decision, setDecision] = useState<StatusDecision | null>(null);
+  const [decisionSaving, setDecisionSaving] = useState(false);
 
   const advertisers = useAsync(
     () => getAdvertisers({ status: status || undefined, search: search || undefined }),
     [status, search],
   );
 
-  async function setAdvertiserStatus(advertiser: Advertiser, next: AdvertiserStatus) {
-    await runAction(() => updateAdvertiserStatus(advertiser.id, next), {
-      success: `${advertiser.name} is now ${next.toLowerCase()}`,
+  async function confirmDecision() {
+    if (!decision) return;
+    setDecisionSaving(true);
+    const result = await runAction(() => updateAdvertiserStatus(decision.advertiser.id, decision.next), {
+      success: `${decision.advertiser.name} is now ${decision.next.toLowerCase()}`,
       onDone: advertisers.reload,
     });
+    setDecisionSaving(false);
+    if (result) setDecision(null);
   }
 
   async function saveEdit() {
@@ -108,7 +140,7 @@ export function AllAdvertisers({
       key: 'actions',
       header: '',
       render: (row) => (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex justify-end gap-2">
           <Button
             size="sm"
             variant="outline"
@@ -128,12 +160,12 @@ export function AllAdvertisers({
             Edit
           </Button>
           {row.status !== 'ACTIVE' && (
-            <Button size="sm" variant="outline" onClick={() => setAdvertiserStatus(row, 'ACTIVE')}>
+            <Button size="sm" variant="outline" onClick={() => setDecision({ advertiser: row, next: 'ACTIVE' })}>
               Activate
             </Button>
           )}
           {row.status === 'ACTIVE' && (
-            <Button size="sm" variant="destructive" onClick={() => setAdvertiserStatus(row, 'SUSPENDED')}>
+            <Button size="sm" variant="destructive" onClick={() => setDecision({ advertiser: row, next: 'SUSPENDED' })}>
               Suspend
             </Button>
           )}
@@ -215,6 +247,17 @@ export function AllAdvertisers({
           </div>
         )}
       </Modal>
+
+      <ConfirmModal
+        open={!!decision}
+        onOpenChange={(open) => !open && setDecision(null)}
+        title={decision ? DECISION_COPY[decision.next].title : ''}
+        description={decision ? DECISION_COPY[decision.next].description(decision.advertiser.name) : ''}
+        confirmLabel={decision ? DECISION_COPY[decision.next].confirmLabel : ''}
+        destructive={decision ? DECISION_COPY[decision.next].destructive : false}
+        loading={decisionSaving}
+        onConfirm={confirmDecision}
+      />
     </div>
   );
 }

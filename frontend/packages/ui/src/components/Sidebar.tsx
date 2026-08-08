@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import type { MenuConfig, MenuItem } from '@fatexia/types';
 import { cn } from '../lib/cn';
+import { LogoMark } from './LogoMark';
 
 const ICONS: Record<string, LucideIcon> = {
   dashboard: LayoutDashboard,
@@ -125,12 +126,14 @@ function SidebarItem({
 export function Sidebar({ menu, currentPath, onNavigate, collapsed = false, onCollapsedChange, logoMark, logoText, userName, userRole }: SidebarProps) {
   return (
     <aside className={cn('flex h-full flex-col border-r border-border bg-card transition-[width]', collapsed ? 'w-16' : 'w-64')}>
-      {(logoMark || logoText) && (
-        <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
-          {logoMark}
-          {logoText && !collapsed && <span className="truncate font-semibold text-foreground">{logoText}</span>}
-        </div>
-      )}
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
+        {/* The wordmark already contains "Fatexia", so `logoText` is only rendered
+            when a caller supplies a custom mark that doesn't include it. */}
+        {logoMark ?? <LogoMark variant={collapsed ? 'mark' : 'full'} />}
+        {logoMark && logoText && !collapsed && (
+          <span className="truncate font-semibold text-foreground">{logoText}</span>
+        )}
+      </div>
 
       <nav className="flex-1 overflow-y-auto px-2 py-4">
         {menu.groups.map((group, i) => (

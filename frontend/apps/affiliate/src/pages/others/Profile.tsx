@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, PageHeader, PayoutMethodFields, Select, Skeleton, toast } from '@fatexia/ui';
+import { Button, ConfirmModal, Input, PageHeader, PayoutMethodFields, Select, Skeleton, toast } from '@fatexia/ui';
 import { readCryptoDetails } from '@fatexia/types';
 import type { Affiliate, AffiliateMessenger, AffiliatePayoutMethod, CryptoPayoutDetails } from '@fatexia/types';
 import { getOwnProfile, updateOwnProfile } from '../../lib/portal-api';
@@ -51,11 +51,13 @@ export function Profile() {
   const profile = useAsync<Affiliate>(() => getOwnProfile(), []);
   const [form, setForm] = useState<ContactForm | null>(null);
   const [saving, setSaving] = useState(false);
+  const [confirmPayout, setConfirmPayout] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
+  const [confirmPasswordChange, setConfirmPasswordChange] = useState(false);
 
   useEffect(() => {
     if (!profile.data) return;
@@ -78,8 +80,40 @@ export function Profile() {
     setForm((current) => (current ? { ...current, [key]: value } : current));
   }
 
-  async function save() {
-    if (!form) return;
+  // Only a payout-method/details change is consequential enough to confirm — gating
+  // every routine contact-info edit behind a modal would just be friction.
+  function payoutDetailsChanged(): boolean {
+    if (!form || !profile.data) return false;
+    const savedMethod = profile.data.payoutMethod ?? '';
+    if (form.payoutMethod !== savedMethod) return true;
+    const saved = profile.data.payoutDetails ?? {};
+    if (form.payoutMethod === 'PAYPAL') return form.payoutAccount !== String(saved.paypalEmail ?? '');
+    if (form.payoutMethod === 'BANK_TRANSFER') return form.payoutAccount !== String(saved.accountLast4 ?? '');
+    if (form.payoutMethod === 'CRYPTO') {
+      const savedCrypto = readCryptoDetails(saved);
+      return (
+        form.crypto.cryptoCurrency !== savedCrypto.cryptoCurrency ||
+        form.crypto.cryptoNetwork !== savedCrypto.cryptoNetwork ||
+        form.crypto.walletAddress !== savedCrypto.walletAddress
+      );
+    }
+    return false;
+  }
+
+  function handleSaveClick() {
+    if (payoutDetailsChanged()) {
+      setConfirmPayout(true);
+    } else {
+      void save();
+    }
+  }
+
+  async function confirmSaveWithPayout() {
+    if (await save()) setConfirmPayout(false);
+  }
+
+  async function save(): Promise<boolean> {
+    if (!form) return false;
     setSaving(true);
     try {
       await updateOwnProfile({
@@ -106,19 +140,25 @@ export function Profile() {
       });
       toast.success('Profile saved');
       profile.reload();
+      return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save profile');
+      return false;
     } finally {
       setSaving(false);
     }
   }
 
-  async function changePassword(event: React.FormEvent) {
+  function handlePasswordSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (newPassword !== confirmPassword) {
       toast.error('The new passwords do not match');
       return;
     }
+    setConfirmPasswordChange(true);
+  }
+
+  async function changePassword() {
     setChangingPassword(true);
     try {
       await apiFetch('/users/me/password', { method: 'PATCH', body: JSON.stringify({ currentPassword, newPassword }) });
@@ -126,8 +166,8 @@ export function Profile() {
       logout();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to change password');
-    } finally {
       setChangingPassword(false);
+      setConfirmPasswordChange(false);
     }
   }
 
@@ -146,7 +186,7 @@ export function Profile() {
         title="Profile"
         description="Your contact and payout details."
         actions={
-          <Button disabled={saving} onClick={save}>
+          <Button disabled={saving} onClick={handleSaveClick}>
             {saving ? 'Saving…' : 'Save changes'}
           </Button>
         }
@@ -213,7 +253,7 @@ export function Profile() {
         )}
       </Section>
 
-      <form onSubmit={changePassword} className="rounded-lg border border-border bg-card p-4">
+      <form onSubmit={handlePasswordSubmit} className="rounded-lg border border-border bg-card p-4">
         <h2 className="text-sm font-semibold text-card-foreground">Change password</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">You will be signed out afterwards.</p>
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
@@ -259,6 +299,26 @@ export function Profile() {
           </Button>
         </div>
       </form>
+
+      <ConfirmModal
+        open={confirmPayout}
+        onOpenChange={(open) => !open && setConfirmPayout(false)}
+        title="Update your payout details?"
+        description="Payouts will be sent to these new details starting with your next payment. Double-check the wallet address or account — a mistake here can't be recovered once a payout has been sent."
+        confirmLabel="Save changes"
+        loading={saving}
+        onConfirm={confirmSaveWithPayout}
+      />
+
+      <ConfirmModal
+        open={confirmPasswordChange}
+        onOpenChange={(open) => !open && setConfirmPasswordChange(false)}
+        title="Change your password?"
+        description="You'll be signed out immediately and need to log in again with the new password."
+        confirmLabel="Change password"
+        loading={changingPassword}
+        onConfirm={changePassword}
+      />
     </div>
   );
 }

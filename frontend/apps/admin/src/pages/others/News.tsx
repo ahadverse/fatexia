@@ -56,6 +56,8 @@ export function News() {
   const [form, setForm] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<NewsPost | null>(null);
+  const [publishing, setPublishing] = useState<NewsPost | null>(null);
+  const [publishSaving, setPublishSaving] = useState(false);
 
   const posts = useAsync(() => getNewsPosts({ status: status || undefined }), [status]);
 
@@ -121,16 +123,7 @@ export function News() {
             Edit
           </Button>
           {row.status !== 'PUBLISHED' && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                runAction(() => updateNewsPost(row.id, { status: 'PUBLISHED' }), {
-                  success: 'Post published',
-                  onDone: posts.reload,
-                })
-              }
-            >
+            <Button size="sm" variant="outline" onClick={() => setPublishing(row)}>
               Publish
             </Button>
           )}
@@ -255,6 +248,29 @@ export function News() {
           if (!deleting) return;
           await runAction(() => deleteNewsPost(deleting.id), { success: 'Post deleted', onDone: posts.reload });
           setDeleting(null);
+        }}
+      />
+
+      <ConfirmModal
+        open={!!publishing}
+        onOpenChange={(open) => !open && setPublishing(null)}
+        title="Publish this post?"
+        description={
+          publishing
+            ? `"${publishing.title}" becomes visible to ${publishing.audience === 'ALL' ? 'everyone' : publishing.audience.toLowerCase()} immediately.`
+            : ''
+        }
+        confirmLabel="Publish"
+        loading={publishSaving}
+        onConfirm={async () => {
+          if (!publishing) return;
+          setPublishSaving(true);
+          const result = await runAction(() => updateNewsPost(publishing.id, { status: 'PUBLISHED' }), {
+            success: 'Post published',
+            onDone: posts.reload,
+          });
+          setPublishSaving(false);
+          if (result) setPublishing(null);
         }}
       />
     </div>

@@ -27,4 +27,11 @@ export const userRepository = {
   updatePassword(id: string, passwordHash: string): Promise<void> {
     return repository.update({ id }, { passwordHash }).then(() => undefined);
   },
+
+  updateVerification(
+    id: string,
+    fields: Partial<Pick<User, 'emailVerifiedAt' | 'emailVerificationCode' | 'emailVerificationExpiresAt' | 'emailVerificationAttempts'>>,
+  ): Promise<void> {
+    return repository.update({ id }, fields).then(() => undefined);
+  },
 };

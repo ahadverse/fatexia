@@ -43,10 +43,8 @@ export const updateNetworkSettingsSchema = z
     blockedRedirectUrl: nullableUrl,
     loginRateLimitPerMinute: z.number().int().min(1).max(1000).optional(),
     clickRateLimitPerMinute: z.number().int().min(1).max(100000).optional(),
-    smtpHost: nullableText(160),
-    smtpPort: z.number().int().min(1).max(65535).nullish(),
-    smtpUser: nullableText(160),
-    smtpFromEmail: nullableEmail,
+    senderEmail: nullableEmail,
+    senderName: nullableText(160),
   })
   // A suspect band at or above the block band would collapse the middle "hold for
   // review" tier entirely — every suspect click would be blocked outright.
@@ -76,10 +74,8 @@ export interface NetworkSettingsDto {
   blockedRedirectUrl: string | null;
   loginRateLimitPerMinute: number;
   clickRateLimitPerMinute: number;
-  smtpHost: string | null;
-  smtpPort: number | null;
-  smtpUser: string | null;
-  smtpFromEmail: string | null;
+  senderEmail: string | null;
+  senderName: string | null;
   updatedAt: string;
 }
 
@@ -100,10 +96,8 @@ export function toNetworkSettingsDto(settings: NetworkSetting): NetworkSettingsD
     blockedRedirectUrl: settings.blockedRedirectUrl,
     loginRateLimitPerMinute: settings.loginRateLimitPerMinute,
     clickRateLimitPerMinute: settings.clickRateLimitPerMinute,
-    smtpHost: settings.smtpHost,
-    smtpPort: settings.smtpPort,
-    smtpUser: settings.smtpUser,
-    smtpFromEmail: settings.smtpFromEmail,
+    senderEmail: settings.senderEmail,
+    senderName: settings.senderName,
     updatedAt: settings.updatedAt.toISOString(),
   };
 }

@@ -223,6 +223,16 @@ export interface AffiliateDashboardDto {
     totalPoints: number;
     unreadMessages: number;
   };
+  // Payout-only, matching the rest of this DTO — no revenue/profit delta exists here
+  // for the same structural reason the summary has no revenue field.
+  deltas: {
+    clicks: number | null;
+    uniqueClicks: number | null;
+    conversions: number | null;
+    conversionRate: number | null;
+    epc: number | null;
+    payout: number | null;
+  };
   trend: AffiliateReportRowDto[];
   topOffers: AffiliateReportRowDto[];
 }
@@ -248,8 +258,27 @@ export interface DashboardSummaryDto {
   suspectClicks: number;
 }
 
+/**
+ * Percentage change vs the immediately preceding window of equal length.
+ *
+ * Only period-based metrics appear here. The "pending X" counts are current state,
+ * not a measurement over the window, so a period-over-period delta would be
+ * meaningless for them. `null` means there was no baseline to compare against — see
+ * percentChange in dashboard/period-delta.ts.
+ */
+export interface DashboardDeltasDto {
+  clicks: number | null;
+  conversions: number | null;
+  conversionRate: number | null;
+  epc: number | null;
+  revenue: number | null;
+  payout: number | null;
+  profit: number | null;
+}
+
 export interface DashboardDto {
   summary: DashboardSummaryDto;
+  deltas: DashboardDeltasDto;
   trend: ReportRowDto[];
   topOffers: ReportRowDto[];
   topAffiliates: ReportRowDto[];

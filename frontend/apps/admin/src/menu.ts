@@ -110,7 +110,16 @@ export const adminMenu: MenuConfig = {
         // its route and the /subscriptions API are all untouched, so restoring it is
         // uncommenting this line and the matching route in App.tsx.
         // { label: 'Subscriptions', path: '/subscriptions', icon: 'subscription' },
-        { label: 'Email Templates', path: '/email-templates', icon: 'email' },
+        {
+          label: 'Emails',
+          path: '/emails',
+          icon: 'email',
+          children: [
+            { label: 'Templates', path: '/emails/templates' },
+            { label: 'Send Email', path: '/emails/send' },
+            { label: 'Settings', path: '/emails/settings' },
+          ],
+        },
         { label: 'News', path: '/news', icon: 'news' },
         { label: 'Integrations', path: '/integrations', icon: 'integrations' },
         { label: 'Profile', path: '/profile', icon: 'profile' },

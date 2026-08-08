@@ -24,10 +24,8 @@ export function Login() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm space-y-6 rounded-lg border border-border bg-card p-8">
-        <div className="flex items-center gap-2">
-          <LogoMark />
-          <span className="text-lg font-semibold text-card-foreground">Fatexia</span>
-        </div>
+        {/* The wordmark carries the name, so no separate "Fatexia" label here. */}
+        <LogoMark className="h-8" />
         <div className="space-y-1">
           <h1 className="text-xl font-semibold text-card-foreground">Admin sign in</h1>
           <p className="text-sm text-muted-foreground">Manage offers, affiliates, and reports.</p>

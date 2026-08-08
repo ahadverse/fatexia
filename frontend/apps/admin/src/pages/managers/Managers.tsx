@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Button,
+  ConfirmModal,
   DataTable,
   FilterBar,
   FilterField,
@@ -53,6 +54,8 @@ export function Managers({
   const [search, setSearch] = useState('');
   const [edit, setEdit] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
+  const [decision, setDecision] = useState<{ manager: Manager; next: UserStatus } | null>(null);
+  const [decisionSaving, setDecisionSaving] = useState(false);
 
   const managers = useAsync(
     () => getManagers({ managerRole: role, status: status || undefined, search: search || undefined }),
@@ -62,11 +65,15 @@ export function Managers({
   const managerName = (id: string | null) =>
     id ? ((managers.data ?? []).find((manager) => manager.id === id)?.fullName ?? 'Unknown') : '—';
 
-  async function setManagerStatus(manager: Manager, next: UserStatus) {
-    await runAction(() => updateManagerStatus(manager.id, next), {
-      success: `${manager.fullName ?? manager.email} is now ${next.toLowerCase()}`,
+  async function confirmDecision() {
+    if (!decision) return;
+    setDecisionSaving(true);
+    const result = await runAction(() => updateManagerStatus(decision.manager.id, decision.next), {
+      success: `${decision.manager.fullName ?? decision.manager.email} is now ${decision.next.toLowerCase()}`,
       onDone: managers.reload,
     });
+    setDecisionSaving(false);
+    if (result) setDecision(null);
   }
 
   async function saveEdit() {
@@ -111,7 +118,7 @@ export function Managers({
       key: 'actions',
       header: '',
       render: (row) => (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex justify-end gap-2">
           <Button
             size="sm"
             variant="outline"
@@ -131,11 +138,11 @@ export function Managers({
             Edit
           </Button>
           {row.status === 'ACTIVE' ? (
-            <Button size="sm" variant="destructive" onClick={() => setManagerStatus(row, 'BLOCKED')}>
+            <Button size="sm" variant="destructive" onClick={() => setDecision({ manager: row, next: 'BLOCKED' })}>
               Suspend
             </Button>
           ) : (
-            <Button size="sm" variant="outline" onClick={() => setManagerStatus(row, 'ACTIVE')}>
+            <Button size="sm" variant="outline" onClick={() => setDecision({ manager: row, next: 'ACTIVE' })}>
               Reactivate
             </Button>
           )}
@@ -252,6 +259,23 @@ export function Managers({
           </div>
         )}
       </Modal>
+
+      <ConfirmModal
+        open={!!decision}
+        onOpenChange={(open) => !open && setDecision(null)}
+        title={decision?.next === 'BLOCKED' ? 'Suspend this manager?' : 'Reactivate this manager?'}
+        description={
+          decision
+            ? decision.next === 'BLOCKED'
+              ? `${decision.manager.fullName ?? decision.manager.email} loses access to this portal immediately.`
+              : `${decision.manager.fullName ?? decision.manager.email} can log in again.`
+            : ''
+        }
+        confirmLabel={decision?.next === 'BLOCKED' ? 'Suspend' : 'Reactivate'}
+        destructive={decision?.next === 'BLOCKED'}
+        loading={decisionSaving}
+        onConfirm={confirmDecision}
+      />
     </div>
   );
 }

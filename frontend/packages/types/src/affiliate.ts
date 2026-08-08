@@ -65,6 +65,7 @@ export interface Affiliate {
   // gate and this list can never disagree.
   status: UserStatus;
   fullName: string | null;
+  emailVerified: boolean;
   country: string | null;
   messengerType: AffiliateMessenger | null;
   messengerHandle: string | null;

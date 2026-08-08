@@ -34,3 +34,5 @@ affiliateRoutes.get('/:id', affiliateController.getAffiliate);
 affiliateRoutes.post('/', validate(createAffiliateSchema), affiliateController.createAffiliate);
 affiliateRoutes.patch('/:id', validate(updateAffiliateSchema), affiliateController.updateAffiliate);
 affiliateRoutes.patch('/:id/status', validate(updateAffiliateStatusSchema), affiliateController.updateStatus);
+affiliateRoutes.patch('/:id/verify-email', affiliateController.markEmailVerified);
+affiliateRoutes.post('/:id/impersonate', affiliateController.impersonate);

@@ -56,7 +56,9 @@ import { Billing } from './pages/others/Billing';
 // Subscriptions is hidden from the nav for now (see menu.ts) — page kept on disk,
 // import and route commented out together so it comes back in one edit.
 // import { Subscriptions } from './pages/others/Subscriptions';
-import { EmailTemplates } from './pages/others/EmailTemplates';
+import { EmailTemplates } from './pages/emails/EmailTemplates';
+import { EmailSettings } from './pages/emails/EmailSettings';
+import { SendEmail } from './pages/emails/SendEmail';
 import { News } from './pages/others/News';
 import { Integrations } from './pages/others/Integrations';
 import { Profile } from './pages/others/Profile';
@@ -146,7 +148,13 @@ function App() {
           {/* Subscriptions route hidden alongside its nav entry; /subscriptions falls
               through to the catch-all below and lands on the dashboard. */}
           {/* <Route path="/subscriptions" element={<Subscriptions />} /> */}
-          <Route path="/email-templates" element={<EmailTemplates />} />
+          <Route path="/emails" element={<Navigate to="/emails/templates" replace />} />
+          <Route path="/emails/templates" element={<EmailTemplates />} />
+          <Route path="/emails/send" element={<SendEmail />} />
+          <Route path="/emails/settings" element={<EmailSettings />} />
+          {/* The templates page used to live here — kept as a redirect so bookmarks
+              and any linked-to URL still resolve. */}
+          <Route path="/email-templates" element={<Navigate to="/emails/templates" replace />} />
           <Route path="/news" element={<News />} />
           <Route path="/integrations" element={<Integrations />} />
           <Route path="/profile" element={<Profile />} />
