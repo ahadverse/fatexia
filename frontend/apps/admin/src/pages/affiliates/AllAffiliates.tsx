@@ -32,7 +32,14 @@ const DECISION_COPY: Record<StatusDecision['next'], { title: string; verb: strin
   BLOCKED: { title: 'Suspend this affiliate?', verb: 'suspended' },
 };
 
-const AFFILIATE_PORTAL_URL = (import.meta.env.VITE_AFFILIATE_URL as string | undefined) ?? 'http://localhost:5174';
+// Environment-aware fallback: Vite bakes `VITE_*` in at build time, so an unset
+// variable cannot be corrected at runtime. Defaulting to localhost in a production
+// build sends the operator to their own machine — the same way it once sent public
+// "Sign in" traffic there. Setting VITE_AFFILIATE_URL is still correct; this only
+// makes forgetting it degrade to the real domain.
+const AFFILIATE_PORTAL_URL =
+  (import.meta.env.VITE_AFFILIATE_URL as string | undefined) ??
+  (import.meta.env.PROD ? 'https://affiliates.fatexia.com' : 'http://localhost:5174');
 
 export interface AllAffiliatesProps {
   /** Pre-filters the list. Affiliates → Pending is this page pinned to PENDING. */
