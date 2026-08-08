@@ -133,17 +133,10 @@ export function Dashboard() {
                 <StatCard label="Unread messages" value={number(data.summary.unreadMessages)} tone="info" icon={<MessageSquare className="size-4" />} />
               </button>
               <button type="button" onClick={() => navigate('/reports/clicks')} className="text-left">
-<<<<<<< HEAD
                 <StatCard label="Blocked clicks" value={number(data.summary.blockedClicks)} tone="danger" icon={<ShieldAlert className="size-4" />} />
               </button>
               <button type="button" onClick={() => navigate('/reports/clicks')} className="text-left">
                 <StatCard label="Suspect clicks" value={number(data.summary.suspectClicks)} tone="danger" icon={<ShieldQuestion className="size-4" />} />
-=======
-                <StatCard label="Blocked clicks" value={number(data.summary.blockedClicks)} />
-              </button>
-              <button type="button" onClick={() => navigate('/reports/clicks')} className="text-left">
-                <StatCard label="Suspect clicks" value={number(data.summary.suspectClicks)} />
->>>>>>> 5b6b4ee49a8bd8ba65d0c07c0f48069cea886828
               </button>
             </div>
           </div>

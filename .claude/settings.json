@@ -58,7 +58,10 @@
       "Bash(curl -s -X POST http://localhost:4000/auth/register -H 'Content-Type: application/json' -d '{\"email\":\"badurl-test@example.com\",\"password\":\"Pa$$w0rd!\",\"fullName\":\"Dolorem culpa aliqu\",\"country\":\"Ghana\",\"messengerType\":\"SKYPE\",\"messengerHandle\":\"Esse est animi sed\",\"trafficSources\":[\"Facebook\"],\"websiteUrl\":\"https://Consequatur Dolores\"}')",
       "Bash(curl -s -X POST http://localhost:4000/auth/register -H 'Content-Type: application/json' -d '{\"email\":\"urlok-test@example.com\",\"password\":\"Pa$$w0rd!\",\"fullName\":\"Url Ok\",\"country\":\"Ghana\",\"messengerType\":\"SKYPE\",\"messengerHandle\":\"urlok\",\"trafficSources\":[\"Facebook\"],\"websiteUrl\":\"https://example.com/\"}')",
       "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const r=JSON.parse\\(d\\);console.log\\(r.error?\\('ERROR: '+r.error\\):\\('created '+r.email+' status='+r.status\\)\\)}\\)\")",
-      "Bash(PGPASSWORD=123456 psql -h localhost -U postgres -d fatexia -c \"DELETE FROM affiliates WHERE \\\\\"userId\\\\\" IN \\(SELECT id FROM users WHERE email LIKE '%-test@example.com'\\); DELETE FROM users WHERE email LIKE '%-test@example.com';\")"
+      "Bash(PGPASSWORD=123456 psql -h localhost -U postgres -d fatexia -c \"DELETE FROM affiliates WHERE \\\\\"userId\\\\\" IN \\(SELECT id FROM users WHERE email LIKE '%-test@example.com'\\); DELETE FROM users WHERE email LIKE '%-test@example.com';\")",
+      "Bash(timeout 60 git status --short)",
+      "Bash(timeout 30 git log --oneline -3)",
+      "Bash(timeout 60 git grep -nE '^\\(<<<<<<< |>>>>>>> \\)' HEAD -- '*.ts' '*.tsx' '*.css')"
     ]
   }
 }
