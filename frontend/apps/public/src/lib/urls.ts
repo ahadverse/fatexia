@@ -13,7 +13,7 @@
  * preview deployments point at the right portal); this just makes forgetting it
  * degrade to the real domain instead of to nothing.
  */
-const PRODUCTION_AFFILIATE_URL = 'https://affiliates.fatexia.com';
+const PRODUCTION_AFFILIATE_URL = 'https://affiliate.fatexia.com';
 const DEV_AFFILIATE_URL = 'http://localhost:5174';
 
 export const AFFILIATE_URL =
