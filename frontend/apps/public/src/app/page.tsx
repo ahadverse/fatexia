@@ -5,6 +5,7 @@ import { HeroVisual } from '@/components/HeroVisual';
 import { TrackingDashboard } from '@/components/TrackingDashboard';
 import { Reveal } from '@/components/Reveal';
 import { FAQAccordion } from '@/components/FAQAccordion';
+import { ListedOn } from '@/components/ListedOn';
 import { FEATURES, STATS, STEPS, VERTICALS, TRAFFIC_SOURCES, PAYMENT_METHODS, FAQS, DIFFERENTIATORS, FRAUD_LAYERS } from '@/lib/content';
 
 export default function HomePage() {
@@ -291,6 +292,22 @@ export default function HomePage() {
                 See all FAQs
               </ButtonLink>
             </div>
+          </div>
+        </Reveal>
+      </Section>
+
+      {/* --------------------------------------------------- Directory listings -- */}
+      <Section tone="muted">
+        <Reveal>
+          <SectionHeading
+            eyebrow="Listed on"
+            title="Find us where affiliates check networks out"
+            description="Independent directories where you can look up Fatexia rather than take our word for it."
+          />
+        </Reveal>
+        <Reveal delay={80}>
+          <div className="mt-12">
+            <ListedOn />
           </div>
         </Reveal>
       </Section>

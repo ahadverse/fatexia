@@ -446,4 +446,10 @@ export const LISTING_SITES: { name: string; href: string; logo: string; blurb: s
     logo: '/brands/offervault.png',
     blurb: 'One of the longest-running offer and network search engines.',
   },
+  {
+    name: 'AffPlus',
+    href: 'https://affplus.com',
+    logo: '/brands/affplus.png',
+    blurb: 'Offer search engine aggregating campaigns across CPA networks.',
+  },
 ];

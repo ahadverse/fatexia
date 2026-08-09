@@ -33,7 +33,7 @@ function BrandLogo({ name, logo }: { name: string; logo: string }) {
 
 export function ListedOn() {
   return (
-    <div className="grid gap-4 sm:grid-cols-3">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {LISTING_SITES.map((site) => (
         <a
           key={site.name}
