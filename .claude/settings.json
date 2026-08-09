@@ -61,7 +61,12 @@
       "Bash(PGPASSWORD=123456 psql -h localhost -U postgres -d fatexia -c \"DELETE FROM affiliates WHERE \\\\\"userId\\\\\" IN \\(SELECT id FROM users WHERE email LIKE '%-test@example.com'\\); DELETE FROM users WHERE email LIKE '%-test@example.com';\")",
       "Bash(timeout 60 git status --short)",
       "Bash(timeout 30 git log --oneline -3)",
-      "Bash(timeout 60 git grep -nE '^\\(<<<<<<< |>>>>>>> \\)' HEAD -- '*.ts' '*.tsx' '*.css')"
+      "Bash(timeout 60 git grep -nE '^\\(<<<<<<< |>>>>>>> \\)' HEAD -- '*.ts' '*.tsx' '*.css')",
+      "Bash(curl -sL -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/126.0 Safari/537.36\" -m 30 https://affplus.com -o affplus.html -w \"affplus:%{http_code} %{size_download}\\\\n\")",
+      "Bash(curl -sL -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/126.0 Safari/537.36\" -m 30 https://affhub.com -o affhub.html -w \"affhub:%{http_code} %{size_download}\\\\n\")",
+      "Bash(curl -sL -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/126.0 Safari/537.36\" -m 40 https://affhub.net/ -o affhub.html -w \"affhub:%{http_code} %{size_download} %{url_effective}\\\\n\")",
+      "Bash(curl -sL -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/126.0 Safari/537.36\" -e \"https://affplus.com/\" -m 40 https://affplus.com/logo.png -o affplus.png -w \"affplus.png:%{http_code} %{size_download} %{content_type}\\\\n\")",
+      "Bash(curl -sL --http1.1 -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/126.0 Safari/537.36\" -m 90 https://affhub.net/ -o affhub.html -w \"affhub:%{http_code} %{size_download}\\\\n\")"
     ]
   }
 }
