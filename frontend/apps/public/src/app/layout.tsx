@@ -23,6 +23,9 @@ export const metadata: Metadata = {
   description:
     'Fatexia is a CPA affiliate network with an in-house click tracker, layered no-cost fraud detection, and payouts computed from the rule every time. Built for affiliates and advertisers who want a network that shows its work.',
   keywords: ['CPA network', 'affiliate network', 'affiliate marketing', 'CPA offers', 'performance marketing', 'affiliate payouts'],
+  verification: {
+    google: 'kn_FpdyM29NGPgKW6TldIxN5eFzHEluwc-zR0MHbXyk',
+  },
   openGraph: {
     type: 'website',
     siteName: 'Fatexia',
