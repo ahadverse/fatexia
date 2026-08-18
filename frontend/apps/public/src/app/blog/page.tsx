@@ -4,11 +4,14 @@ import { ArrowRight } from 'lucide-react';
 import { PageHero, Section } from '@/components/marketing';
 import { Reveal } from '@/components/Reveal';
 import { getPublishedPosts } from '@/lib/posts';
+import { JsonLd } from '@/components/JsonLd';
+import { breadcrumbSchema, pageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Blog',
   description: 'Notes on CPA tracking, fraud detection, and how Fatexia is built.',
-};
+  path: '/blog',
+});
 
 export default async function BlogIndexPage() {
   const posts = (await getPublishedPosts()).slice().reverse();
@@ -16,6 +19,7 @@ export default async function BlogIndexPage() {
 
   return (
     <>
+      <JsonLd data={breadcrumbSchema([{ name: 'Blog', path: '/blog' }])} />
       <PageHero eyebrow="Blog" title="Notes from behind the tracker" description="Plain-language writing on CPA tracking, fraud detection, and how Fatexia is built." />
 
       <Section>

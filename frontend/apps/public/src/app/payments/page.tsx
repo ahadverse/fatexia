@@ -4,11 +4,16 @@ import { PageHero, Section, SectionHeading, ButtonLink, CTABanner } from '@/comp
 import { Reveal } from '@/components/Reveal';
 import { PAYMENT_METHODS, FAQS } from '@/lib/content';
 import { FAQAccordion } from '@/components/FAQAccordion';
+import { JsonLd } from '@/components/JsonLd';
+import { breadcrumbSchema, pageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
-  title: 'Payments',
-  description: 'How Fatexia pays: methods, currencies, schedules, and why every payout is computed from the offer rule rather than trusted from a postback.',
-};
+export const metadata: Metadata = pageMetadata({
+  title: 'Affiliate Payments & Payout Terms',
+  description:
+    'How Fatexia pays: methods, currencies, schedules, and why every payout is computed from the offer rule rather than trusted from a postback.',
+  path: '/payments',
+  keywords: ['affiliate payments', 'CPA payouts', 'payment terms', 'crypto payouts', 'PayPal affiliate payouts'],
+});
 
 const PAYMENT_PRINCIPLES = [
   { icon: Calculator, title: 'Computed, not trusted', description: "Every payout is calculated from the offer's own payout rule — never taken from the advertiser's postback payload." },
@@ -20,6 +25,7 @@ const PAYMENT_PRINCIPLES = [
 export default function PaymentsPage() {
   return (
     <>
+      <JsonLd data={breadcrumbSchema([{ name: 'Payments', path: '/payments' }])} />
       <PageHero
         eyebrow="Payments"
         title="Payouts you can reproduce"

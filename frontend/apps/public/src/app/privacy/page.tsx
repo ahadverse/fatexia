@@ -1,14 +1,20 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { PageHero, Section } from '@/components/marketing';
+import { JsonLd } from '@/components/JsonLd';
+import { breadcrumbSchema, pageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Privacy Policy',
-};
+  description:
+    'What Fatexia collects, why a click identifier exists, how long data is kept, and how to ask for it to be removed.',
+  path: '/privacy',
+});
 
 export default function PrivacyPage() {
   return (
     <>
+      <JsonLd data={breadcrumbSchema([{ name: 'Privacy Policy', path: '/privacy' }])} />
       <PageHero eyebrow="Legal" title="Privacy Policy" />
       <Section>
         <div className="mx-auto max-w-3xl">

@@ -2,15 +2,21 @@ import type { Metadata } from 'next';
 import { PageHero, Section, SectionHeading, VerticalCard, CTABanner } from '@/components/marketing';
 import { Reveal } from '@/components/Reveal';
 import { VERTICALS } from '@/lib/content';
+import { JsonLd } from '@/components/JsonLd';
+import { breadcrumbSchema, pageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
-  title: 'Verticals',
-  description: 'Every category Fatexia runs traffic on — finance, nutra, sweepstakes, dating, mobile content, iGaming, e-commerce, insurance, software and lead-gen.',
-};
+export const metadata: Metadata = pageMetadata({
+  title: 'CPA Verticals',
+  description:
+    'Every category Fatexia runs traffic on — finance, nutra, sweepstakes, dating, mobile content, iGaming, e-commerce, insurance, software and lead-gen.',
+  path: '/verticals',
+  keywords: ['CPA verticals', 'finance offers', 'nutra offers', 'sweepstakes offers', 'iGaming offers', 'lead generation offers'],
+});
 
 export default function VerticalsPage() {
   return (
     <>
+      <JsonLd data={breadcrumbSchema([{ name: 'Verticals', path: '/verticals' }])} />
       <PageHero
         eyebrow="Verticals"
         title="Offers across every category that converts"

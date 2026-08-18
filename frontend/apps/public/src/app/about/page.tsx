@@ -3,11 +3,15 @@ import { LineChart, Calculator, ShieldCheck, Target, Eye, Wrench, Scale, Users, 
 import { PageHero, Section, SectionHeading, FeatureCard, StatBand, CTABanner, Eyebrow } from '@/components/marketing';
 import { Reveal } from '@/components/Reveal';
 import { STATS } from '@/lib/content';
+import { JsonLd } from '@/components/JsonLd';
+import { breadcrumbSchema, pageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'About',
-  description: 'Why Fatexia is built the way it is: an in-house tracker, transparent payout math, and fraud detection you can actually explain.',
-};
+  description:
+    'Why Fatexia is built the way it is: an in-house tracker, transparent payout math, and fraud detection you can actually explain.',
+  path: '/about',
+});
 
 const PRINCIPLES = [
   {
@@ -69,6 +73,7 @@ const ROADMAP = [
 export default function AboutPage() {
   return (
     <>
+      <JsonLd data={breadcrumbSchema([{ name: 'About', path: '/about' }])} />
       <PageHero
         eyebrow="About"
         title="A network built to show its work"

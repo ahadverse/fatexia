@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { GlowBackdrop, ButtonLink } from '@/components/marketing';
 import { getPostBySlug, getPublishedPosts } from '@/lib/posts';
+import { JsonLd } from '@/components/JsonLd';
+import { ORGANIZATION_ID, absoluteUrl, breadcrumbSchema, pageMetadata } from '@/lib/seo';
 
 // No generateStaticParams — posts are admin-managed and can change at any time, so
 // this route renders dynamically per-request (getPostBySlug fetches with no-store)
@@ -12,8 +14,17 @@ import { getPostBySlug, getPublishedPosts } from '@/lib/posts';
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const post = await getPostBySlug(slug);
-  if (!post) return {};
-  return { title: post.title, description: post.excerpt };
+  // An unknown slug renders notFound() below. Returning a noindex stub rather than {}
+  // keeps a crawler that reached a deleted post from indexing the 404 shell.
+  if (!post) return { title: 'Post not found', robots: { index: false, follow: false } };
+
+  return pageMetadata({
+    title: post.title,
+    description: post.excerpt,
+    path: `/blog/${post.slug}`,
+    type: 'article',
+    publishedTime: post.publishedAt,
+  });
 }
 
 export default async function BlogPostPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -26,6 +37,26 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
 
   return (
     <>
+      <JsonLd
+        data={[
+          breadcrumbSchema([
+            { name: 'Blog', path: '/blog' },
+            { name: post.title, path: `/blog/${post.slug}` },
+          ]),
+          {
+            '@context': 'https://schema.org',
+            '@type': 'BlogPosting',
+            headline: post.title,
+            description: post.excerpt,
+            datePublished: post.publishedAt,
+            dateModified: post.publishedAt,
+            author: { '@id': ORGANIZATION_ID },
+            publisher: { '@id': ORGANIZATION_ID },
+            // Tells Google which URL to credit when the article is syndicated or scraped.
+            mainEntityOfPage: { '@type': 'WebPage', '@id': absoluteUrl(`/blog/${post.slug}`) },
+          },
+        ]}
+      />
       <section className="relative overflow-hidden border-b border-border">
         <GlowBackdrop />
         <div className="container-page max-w-3xl py-16 sm:py-20">

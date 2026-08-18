@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Check, ArrowRight, Users, Megaphone } from 'lucide-react';
 import { ButtonLink, Eyebrow, SectionHeading, Section, GlowBackdrop, FeatureCard, VerticalCard, StatBand, CTABanner } from '@/components/marketing';
@@ -7,6 +8,25 @@ import { Reveal } from '@/components/Reveal';
 import { FAQAccordion } from '@/components/FAQAccordion';
 import { ListedOn } from '@/components/ListedOn';
 import { FEATURES, STATS, STEPS, VERTICALS, TRAFFIC_SOURCES, PAYMENT_METHODS, FAQS, DIFFERENTIATORS, FRAUD_LAYERS } from '@/lib/content';
+import { SITE_NAME, SITE_URL } from '@/lib/seo';
+
+// The home page keeps the root layout's title verbatim (`absolute` so the "%s — Fatexia"
+// template does not append the brand a second time) and adds only what the root cannot
+// declare for everyone: its own canonical.
+export const metadata: Metadata = {
+  title: {
+    absolute: 'Fatexia — The CPA Network Built on Transparent Tracking',
+  },
+  alternates: { canonical: SITE_URL },
+  openGraph: {
+    type: 'website',
+    siteName: SITE_NAME,
+    locale: 'en_US',
+    url: SITE_URL,
+    title: 'Fatexia — The CPA Network Built on Transparent Tracking',
+    description: 'In-house tracking, layered fraud detection, and payouts you can verify. One network, built well.',
+  },
+};
 
 export default function HomePage() {
   return (

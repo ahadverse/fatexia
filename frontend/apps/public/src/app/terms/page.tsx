@@ -1,9 +1,14 @@
 import type { Metadata } from 'next';
 import { PageHero, Section } from '@/components/marketing';
+import { JsonLd } from '@/components/JsonLd';
+import { breadcrumbSchema, pageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Terms of Service',
-};
+  description:
+    'The terms that govern Fatexia affiliate accounts: eligibility, tracking and attribution, payout calculation, and termination.',
+  path: '/terms',
+});
 
 const SECTIONS = [
   { heading: '1. Acceptance of terms', body: "By registering for or using Fatexia's affiliate network, you agree to these Terms of Service and any offer-specific terms attached to individual campaigns." },
@@ -26,6 +31,7 @@ const SECTIONS = [
 export default function TermsPage() {
   return (
     <>
+      <JsonLd data={breadcrumbSchema([{ name: 'Terms of Service', path: '/terms' }])} />
       <PageHero eyebrow="Legal" title="Terms of Service" />
       <Section>
         <div className="mx-auto max-w-3xl">

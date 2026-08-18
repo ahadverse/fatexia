@@ -1,10 +1,14 @@
 import type { Metadata } from 'next';
 import { PageHero, Section } from '@/components/marketing';
+import { JsonLd } from '@/components/JsonLd';
+import { breadcrumbSchema, pageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Cookie Policy',
-  description: 'How Fatexia uses cookies and tracking identifiers across the public site and the tracker.',
-};
+  description:
+    'How Fatexia uses cookies and tracking identifiers across the public site and the tracker.',
+  path: '/cookies',
+});
 
 const SECTIONS = [
   {
@@ -36,6 +40,7 @@ const SECTIONS = [
 export default function CookiesPage() {
   return (
     <>
+      <JsonLd data={breadcrumbSchema([{ name: 'Cookie Policy', path: '/cookies' }])} />
       <PageHero eyebrow="Legal" title="Cookie Policy" description="How we use cookies and tracking identifiers across the site and the tracker." />
 
       <Section>

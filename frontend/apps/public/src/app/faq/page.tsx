@@ -3,17 +3,22 @@ import { PageHero, Section, ButtonLink, CTABanner } from '@/components/marketing
 import { Reveal } from '@/components/Reveal';
 import { FAQAccordion } from '@/components/FAQAccordion';
 import { FAQS } from '@/lib/content';
+import { JsonLd } from '@/components/JsonLd';
+import { breadcrumbSchema, faqSchema, pageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
-  title: 'FAQ',
-  description: 'Answers to common questions about joining Fatexia, tracking, payments, and fraud & quality control.',
-};
+export const metadata: Metadata = pageMetadata({
+  title: 'Affiliate Network FAQ',
+  description:
+    'Answers to common questions about joining Fatexia, tracking, payments, and fraud & quality control.',
+  path: '/faq',
+});
 
 const CATEGORIES = ['Getting started', 'Offers', 'Tracking', 'Payments', 'Fraud & quality', 'Account & support'] as const;
 
 export default function FaqPage() {
   return (
     <>
+      <JsonLd data={[breadcrumbSchema([{ name: 'FAQ', path: '/faq' }]), faqSchema(FAQS)]} />
       <PageHero eyebrow="FAQ" title="Everything you might want to ask" description="Grouped by topic. Still stuck? Reach out and a real person will get back to you." />
 
       <Section>

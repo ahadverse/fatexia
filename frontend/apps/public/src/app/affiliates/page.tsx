@@ -4,6 +4,8 @@ import { PageHero, Section, SectionHeading, FeatureCard, VerticalCard, ButtonLin
 import { Reveal } from '@/components/Reveal';
 import { FAQAccordion } from '@/components/FAQAccordion';
 import { FEATURES, VERTICALS, STEPS, FAQS, STATS } from '@/lib/content';
+import { JsonLd } from '@/components/JsonLd';
+import { breadcrumbSchema, pageMetadata } from '@/lib/seo';
 
 const TOOLKIT = [
   { icon: Link2, title: 'Tracking links', description: 'Every offer gives you a link with your affiliate ID already embedded — no manual macros to wire up.' },
@@ -14,10 +16,13 @@ const TOOLKIT = [
   { icon: LayoutDashboard, title: 'Real-time dashboard', description: 'Clicks, conversions and payout status update live — no nightly batch, no waiting to see what is working.' },
 ];
 
-export const metadata: Metadata = {
-  title: 'For Affiliates',
-  description: 'Run offers across every converting vertical, with tracking links built for your traffic, real-time reporting, and payouts computed from the rule every time.',
-};
+export const metadata: Metadata = pageMetadata({
+  title: 'CPA Offers for Affiliates',
+  description:
+    'Run offers across every converting vertical, with tracking links built for your traffic, real-time reporting, and payouts computed from the rule every time.',
+  path: '/affiliates',
+  keywords: ['affiliate program', 'CPA offers', 'affiliate tracking links', 'smart links', 'S2S postback', 'affiliate payouts'],
+});
 
 const AFFILIATE_PERKS = [
   'Access to every offer available to your traffic type',
@@ -31,6 +36,7 @@ const AFFILIATE_PERKS = [
 export default function AffiliatesPage() {
   return (
     <>
+      <JsonLd data={breadcrumbSchema([{ name: 'For Affiliates', path: '/affiliates' }])} />
       <PageHero
         eyebrow="For Affiliates"
         title="Run the traffic. Keep the receipts."

@@ -3,6 +3,8 @@ import { ShieldCheck, Server, Wallet, LineChart, ClipboardList, BadgeCheck, Chec
 import { PageHero, Section, SectionHeading, FeatureCard, ButtonLink, Eyebrow } from '@/components/marketing';
 import { Reveal } from '@/components/Reveal';
 import { FRAUD_LAYERS } from '@/lib/content';
+import { JsonLd } from '@/components/JsonLd';
+import { breadcrumbSchema, pageMetadata } from '@/lib/seo';
 
 const ADVERTISER_STEPS = [
   { icon: ClipboardList, step: '01', title: 'Brief your offer', description: 'Send us the offer, payout rule, targeting and any caps. We set it up and generate the tracking and postback endpoints.' },
@@ -20,10 +22,13 @@ const ADVERTISER_GETS = [
   'Direct onboarding and a real person to talk to while the self-serve portal is built',
 ];
 
-export const metadata: Metadata = {
-  title: 'For Advertisers',
-  description: 'Reach vetted affiliate traffic protected by a fraud pipeline we can explain layer by layer, with conversions verified and payouts computed from your own rule.',
-};
+export const metadata: Metadata = pageMetadata({
+  title: 'Affiliate Traffic for Advertisers',
+  description:
+    'Reach vetted affiliate traffic protected by a fraud pipeline we can explain layer by layer, with conversions verified and payouts computed from your own rule.',
+  path: '/advertisers',
+  keywords: ['advertisers', 'CPA advertising', 'affiliate traffic', 'ad fraud detection', 'conversion tracking', 'performance marketing'],
+});
 
 const ADVERTISER_VALUE = [
   { icon: ShieldCheck, title: 'Traffic quality you can audit', description: 'A layered fraud pipeline runs on infrastructure we own — and we can walk you through what every layer does, not point at a black box.' },
@@ -35,6 +40,7 @@ const ADVERTISER_VALUE = [
 export default function AdvertisersPage() {
   return (
     <>
+      <JsonLd data={breadcrumbSchema([{ name: 'For Advertisers', path: '/advertisers' }])} />
       <PageHero
         eyebrow="For Advertisers"
         title="Performance traffic, without the fraud tax."
