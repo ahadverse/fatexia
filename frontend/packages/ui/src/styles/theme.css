@@ -1,12 +1,3 @@
-/* Theme tokens — locked here, derive every color from these. HSL triples (no
-   `hsl()` wrapper) so Tailwind can apply alpha via `hsl(var(--x) / <alpha-value>)`.
-   Dark is the primary design direction (see PLAN-admin.md: "Trakaff-style dark
-   dashboard"); the .light block below exists only so the theme toggle isn't a
-   no-op, not as an equally-designed alternative.
-
-   The --primary/--ring hue (243, indigo/violet) is a placeholder — swap for
-   Fatexia's real brand color once one exists; nothing else depends on this
-   specific hue. */
 html,
 body,
 #root {
