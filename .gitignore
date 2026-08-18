@@ -49,8 +49,16 @@ Thumbs.db
 coverage/
 playwright-report/
 test-results/
+# Screenshots from Playwright and the like. The negations below are not optional
+# extras: every static root that *serves* a .png has to be re-included, or the file
+# exists only on the machine that added it and 404s everywhere else. That is exactly
+# how the login-page logo broke - three of the four copies made by scripts/sync-logo.js
+# were silently untracked.
 *.png
+!frontend/apps/admin/public/**/*.png
+!frontend/apps/affiliate/public/**/*.png
 !frontend/apps/public/public/**/*.png
+!backend/public/**/*.png
 
 # Local credentials scratch file
 credentails.md
