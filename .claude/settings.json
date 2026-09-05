@@ -106,7 +106,9 @@
       "Bash(npm test *)",
       "Bash(echo \"backend=$?\")",
       "Bash(npx --yes prettier --write \"frontend/apps/affiliate/src/components/ManagerCard.tsx\")",
-      "Bash(npx --yes prettier --single-quote --print-width 110 --trailing-comma all --write \"frontend/apps/affiliate/src/components/ManagerCard.tsx\")"
+      "Bash(npx --yes prettier --single-quote --print-width 110 --trailing-comma all --write \"frontend/apps/affiliate/src/components/ManagerCard.tsx\")",
+      "Bash(git show *)",
+      "Bash(echo \"ADMIN_BUILD_EXIT=$?\")"
     ]
   }
 }
