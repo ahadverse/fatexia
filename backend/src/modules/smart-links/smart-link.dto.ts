@@ -57,7 +57,18 @@ export interface SmartLinkDto {
   createdAt: string;
 }
 
-export function toSmartLinkDto(link: SmartLink): SmartLinkDto {
+/**
+ * `affiliateId` is filled in server-side for an affiliate caller and left as the
+ * `{affiliate_id}` macro for staff.
+ *
+ * It used to be left unresolved for everyone, with a comment saying the affiliate
+ * portal would substitute it — the portal never did, so every affiliate was copying a
+ * link with a literal `{affiliate_id}` in the query string and sending traffic that
+ * could not be attributed to them. Resolved here rather than in the portal because
+ * the server already knows who is asking from their JWT, and an id the client builds
+ * into its own tracking link is an id the client can get wrong.
+ */
+export function toSmartLinkDto(link: SmartLink, affiliateId?: string): SmartLinkDto {
   return {
     id: link.id,
     name: link.name,
@@ -70,9 +81,8 @@ export function toSmartLinkDto(link: SmartLink): SmartLinkDto {
     rotation: link.rotation,
     status: link.status,
     fallbackUrl: link.fallbackUrl,
-    // The Tracker's /sl route resolves this at click time. The {affiliate_id} macro
-    // is left unresolved here — the affiliate portal substitutes its own id.
-    smartLinkUrl: `${env.PUBLIC_TRACKING_URL}/sl/${link.slug}?affiliateId={affiliate_id}`,
+    // The Tracker's /sl route resolves which offer this lands on at click time.
+    smartLinkUrl: `${env.PUBLIC_TRACKING_URL}/sl/${link.slug}?affiliateId=${affiliateId ?? '{affiliate_id}'}`,
     createdAt: link.createdAt.toISOString(),
   };
 }

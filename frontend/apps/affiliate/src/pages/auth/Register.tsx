@@ -115,6 +115,11 @@ export function Register() {
   const [verticals, setVerticals] = useState<string[]>([]);
   const [monthlyVolume, setMonthlyVolume] = useState('');
   const [referralSource, setReferralSource] = useState('');
+  // Prefilled from `?ref=CODE` so an invite link just works — read once at mount
+  // rather than on every render, since the applicant may edit or clear the field.
+  const [referralCode, setReferralCode] = useState(() =>
+    (new URLSearchParams(window.location.search).get('ref') ?? '').trim().toUpperCase(),
+  );
   const [notes, setNotes] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
@@ -173,6 +178,7 @@ export function Register() {
         verticals: verticals.length ? verticals : undefined,
         monthlyVolume: monthlyVolume || undefined,
         referralSource: referralSource || undefined,
+        referralCode: referralCode.trim() || undefined,
         notes: notes.trim() || undefined,
       });
       setPhase('verify');
@@ -429,6 +435,20 @@ export function Register() {
                 <div className="space-y-2 sm:max-w-xs">
                   <Label>How did you hear about us?</Label>
                   <Select value={referralSource} onChange={setReferralSource} options={REFERRAL_SOURCES} placeholder="Select one" />
+                </div>
+                <div className="space-y-2 sm:max-w-xs">
+                  <Label>Referral code</Label>
+                  <input
+                    value={referralCode}
+                    onChange={(event) => setReferralCode(event.target.value.toUpperCase())}
+                    maxLength={40}
+                    placeholder="If an affiliate invited you"
+                    className={`${INPUT} font-mono uppercase`}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Prefilled automatically when you arrive through someone&apos;s invite link. It puts you on the same
+                    manager as the affiliate who invited you.
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label>Notes</Label>

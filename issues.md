@@ -1,19 +1,23 @@
-1. remove managers select options from everywhere.
-2. filters  list is not ok. use today/yesterday/7d/30/last month/custom. custom will be single input calender.
-3. need every clicks details. use drawer for  it. 
-4. messages page ui can be make more professional.
-5. dont need subject when messaging.
-6. add crypto currency for payments. handle in all portals.
-7. I have updated IPHub in Integrations page. but i dont think its working.
-8. hide billing menu for now.
+1. email not sending / working. register, reject, approval
+3. affiliate portal is not colorize. like colorful icons. buttons active menus etc.
+4. manager portal need now. manager can manage affiliate like payment method change, affiliate create, paused, reject etc can handle. direct chat with affiliate, affiliate detail can view properly.
+5. those affiliate created or managed by a manager then the affiliate is under the manager. and if any affiliate created without any reffer or a manager then those affiliate will be under admin directly. admin can add any manager for his own and indiviual manager.  admin can assign of his manager to his affiliate. this is complex tasks so ask me qna for better approch.
+6. add details of manager in affiliate sidebar below the menus. 
+7. affiliate cannot add or manage payment details. only admin and manager can do this. so affiliate must have to contact manager to update payment details. admin can do everything.
+8. remove tracking platform input from create offer page.
+9. payout percentage logic rethink in offer payout setting,
+10. explain click id logic in create offer page. in destination url. also what about payout amount
+11. in postback method. user add macros by typeing. i want to make them like checked. user will checked the mactos and that will add in url. so that no type mistake.
+12. RPS and re think about payout settings
+13. when offer create, offer can be dedicated to a afffiliate or multiple affiliate. show a searchable dropdown with affiliate id or affiliate email.
+14. when right click on any link, show open in another new tab option like imonitize. 
+15. when offer create, need geo, device and os system to select for the offer. without the selected geo/device/os user will redirect to default link.
+16. i have added payout rule but still showing 00 in offers list.
+17. add click_id and payout_amount automatic hiddenly in destinationUrl. and offer status change option need in offer create page also. maybe click_id already handled so check again it
+18. offer preview image/thumbnail needed when offer create. add a upload option. use s3. i will provide full code with cdn. ask me 
+19. when offer create by admin/manager set offer link public or need be request to get access.
+20. admin can hanlde by checkbox of manager access for every tasks of manager. like admin can check manage can delete a affiliate or not. got it ?
+21. every affiliate and manager must have a ID professional like AFF-1258, MAN-1235. it will start from 1001, it must be very unique and squence.
 
 
-9. notification icon add in header and it will realtime. and show last 5 on notification dropdown. and at bottom add all Notifications then link to notification page.
-10. show date filter at right side and date range is not working as expected.
-11. Integrations page credentials must be working. it will override env. 
-12. default every date filter will be today selected.
-13. both panel - for click details  drawer follow the screenshot.
-14.  both panel - check screenshot. my performance page has missing many things.
-15. both panel - check also click page. check screenshot.
-16. in admin - in click page filter by affiliate, pending affiliate is showing in dropdown.
-17.  * most important. watch the last screenshot, geo is missing. also show city in drawer. 
+ask me if you not clear.

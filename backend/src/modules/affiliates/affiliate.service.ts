@@ -1,7 +1,10 @@
-import { randomBytes } from 'node:crypto';
 import { AppDataSource } from '../../infra/database/data-source';
 import { NotFoundError, ValidationError } from '../../common/errors';
+import { env } from '../../common/env';
 import { signAccessToken, signRefreshToken } from '../../common/jwt';
+import { nextPublicId } from '../../common/public-id';
+import { managerService } from '../managers/manager.service';
+import type { AffiliateManagerContactDto } from '../managers/manager.dto';
 import { User, UserRole, UserStatus } from '../users/user.entity';
 import { userProvisioningService } from '../users/user-provisioning.service';
 import { loginLogService } from '../login-logs/login-log.service';
@@ -11,6 +14,7 @@ import { sendTemplateEmail, safeSendEmail } from '../../infra/email/brevo-mailer
 import { EmailTemplateKey } from '../email-templates/email-template.entity';
 import { Affiliate } from './affiliate.entity';
 import { affiliateRepository } from './affiliate.repository';
+import { generateReferralCode } from './referral-code';
 import {
   toAffiliateDto,
   type AffiliateDto,
@@ -20,15 +24,6 @@ import {
   type UpdateAffiliateStatusDto,
   type UpdateOwnProfileDto,
 } from './affiliate.dto';
-
-// Short, unambiguous code an affiliate shares to recruit others. Uppercase base32-ish
-// alphabet with I/O/0/1 removed so a code read aloud or off a screenshot round-trips.
-const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-
-function generateReferralCode(): string {
-  const bytes = randomBytes(8);
-  return Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
-}
 
 // Which status changes are worth telling the affiliate about, and how they read from
 // their side. PENDING and INACTIVE are omitted: they are intermediate administrative
@@ -51,25 +46,50 @@ const STATUS_NOTICE: Partial<Record<UserStatus, { level: NotificationLevel; titl
   },
 };
 
-// Only these two statuses have a matching email_templates row (see fixtures.ts) —
-// REJECTED has no template yet, so it stays an in-app notification only.
+// Every decision an affiliate can be told about now has a template behind it
+// (issue #1 — rejection used to be an in-app notification only, so an applicant who
+// never logged back in simply never heard back).
 const STATUS_EMAIL: Partial<Record<UserStatus, EmailTemplateKey>> = {
   [UserStatus.ACTIVE]: EmailTemplateKey.AFFILIATE_APPROVED,
+  [UserStatus.REJECTED]: EmailTemplateKey.AFFILIATE_REJECTED,
   [UserStatus.BLOCKED]: EmailTemplateKey.AFFILIATE_SUSPENDED,
 };
 
+/**
+ * Which affiliates the caller may act on (issue #5).
+ *
+ * A manager id restricts every read and write to affiliates assigned to that manager;
+ * `null` means admin — the whole network, including the affiliates with no manager at
+ * all, who sit under the admin directly.
+ */
+export type AffiliateScope = string | null;
+
 export const affiliateService = {
-  async getAffiliates(filters: AffiliateFiltersDto): Promise<AffiliateDto[]> {
-    const affiliates = await affiliateRepository.findAll(filters);
+  async getAffiliates(filters: AffiliateFiltersDto, scope: AffiliateScope): Promise<AffiliateDto[]> {
+    // The manager's own id overrides any assignedManagerId the client sent, rather
+    // than being merged with it — otherwise a manager could read another manager's
+    // book just by passing that manager's id as a query parameter.
+    const affiliates = await affiliateRepository.findAll(scope ? { ...filters, assignedManagerId: scope } : filters);
     return affiliates.map(toAffiliateDto);
   },
 
-  async getAffiliate(id: string): Promise<AffiliateDto> {
+  /**
+   * Loads an affiliate the caller is allowed to touch.
+   *
+   * Out-of-scope reads NotFound rather than Forbidden on purpose: "this exists but
+   * isn't yours" tells a manager how many affiliates the network has and lets them
+   * probe ids, and there is nothing they can do with the distinction anyway.
+   */
+  async loadInScope(id: string, scope: AffiliateScope): Promise<Affiliate> {
     const affiliate = await affiliateRepository.findById(id);
-    if (!affiliate) {
+    if (!affiliate || (scope !== null && affiliate.assignedManagerId !== scope)) {
       throw new NotFoundError('Affiliate not found');
     }
-    return toAffiliateDto(affiliate);
+    return affiliate;
+  },
+
+  async getAffiliate(id: string, scope: AffiliateScope = null): Promise<AffiliateDto> {
+    return toAffiliateDto(await this.loadInScope(id, scope));
   },
 
   async getOwnProfile(userId: string): Promise<AffiliateDto> {
@@ -104,11 +124,18 @@ export const affiliateService = {
 
   // Provisions the login and the profile in one transaction — a half-created
   // affiliate (user with no profile, or vice versa) would break both portals.
-  async createAffiliate(dto: CreateAffiliateDto): Promise<AffiliateDto> {
+  async createAffiliate(dto: CreateAffiliateDto, scope: AffiliateScope): Promise<AffiliateDto> {
     const existing = await AppDataSource.getRepository(User).findOne({ where: { email: dto.email } });
     if (existing) {
       throw new ValidationError('An account with this email already exists');
     }
+
+    // Issue #5's ownership rule, in one line: an affiliate a manager creates is that
+    // manager's, full stop — they cannot hand it to a colleague, and they cannot
+    // create an unassigned one that would land under the admin. An admin (scope null)
+    // keeps the free choice, including "nobody", which is what "under admin directly"
+    // is stored as.
+    const assignedManagerId = scope ?? dto.assignedManagerId ?? null;
 
     const affiliateId = await AppDataSource.transaction(async (manager) => {
       const user = await userProvisioningService.createUser(manager, {
@@ -122,6 +149,7 @@ export const affiliateService = {
       const affiliate = await repo.save(
         repo.create({
           userId: user.id,
+          publicId: await nextPublicId('AFF', manager),
           fullName: dto.fullName,
           country: dto.country,
           messengerType: dto.messengerType ?? null,
@@ -135,7 +163,7 @@ export const affiliateService = {
           referralSource: dto.referralSource ?? null,
           notes: dto.notes ?? null,
           postbackUrl: dto.postbackUrl ?? null,
-          assignedManagerId: dto.assignedManagerId ?? null,
+          assignedManagerId,
           referredByAffiliateId: dto.referredByAffiliateId ?? null,
           referralCode: generateReferralCode(),
           payoutMethod: dto.payoutMethod ?? null,
@@ -145,16 +173,20 @@ export const affiliateService = {
       return affiliate.id;
     });
 
-    return this.getAffiliate(affiliateId);
+    return this.getAffiliate(affiliateId, scope);
   },
 
-  async updateAffiliate(id: string, dto: UpdateAffiliateDto): Promise<AffiliateDto> {
-    const affiliate = await affiliateRepository.findById(id);
-    if (!affiliate) {
-      throw new NotFoundError('Affiliate not found');
-    }
+  async updateAffiliate(id: string, dto: UpdateAffiliateDto, scope: AffiliateScope): Promise<AffiliateDto> {
+    await this.loadInScope(id, scope);
     if (dto.referredByAffiliateId === id) {
       throw new ValidationError('An affiliate cannot refer themselves');
+    }
+    // Reassigning an affiliate to a different manager is an admin decision (issue #5:
+    // "admin can assign of his manager to his affiliate"). A manager editing their own
+    // affiliate silently keeps the assignment rather than being able to push the
+    // account onto someone else — or off their own book to dodge a cap.
+    if (scope !== null && dto.assignedManagerId !== undefined && dto.assignedManagerId !== scope) {
+      throw new ValidationError('Only an admin can reassign an affiliate to a different manager');
     }
 
     await affiliateRepository.update(id, {
@@ -177,16 +209,13 @@ export const affiliateService = {
       ...(dto.payoutDetails !== undefined && { payoutDetails: dto.payoutDetails }),
     });
 
-    return this.getAffiliate(id);
+    return this.getAffiliate(id, scope);
   },
 
   // Approve/suspend/reject writes to the linked user account — the one place status
   // lives, so the login gate and the admin list can never disagree.
-  async updateStatus(id: string, dto: UpdateAffiliateStatusDto): Promise<AffiliateDto> {
-    const affiliate = await affiliateRepository.findById(id);
-    if (!affiliate) {
-      throw new NotFoundError('Affiliate not found');
-    }
+  async updateStatus(id: string, dto: UpdateAffiliateStatusDto, scope: AffiliateScope): Promise<AffiliateDto> {
+    const affiliate = await this.loadInScope(id, scope);
     await AppDataSource.getRepository(User).update({ id: affiliate.userId }, { status: dto.status });
 
     // A decision on someone's account is the clearest case for telling them. Sent
@@ -207,30 +236,49 @@ export const affiliateService = {
 
     const templateKey = STATUS_EMAIL[dto.status];
     if (templateKey && affiliate.user?.email) {
+      // The approval template addresses {manager_name} by name, which used to render
+      // blank because nothing looked the manager up. Resolved here rather than in the
+      // mailer so the template stays a pure substitution.
+      const contact = await managerService.getContactForAffiliate(affiliate.assignedManagerId);
       safeSendEmail(
         sendTemplateEmail({
           templateKey,
           to: { email: affiliate.user.email, name: affiliate.fullName },
-          macros: { affiliate_name: affiliate.fullName ?? 'there', manager_name: '', portal_link: '' },
+          macros: {
+            affiliate_name: affiliate.fullName ?? 'there',
+            manager_name: contact?.fullName ?? 'your account manager',
+            portal_link: env.AFFILIATE_PORTAL_URL,
+          },
         }),
       );
     }
 
-    return this.getAffiliate(id);
+    return this.getAffiliate(id, scope);
   },
 
   // Admin override for an applicant who never completed (or lost) the code — see
   // user.entity.ts. Does not touch `status`; approval is still a separate decision.
-  async markEmailVerified(id: string): Promise<AffiliateDto> {
-    const affiliate = await affiliateRepository.findById(id);
-    if (!affiliate) {
-      throw new NotFoundError('Affiliate not found');
-    }
+  async markEmailVerified(id: string, scope: AffiliateScope): Promise<AffiliateDto> {
+    const affiliate = await this.loadInScope(id, scope);
     await AppDataSource.getRepository(User).update(
       { id: affiliate.userId },
       { emailVerifiedAt: new Date(), emailVerificationCode: null, emailVerificationExpiresAt: null, emailVerificationAttempts: 0 },
     );
-    return this.getAffiliate(id);
+    return this.getAffiliate(id, scope);
+  },
+
+  /**
+   * The manager contact card for the signed-in affiliate's own sidebar (issue #6).
+   *
+   * Always resolves: an affiliate with no active manager gets the network support
+   * desk, so the sidebar card looks the same for everyone (see getContactForAffiliate).
+   */
+  async getOwnManagerContact(userId: string): Promise<AffiliateManagerContactDto> {
+    const affiliate = await affiliateRepository.findByUserId(userId);
+    if (!affiliate) {
+      throw new NotFoundError('Affiliate profile not found');
+    }
+    return managerService.getContactForAffiliate(affiliate.assignedManagerId);
   },
 
   /**
@@ -246,11 +294,9 @@ export const affiliateService = {
     id: string,
     admin: { id: string },
     ctx: { ip: string; userAgent: string | null },
+    scope: AffiliateScope,
   ): Promise<{ accessToken: string; refreshToken: string }> {
-    const affiliate = await affiliateRepository.findById(id);
-    if (!affiliate) {
-      throw new NotFoundError('Affiliate not found');
-    }
+    const affiliate = await this.loadInScope(id, scope);
 
     const tokens = {
       accessToken: signAccessToken({ sub: affiliate.userId, role: UserRole.AFFILIATE }),
@@ -282,8 +328,6 @@ export const affiliateService = {
       ...(dto.companyName !== undefined && { companyName: dto.companyName ?? null }),
       ...(dto.phone !== undefined && { phone: dto.phone ?? null }),
       ...(dto.postbackUrl !== undefined && { postbackUrl: dto.postbackUrl ?? null }),
-      ...(dto.payoutMethod !== undefined && { payoutMethod: dto.payoutMethod ?? null }),
-      ...(dto.payoutDetails !== undefined && { payoutDetails: dto.payoutDetails }),
     });
     return this.getAffiliate(affiliate.id);
   },

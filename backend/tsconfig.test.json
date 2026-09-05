@@ -1,0 +1,12 @@
+{
+  // Test files are excluded from tsconfig.json so `npm run build` doesn't emit them
+  // into dist/ — but they still need type checking, which is what this is for.
+  // `npm run typecheck` runs both projects.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["vitest/globals", "node"]
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

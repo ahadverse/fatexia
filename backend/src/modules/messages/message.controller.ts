@@ -1,5 +1,8 @@
 import type { NextFunction, Response } from 'express';
 import type { AuthenticatedRequest } from '../../common/guards/auth.guard';
+import type { ScopedRequest } from '../../common/guards/manager-scope.guard';
+import { scopedQuery } from '../../common/manager-scope-sql';
+import { affiliateService } from '../affiliates/affiliate.service';
 import { messageService } from './message.service';
 import type { MessageFiltersDto, ReplyMessageDto, SendMessageDto, ThreadFiltersDto } from './message.dto';
 
@@ -12,41 +15,49 @@ export const messageController = {
     }
   },
 
-  async getThreads(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+  // A manager's inbox holds only their own affiliates' threads (issue #5); an admin
+  // sees every conversation on the network.
+  async getThreads(req: ScopedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      res.json(await messageService.getThreads(req.query as unknown as ThreadFiltersDto));
+      res.json(await messageService.getThreads(scopedQuery<ThreadFiltersDto>(req.query, req.managerScope?.managerId)));
     } catch (err) {
       next(err);
     }
   },
 
-  async getThread(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+  async getThread(req: ScopedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
+      // Reuses the affiliate scope check, so opening someone else's conversation by
+      // pasting their id reads as "not found" rather than handing over the transcript.
+      await affiliateService.loadInScope(req.params.affiliateId!, req.managerScope?.managerId ?? null);
       res.json(await messageService.getThread(req.params.affiliateId!));
     } catch (err) {
       next(err);
     }
   },
 
-  async markThreadRead(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+  async markThreadRead(req: ScopedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
+      await affiliateService.loadInScope(req.params.affiliateId!, req.managerScope?.managerId ?? null);
       res.json(await messageService.markThreadReadByNetwork(req.params.affiliateId!));
     } catch (err) {
       next(err);
     }
   },
 
-  async getUnreadCount(_req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+  async getUnreadCount(req: ScopedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      res.json(await messageService.getUnreadCount());
+      res.json(await messageService.getUnreadCount(req.managerScope?.managerId));
     } catch (err) {
       next(err);
     }
   },
 
-  async send(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+  async send(req: ScopedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      res.status(201).json(await messageService.send(req.body as SendMessageDto, req.user!.id));
+      const dto = req.body as SendMessageDto;
+      await affiliateService.loadInScope(dto.affiliateId, req.managerScope?.managerId ?? null);
+      res.status(201).json(await messageService.send(dto, req.user!.id));
     } catch (err) {
       next(err);
     }

@@ -25,6 +25,8 @@ export * from './components/EmptyState';
 export * from './components/PayoutMethodFields';
 export * from './components/ColumnPicker';
 export * from './components/DateRangePicker';
+export * from './components/MultiSelectCombobox';
+export * from './components/ExternalLinkButton';
 export * from './components/Chat';
 export * from './components/TrendChart';
 export * from './hooks/useDeferredFilters';

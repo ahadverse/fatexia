@@ -56,6 +56,12 @@ export const registerSchema = z.object({
   verticals: z.array(z.enum(AFFILIATE_VERTICALS)).optional(),
   monthlyVolume: optionalEnum(MONTHLY_VOLUMES),
   referralSource: optionalEnum(REFERRAL_SOURCES),
+  // An existing affiliate's referral code, if this applicant came in through one.
+  // Drives both the referral commission split and, via issue #5, which manager the new
+  // account lands under — a referred affiliate joins their referrer's manager rather
+  // than the admin's unassigned pool. An unrecognised code is ignored rather than
+  // rejected: a mistyped code should not block a legitimate application.
+  referralCode: optionalText(40),
   notes: optionalText(1000),
 });
 

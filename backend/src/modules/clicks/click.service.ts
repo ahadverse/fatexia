@@ -3,17 +3,33 @@ import { UAParser } from 'ua-parser-js';
 import { NotFoundError } from '../../common/errors';
 import { logger } from '../../common/logger';
 import { offerRepository } from '../offers/offer.repository';
-import { OfferStatus } from '../offers/offer.entity';
+import { OfferStatus, type Offer } from '../offers/offer.entity';
+import type { PayoutRule } from '../offers/payout-rule.entity';
+import { smartLinkRepository } from '../smart-links/smart-link.repository';
+import { SmartLinkStatus, type SmartLink } from '../smart-links/smart-link.entity';
+import { buildCandidates, linkAcceptsVisitor, pickCandidate } from '../smart-links/smart-link-resolution';
 import { geoSource } from '../geo-source/geo-source';
 import { isLikelyDatacenter } from '../fraud/datacenter-filter';
 import { checkResidentialProxy } from '../fraud/proxy-detection';
 import { getTrackerSettings } from '../network-settings/tracker-settings';
+import { findMatchingRuleForClick, computeAmounts } from '../offers/payout-resolution';
 import { clickRepository } from './click.repository';
 import { ClickQualityStatus } from './click.entity';
 import { isFirstClick } from './unique-click';
 
+/**
+ * What the visitor clicked.
+ *
+ * A normal tracking link names its offer up front; a smart-link names a slug and the
+ * offer is chosen at redirect time from the visitor's geo/device. Modelled as one
+ * union rather than two parallel handlers because everything after the choice — geo,
+ * fraud scoring, the click row, the macro substitution — is identical, and the one
+ * thing a second copy of this pipeline would guarantee is that the two drift.
+ */
+export type ClickTarget = { kind: 'offer'; offerId: string } | { kind: 'smartLink'; slug: string };
+
 export interface ClickRequest {
-  offerId: string;
+  target: ClickTarget;
   affiliateId: string | null;
   ip: string;
   userAgent: string | null;
@@ -60,14 +76,36 @@ function scoreClick(
   return { riskScore, qualityStatus };
 }
 
-export const clickService = {
-  async handleClick(req: ClickRequest): Promise<ClickResult> {
-    // Single indexed PK read — the one synchronous DB read on this hot path (see
-    // PLAN-tracker.md performance requirements).
-    const offer = await offerRepository.findById(req.offerId);
+/**
+ * Loads what the target points at, before any of the fraud pipeline runs.
+ *
+ * Kept as an up-front step so an unknown offer or a dead slug still 404s immediately
+ * rather than after a geo lookup and a billed proxy-detection call.
+ */
+async function loadTarget(
+  target: ClickTarget,
+): Promise<{ offer: Offer; link: null } | { offer: null; link: SmartLink; members: Offer[] }> {
+  if (target.kind === 'offer') {
+    // One query with a join, not a bare PK read — payoutRules are needed for the
+    // geo/device/OS routing decision below (issue #15). Still a single round-trip,
+    // which is what the hot-path requirement (PLAN-tracker.md) actually asks for.
+    const offer = await offerRepository.findByIdWithPayoutRules(target.offerId);
     if (!offer || offer.status !== OfferStatus.APPROVED || !offer.destinationUrl) {
       throw new NotFoundError('Offer not available');
     }
+    return { offer, link: null };
+  }
+
+  const link = await smartLinkRepository.findBySlug(target.slug);
+  if (!link || link.status !== SmartLinkStatus.ACTIVE) {
+    throw new NotFoundError('Smart-link not available');
+  }
+  return { offer: null, link, members: await offerRepository.findApprovedByIdsWithPayoutRules(link.offerIds) };
+}
+
+export const clickService = {
+  async handleClick(req: ClickRequest): Promise<ClickResult> {
+    const target = await loadTarget(req.target);
 
     const clickId = randomUUID();
 
@@ -81,11 +119,44 @@ export const clickService = {
     const isProxyOrVpn = await checkResidentialProxy(req.ip);
     const { riskScore, qualityStatus } = scoreClick(isDatacenter, isProxyOrVpn, settings);
 
+    const ua = req.userAgent ? UAParser(req.userAgent) : null;
+    // ua-parser-js only sets device.type for mobile/tablet/console/smarttv/wearable/
+    // embedded — a regular desktop browser leaves it undefined by design (there's no
+    // "desktop" entry in its taxonomy). Without this fallback every desktop click showed
+    // a blank Device column, in the drawer and in the device-grouped reports alike.
+    const deviceType = ua?.device.type ?? (req.userAgent ? 'desktop' : null);
+    const os = ua?.os.name ?? null;
+
+    const matchable = { countryCode, deviceType, os, affiliateId: req.affiliateId };
+
+    // Smart-link: choose the member offer now that the visitor is known. A link that
+    // resolves to nothing redirects to its own fallback and is deliberately NOT
+    // logged — clicks.offerId is NOT NULL, and there is no honest offer to attribute
+    // this click to.
+    let offer: Offer;
+    let preMatchedRule: PayoutRule | null = null;
+    if (target.offer) {
+      offer = target.offer;
+    } else {
+      const { link, members } = target;
+      const candidates = linkAcceptsVisitor(link, matchable) ? await buildCandidates(members, matchable) : [];
+      if (candidates.length === 0) {
+        if (!link.fallbackUrl) {
+          throw new NotFoundError('No offer available for this smart-link');
+        }
+        return { redirectUrl: link.fallbackUrl, clickId };
+      }
+      const chosen = await pickCandidate(link, candidates);
+      offer = chosen.offer;
+      // The rotation already resolved this click's rule; re-resolving it below could
+      // pick a different one and price the redirect differently from the offer that
+      // was chosen on the strength of that price.
+      preMatchedRule = chosen.rule;
+    }
+
     // One Redis round-trip, alongside the proxy check that may already have made an
     // external HTTP call — this adds nothing meaningful to the hot path.
     const isUnique = await isFirstClick(offer.id, req.ip);
-
-    const ua = req.userAgent ? UAParser(req.userAgent) : null;
 
     // Fire-and-forget: the redirect must not wait on this write. A full batched-flush
     // buffer (Redis/queue) is the production version of this — see PLAN-tracker.md;
@@ -103,14 +174,9 @@ export const clickService = {
         regionCode,
         // UAParser already returns the vendor and both version strings — the previous
         // version parsed them and then dropped them on the floor.
-        //
-        // ua-parser-js only sets device.type for mobile/tablet/console/smarttv/wearable/
-        // embedded — a regular desktop browser leaves it undefined by design (there's no
-        // "desktop" entry in its taxonomy). Without this fallback every desktop click showed
-        // a blank Device column, in the drawer and in the device-grouped reports alike.
-        deviceType: ua?.device.type ?? (req.userAgent ? 'desktop' : null),
+        deviceType,
         deviceBrand: ua?.device.vendor ?? null,
-        os: ua?.os.name ?? null,
+        os,
         osVersion: ua?.os.version ?? null,
         browser: ua?.browser.name ?? null,
         browserVersion: ua?.browser.version ?? null,
@@ -139,6 +205,25 @@ export const clickService = {
       return { redirectUrl: offer.blockedRedirectUrl?.trim() || settings.blockedRedirectUrl, clickId };
     }
 
-    return { redirectUrl: offer.destinationUrl.replace('{click_id}', clickId), clickId };
+    // Issue #15: route by the offer's own geo/device/OS targeting. A rule with empty
+    // targeting (the common case today) matches everything, so this is a no-op for
+    // every offer that hasn't configured targeting — only a genuinely non-matching
+    // click (one that fits none of the offer's targeted rules) falls through to
+    // fallbackUrl instead of destinationUrl.
+    //
+    // A smart-link click already has its rule from the rotation, so this is skipped
+    // there rather than resolved a second time.
+    const matchedRule = preMatchedRule ?? (await findMatchingRuleForClick(offer.payoutRules, matchable));
+
+    if (!matchedRule) {
+      const fallback = offer.fallbackUrl?.trim() || offer.destinationUrl!;
+      return { redirectUrl: fallback.replace('{click_id}', clickId).replace('{payout_amount}', ''), clickId };
+    }
+
+    const { payoutAmount } = computeAmounts(matchedRule);
+    return {
+      redirectUrl: offer.destinationUrl!.replace('{click_id}', clickId).replace('{payout_amount}', payoutAmount.toFixed(2)),
+      clickId,
+    };
   },
 };

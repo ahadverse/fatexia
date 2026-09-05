@@ -1,15 +1,12 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { NotFoundError } from '../../common/errors';
 import { offerRepository } from '../offers/offer.repository';
-import { Offer } from '../offers/offer.entity';
-import { PayoutRule, PayoutType, type PayoutRuleTargeting } from '../offers/payout-rule.entity';
 import { clickRepository } from '../clicks/click.repository';
-import { Click } from '../clicks/click.entity';
 import { conversionRepository } from '../conversions/conversion.repository';
 import { ConversionStatus } from '../conversions/conversion.entity';
-import { affiliateGroupRepository } from '../affiliate-groups/affiliate-group.repository';
 import { postbackLogRepository } from '../postback-logs/postback-log.repository';
 import { PostbackDirection } from '../postback-logs/postback-log.entity';
+import { resolvePayoutRuleForPricing, computeAmounts } from '../offers/payout-resolution';
 
 export interface PostbackRequest {
   offerId: string;
@@ -38,54 +35,6 @@ function ipAllowed(sourceIp: string, allowedPostbackIps: string): boolean {
     .map((ip) => ip.trim())
     .filter(Boolean);
   return allowed.includes(sourceIp);
-}
-
-function isWildcard(t: PayoutRuleTargeting): boolean {
-  return t.countries.length === 0 && t.devices.length === 0 && t.affiliateIds.length === 0 && t.affiliateGroupIds.length === 0;
-}
-
-function ruleMatchesClick(t: PayoutRuleTargeting, click: Click, affiliateGroupIds: string[]): boolean {
-  if (t.countries.length > 0 && (!click.countryCode || !t.countries.includes(click.countryCode))) return false;
-  if (t.devices.length > 0 && (!click.deviceType || !t.devices.includes(click.deviceType))) return false;
-  if (t.affiliateIds.length > 0 && (!click.affiliateId || !t.affiliateIds.includes(click.affiliateId))) return false;
-  if (t.affiliateGroupIds.length > 0 && !t.affiliateGroupIds.some((gid) => affiliateGroupIds.includes(gid))) return false;
-  return true;
-}
-
-// Picks the payout rule that applies to this specific conversion. An orphan postback
-// (no matching click) has nothing to target against, so it falls back to the offer's
-// untargeted rule if it has one. A rule with no matching target at all still falls
-// back rather than leaving the conversion unpriced — every offer requires at least
-// one payout rule to exist (see OfferForm), so `rules` is never empty in practice.
-async function resolvePayoutRule(offer: Offer, click: Click | null): Promise<PayoutRule | null> {
-  const rules = offer.payoutRules;
-  if (rules.length === 0) return null;
-  if (!click) {
-    return rules.find(isWildcardRule) ?? rules[0]!;
-  }
-
-  const needsGroupCheck = !!click.affiliateId && rules.some((r) => r.targeting.affiliateGroupIds.length > 0);
-  const affiliateGroupIds = needsGroupCheck
-    ? (await affiliateGroupRepository.findAll()).filter((g) => g.affiliateIds.includes(click.affiliateId!)).map((g) => g.id)
-    : [];
-
-  const matching = rules.find((r) => ruleMatchesClick(r.targeting, click, affiliateGroupIds));
-  return matching ?? rules.find(isWildcardRule) ?? rules[0]!;
-}
-
-function isWildcardRule(r: PayoutRule): boolean {
-  return isWildcard(r.targeting);
-}
-
-// Both amounts always come from the rule, never from the postback payload (money
-// integrity rule, PLAN-backend.md). PERCENTAGE payoutType applies the rule's own
-// percentage against the rule's own revenueAmount — no externally-reported sale value
-// is ever consulted, so there is nothing here an advertiser could inflate.
-function computeAmounts(rule: PayoutRule): { revenueAmount: number; payoutAmount: number } {
-  const revenueAmount = Number(rule.revenueAmount);
-  const ruleAmount = Number(rule.amount);
-  const payoutAmount = rule.payoutType === PayoutType.PERCENTAGE ? Number(((ruleAmount / 100) * revenueAmount).toFixed(2)) : ruleAmount;
-  return { revenueAmount, payoutAmount };
 }
 
 async function logAttempt(
@@ -129,7 +78,7 @@ export const postbackService = {
     const existingConversion = matchedClick ? await conversionRepository.findByClickId(matchedClick.id) : null;
     const isDuplicate = !!existingConversion;
 
-    const rule = await resolvePayoutRule(offer, matchedClick);
+    const rule = await resolvePayoutRuleForPricing(offer.payoutRules, matchedClick);
     const amounts = rule ? computeAmounts(rule) : { revenueAmount: 0, payoutAmount: 0 };
     // Duplicates are recorded (visible in the Conversions report, filterable by
     // isDuplicate) but carry zero money so an accidental double-fire can never

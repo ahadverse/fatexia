@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { managerScopeField } from '../../common/manager-scope-sql';
 
 // Every report shares one filter shape — PLAN-admin.md's guidance to build this as a
 // single reporting module with shared filters rather than 13 one-off endpoints.
@@ -9,6 +10,9 @@ export const reportFiltersSchema = z.object({
   affiliateId: z.string().uuid().optional(),
   advertiserId: z.string().uuid().optional(),
   countryCode: z.string().max(2).optional(),
+  // Server-set, never trusted from the query string — the controller overwrites it
+  // from the session on every request (issue #5). See common/manager-scope-sql.ts.
+  ...managerScopeField,
 });
 
 export type ReportFiltersDto = z.infer<typeof reportFiltersSchema>;

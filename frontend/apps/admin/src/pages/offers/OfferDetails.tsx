@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Copy } from 'lucide-react';
 import type { Advertiser, Offer, OfferStatus } from '@fatexia/types';
-import { StatusBadge, toast } from '@fatexia/ui';
+import { ExternalLinkButton, StatusBadge, toast } from '@fatexia/ui';
 import { getAdvertisers } from '../../lib/advertisers-api';
 import { getOffer } from '../../lib/offers-api';
 
@@ -42,6 +42,7 @@ function CopyableRow({ label, value }: { label: string; value: string }) {
         <span className="min-w-0 truncate font-medium text-foreground" title={value}>
           {value}
         </span>
+        <ExternalLinkButton href={value} label={`Open ${label} in new tab`} className="h-7 shrink-0 px-1.5" />
         <button
           type="button"
           onClick={handleCopy}

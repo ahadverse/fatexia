@@ -9,6 +9,7 @@ import { AccessRequestStatus } from '../offer-access-requests/offer-access-reque
 import { sendTemplateEmail, safeSendEmail } from '../../infra/email/brevo-mailer';
 import { EmailTemplateKey } from '../email-templates/email-template.entity';
 import { offerRepository } from './offer.repository';
+import { withTrackingMacros } from './destination-url';
 import { Offer, OfferStatus } from './offer.entity';
 import { PayoutRule } from './payout-rule.entity';
 import { OfferCap } from './offer-cap.entity';
@@ -39,9 +40,12 @@ import {
 // modules/postback/postback.service.ts) — an observational signal an admin can check
 // on the offer, not a gate blocking approval.
 function assertActivationGate(offer: Offer): void {
+  // The macro half of this check is now belt-and-braces: withTrackingMacros() appends
+  // {click_id} on every save (issue #17), so the only way to reach APPROVED without one
+  // is an offer whose destination was never filled in at all.
   if (!offer.destinationUrl || !offer.destinationUrl.includes('{click_id}')) {
     throw new ValidationError(
-      'destinationUrl must be set and contain the {click_id} macro before approving this offer',
+      'destinationUrl must be set before approving this offer',
     );
   }
   if (!offer.postbackSecret) {
@@ -135,7 +139,7 @@ export const offerService = {
     if (!affiliate) {
       throw new NotFoundError('Affiliate profile not found');
     }
-    const offers = await offerRepository.findAvailableForAffiliate();
+    const offers = await offerRepository.findAvailableForAffiliate(affiliate.id);
     // The caller's own affiliate id is substituted into each tracking link, so what
     // they copy is usable as-is rather than carrying an unresolved macro.
     return offers.map((offer) => toAffiliateOfferDto(offer, affiliate.id));
@@ -167,6 +171,7 @@ export const offerService = {
           defaultPayoutAmount: dto.defaultPayoutAmount.toFixed(2),
           currency: dto.currency,
           trackingPlatform: dto.trackingPlatform,
+          isPublic: dto.isPublic,
           trafficTypes: dto.trafficTypes,
           featured: dto.featured,
           networkOfferId: dto.networkOfferId ?? null,
@@ -174,7 +179,10 @@ export const offerService = {
           allowDeepLinking: dto.allowDeepLinking,
           remarksForAdmin: dto.remarksForAdmin ?? null,
           remarksForAffiliateManager: dto.remarksForAffiliateManager ?? null,
-          destinationUrl: dto.destinationUrl ?? null,
+          // Issue #17 — the {click_id}/{payout_amount} macros are appended here when
+          // the form didn't carry them, so what's stored is always redirect-ready.
+          destinationUrl: withTrackingMacros(dto.destinationUrl),
+          fallbackUrl: dto.fallbackUrl || null,
           postbackSecret: dto.postbackSecret ?? null,
           allowedPostbackIps: dto.allowedPostbackIps ?? null,
           blockedRedirectUrl: dto.blockedRedirectUrl || null,
@@ -215,6 +223,7 @@ export const offerService = {
           defaultPayoutAmount: dto.defaultPayoutAmount.toFixed(2),
           currency: dto.currency,
           trackingPlatform: dto.trackingPlatform,
+          isPublic: dto.isPublic,
           trafficTypes: dto.trafficTypes,
           featured: dto.featured,
           networkOfferId: dto.networkOfferId ?? null,
@@ -222,7 +231,8 @@ export const offerService = {
           allowDeepLinking: dto.allowDeepLinking,
           remarksForAdmin: dto.remarksForAdmin ?? null,
           remarksForAffiliateManager: dto.remarksForAffiliateManager ?? null,
-          destinationUrl: dto.destinationUrl ?? null,
+          destinationUrl: withTrackingMacros(dto.destinationUrl),
+          fallbackUrl: dto.fallbackUrl || null,
           postbackSecret: dto.postbackSecret ?? null,
           allowedPostbackIps: dto.allowedPostbackIps ?? null,
           blockedRedirectUrl: dto.blockedRedirectUrl || null,

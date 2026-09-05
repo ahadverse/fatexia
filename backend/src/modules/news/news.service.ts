@@ -30,6 +30,7 @@ export const newsService = {
       title: dto.title,
       slug: dto.slug,
       excerpt: dto.excerpt ?? null,
+      imageUrl: dto.imageUrl || null,
       body: dto.body,
       status: dto.status,
       audience: dto.audience,
@@ -57,6 +58,9 @@ export const newsService = {
       ...(dto.title !== undefined && { title: dto.title }),
       ...(dto.slug !== undefined && { slug: dto.slug }),
       ...(dto.excerpt !== undefined && { excerpt: dto.excerpt ?? null }),
+      // Empty string is how the form clears a cover, so it maps to null rather than
+      // being written back as an empty URL.
+      ...(dto.imageUrl !== undefined && { imageUrl: dto.imageUrl || null }),
       ...(dto.body !== undefined && { body: dto.body }),
       ...(dto.status !== undefined && { status: dto.status }),
       ...(dto.audience !== undefined && { audience: dto.audience }),

@@ -59,7 +59,9 @@ async function doFetch(path: string, options: RequestInit): Promise<Response> {
   if (accessToken) {
     headers.set('Authorization', `Bearer ${accessToken}`);
   }
-  if (options.body && !headers.has('Content-Type')) {
+  // A FormData body (file upload) must NOT get a manual Content-Type — the browser
+  // sets one itself with the multipart boundary, and overriding it breaks the upload.
+  if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
   return fetch(`${API_URL}${path}`, { ...options, headers });

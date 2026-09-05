@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Button,
   DataTable,
+  ExternalLinkButton,
   FilterBar,
   FilterField,
   Input,
@@ -78,9 +79,12 @@ export function Browse() {
       key: 'link',
       header: '',
       render: (offer) => (
-        <Button size="sm" variant="outline" onClick={() => copyLink(offer)}>
-          Copy link
-        </Button>
+        <div className="flex justify-end gap-1.5">
+          <ExternalLinkButton href={offer.trackingLink} label="Open tracking link in new tab" />
+          <Button size="sm" variant="outline" onClick={() => copyLink(offer)}>
+            Copy link
+          </Button>
+        </div>
       ),
     },
   ];
@@ -187,6 +191,7 @@ export function Browse() {
                   Preview landing page
                 </a>
               )}
+              <ExternalLinkButton href={detail.trackingLink} label="Open tracking link in new tab" />
               <Button onClick={() => copyLink(detail)}>Copy tracking link</Button>
             </div>
           </div>

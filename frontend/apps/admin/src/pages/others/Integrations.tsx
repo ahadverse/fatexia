@@ -10,7 +10,19 @@ interface EditState {
   integration: Integration;
   apiKey: string;
   apiSecret: string;
+  config: Record<string, string>;
 }
+
+// Providers whose non-secret `config` fields are actually editable here — every other
+// provider's config is display-only context (quota, mode) set by the seed, not
+// something an admin fills in per-key.
+const CONFIG_FIELDS: Partial<Record<Integration['provider'], { key: string; label: string; placeholder?: string }[]>> = {
+  S3: [
+    { key: 'bucket', label: 'Bucket name', placeholder: 'my-offer-thumbnails' },
+    { key: 'region', label: 'Region', placeholder: 'us-east-1' },
+    { key: 'cdnBaseUrl', label: 'CDN base URL', placeholder: 'https://xxxxxxxxxxxxxx.cloudfront.net' },
+  ],
+};
 
 interface ToggleDecision {
   integration: Integration;
@@ -70,9 +82,11 @@ export function Integrations() {
     if (!edit) return;
     setSaving(true);
     try {
+      const configFields = CONFIG_FIELDS[edit.integration.provider];
       await updateIntegration(edit.integration.id, {
         apiKey: edit.apiKey || undefined,
         apiSecret: edit.apiSecret || undefined,
+        ...(configFields && { config: edit.config }),
       });
       toast.success(`${edit.integration.name} updated`);
       setEdit(null);
@@ -190,7 +204,20 @@ export function Integrations() {
                     {testingId === integration.id ? 'Testing…' : 'Test connection'}
                   </Button>
                 )}
-                <Button size="sm" variant="outline" onClick={() => setEdit({ integration, apiKey: '', apiSecret: '' })}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setEdit({
+                      integration,
+                      apiKey: '',
+                      apiSecret: '',
+                      config: Object.fromEntries(
+                        (CONFIG_FIELDS[integration.provider] ?? []).map((field) => [field.key, String(integration.config[field.key] ?? '')]),
+                      ),
+                    })
+                  }
+                >
                   {integration.hasApiKey ? 'Replace credentials' : 'Add credentials'}
                 </Button>
               </div>
@@ -232,6 +259,17 @@ export function Integrations() {
                 className="mt-1"
               />
             </label>
+            {(CONFIG_FIELDS[edit.integration.provider] ?? []).map((field) => (
+              <label key={field.key} className="block">
+                <span className="text-xs font-medium text-muted-foreground">{field.label}</span>
+                <Input
+                  value={edit.config[field.key] ?? ''}
+                  onChange={(event) => setEdit({ ...edit, config: { ...edit.config, [field.key]: event.target.value } })}
+                  placeholder={field.placeholder}
+                  className="mt-1"
+                />
+              </label>
+            ))}
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setEdit(null)}>
                 Cancel

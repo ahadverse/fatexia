@@ -34,6 +34,8 @@ export interface RegisterPayload {
   verticals?: string[];
   monthlyVolume?: string;
   referralSource?: string;
+  /** Another affiliate's referral code — also decides which manager they land under. */
+  referralCode?: string;
   notes?: string;
 }
 

@@ -1,12 +1,16 @@
 import type { NextFunction, Response } from 'express';
 import type { AuthenticatedRequest } from '../../common/guards/auth.guard';
+import type { ScopedRequest } from '../../common/guards/manager-scope.guard';
+import { scopedQuery } from '../../common/manager-scope-sql';
 import { clickLogService } from './click-log.service';
 import type { ClickLogFiltersDto } from './click.dto';
 
 export const clickLogController = {
-  async getLogs(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+  // Scoped to the signed-in manager's own affiliates; unrestricted for an admin
+  // (issue #5). The session value is applied last, so it overrides any in the query.
+  async getLogs(req: ScopedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      res.json(await clickLogService.getLogs(req.query as unknown as ClickLogFiltersDto));
+      res.json(await clickLogService.getLogs(scopedQuery<ClickLogFiltersDto>(req.query, req.managerScope?.managerId)));
     } catch (err) {
       next(err);
     }

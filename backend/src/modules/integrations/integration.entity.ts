@@ -10,6 +10,10 @@ export enum IntegrationProvider {
   SMTP = 'SMTP',
   PAYPAL = 'PAYPAL',
   WISE = 'WISE',
+  // Offer thumbnail storage (issue #18). apiKey/apiSecret hold the AWS access key
+  // id/secret; bucket/region/cdnBaseUrl live in config — same non-secret-config split
+  // every other provider uses.
+  S3 = 'S3',
 }
 
 export enum IntegrationStatus {

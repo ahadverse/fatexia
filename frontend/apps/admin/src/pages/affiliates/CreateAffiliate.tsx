@@ -2,8 +2,11 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Input, PageHeader, PayoutMethodFields, Select, Textarea, toast } from '@fatexia/ui';
 import { readCryptoDetails } from '@fatexia/types';
-import type { AffiliateMessenger, AffiliatePayoutMethod, CryptoPayoutDetails, UserStatus } from '@fatexia/types';
+import type { AffiliateMessenger, AffiliatePayoutMethod, CryptoPayoutDetails, Manager, UserStatus } from '@fatexia/types';
 import { createAffiliate } from '../../lib/affiliates-api';
+import { getManagers } from '../../lib/managers-api';
+import { useAsync } from '../../hooks/useAsync';
+import { useAccess } from '../../session/AccessContext';
 
 const TRAFFIC_SOURCES = ['Facebook', 'Google', 'Native', 'Push', 'Pop', 'Email', 'SEO', 'Influencer'];
 const VERTICALS = [
@@ -68,6 +71,12 @@ function ChipGroup({ options, selected, onToggle }: { options: string[]; selecte
 
 export function CreateAffiliate() {
   const navigate = useNavigate();
+  const { isAdmin, can } = useAccess();
+  // Only an admin gets to choose — an affiliate a manager creates is always theirs
+  // (issue #5), which the server enforces regardless of what this form sends.
+  const managers = useAsync<Manager[]>(() => (isAdmin ? getManagers() : Promise.resolve([])), [isAdmin]);
+  const canSetPayout = can('affiliates.payout');
+  const [assignedManagerId, setAssignedManagerId] = useState('');
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -111,10 +120,13 @@ export function CreateAffiliate() {
         trafficSources,
         verticals,
         monthlyVolume: monthlyVolume || undefined,
-        payoutMethod: payoutMethod || null,
-        // Only crypto has structured details, and sending a stale wallet address
-        // alongside a bank-transfer payout would leave a live address on the record.
-        payoutDetails: payoutMethod === 'CRYPTO' ? { ...payoutDetails } : {},
+        ...(isAdmin && { assignedManagerId: assignedManagerId || null }),
+        ...(canSetPayout && {
+          payoutMethod: payoutMethod || null,
+          // Only crypto has structured details, and sending a stale wallet address
+          // alongside a bank-transfer payout would leave a live address on the record.
+          payoutDetails: payoutMethod === 'CRYPTO' ? { ...payoutDetails } : {},
+        }),
         postbackUrl: postbackUrl || undefined,
         notes: notes || undefined,
         status,
@@ -158,6 +170,23 @@ export function CreateAffiliate() {
             <option value="PENDING">Pending — blocked until approved</option>
           </Select>
         </Field>
+        {isAdmin ? (
+          <Field label="Assigned manager">
+            <Select value={assignedManagerId} onChange={(event) => setAssignedManagerId(event.target.value)}>
+              <option value="">Admin (unassigned)</option>
+              {(managers.data ?? []).map((manager) => (
+                <option key={manager.id} value={manager.id}>
+                  {manager.publicId ? `${manager.publicId} · ` : ''}
+                  {manager.fullName ?? manager.email}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        ) : (
+          <Field label="Assigned manager">
+            <p className="text-sm text-card-foreground">You — affiliates you create join your own book.</p>
+          </Field>
+        )}
       </Section>
 
       <Section title="Contact">
@@ -211,14 +240,18 @@ export function CreateAffiliate() {
         </Field>
       </Section>
 
-      <Section title="Payout" hint="How this affiliate gets paid. Crypto needs a coin, a network and a wallet address.">
-        <PayoutMethodFields
-          method={payoutMethod}
-          details={payoutDetails}
-          onMethodChange={setPayoutMethod}
-          onDetailsChange={setPayoutDetails}
-        />
-      </Section>
+      {/* Affiliates cannot set this themselves (issue #7), so whoever creates the
+          account is the first person who can — provided they hold the grant. */}
+      {canSetPayout && (
+        <Section title="Payout" hint="How this affiliate gets paid. Crypto needs a coin, a network and a wallet address.">
+          <PayoutMethodFields
+            method={payoutMethod}
+            details={payoutDetails}
+            onMethodChange={setPayoutMethod}
+            onDetailsChange={setPayoutDetails}
+          />
+        </Section>
+      )}
 
       <Section title="Tracking &amp; notes">
         <Field label="Postback URL" wide>

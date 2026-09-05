@@ -14,9 +14,24 @@ export interface AppShellProps extends TopbarProps {
   logoMark?: ReactNode;
   logoText?: string;
   userName?: string;
+  /** Colour-coded nav icons and active row (issue #3) — the affiliate portal opts in. */
+  colorfulNav?: boolean;
+  /** Rendered under the nav — the affiliate portal's manager card (issue #6). */
+  sidebarFooter?: ReactNode;
 }
 
-export function AppShell({ menu, currentPath, onNavigate, children, logoMark, logoText, userName, ...topbarProps }: AppShellProps) {
+export function AppShell({
+  menu,
+  currentPath,
+  onNavigate,
+  children,
+  logoMark,
+  logoText,
+  userName,
+  colorfulNav,
+  sidebarFooter,
+  ...topbarProps
+}: AppShellProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -41,6 +56,8 @@ export function AppShell({ menu, currentPath, onNavigate, children, logoMark, lo
           logoText={logoText}
           userName={userName}
           userRole={topbarProps.userLabel}
+          colorful={colorfulNav}
+          footer={sidebarFooter}
         />
       </div>
       <div className="flex flex-1 flex-col overflow-hidden">

@@ -1,12 +1,18 @@
 import type { NextFunction, Response } from 'express';
 import type { AuthenticatedRequest } from '../../common/guards/auth.guard';
+import { UserRole } from '../users/user.entity';
+import { affiliateService } from '../affiliates/affiliate.service';
 import { smartLinkService } from './smart-link.service';
 import type { CreateSmartLinkDto, SmartLinkFiltersDto, UpdateSmartLinkDto } from './smart-link.dto';
 
 export const smartLinkController = {
   async getSmartLinks(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      res.json(await smartLinkService.getSmartLinks(req.query as unknown as SmartLinkFiltersDto));
+      // An affiliate gets links already stamped with their own id; staff get the
+      // `{affiliate_id}` macro, which is the shape they need to see when authoring.
+      const affiliateId =
+        req.user?.role === UserRole.AFFILIATE ? await affiliateService.resolveAffiliateId(req.user.id) : undefined;
+      res.json(await smartLinkService.getSmartLinks(req.query as unknown as SmartLinkFiltersDto, affiliateId));
     } catch (err) {
       next(err);
     }

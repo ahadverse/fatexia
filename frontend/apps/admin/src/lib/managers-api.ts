@@ -16,6 +16,16 @@ export function getManager(id: string): Promise<Manager> {
   return apiFetch<Manager>(`/managers/${id}`);
 }
 
+/**
+ * The signed-in manager's own profile and permission grid (issue #20).
+ *
+ * MANAGER-role only — an admin has no manager row, so AccessContext never calls this
+ * for one.
+ */
+export function getOwnManager(): Promise<Manager> {
+  return apiFetch<Manager>('/managers/me');
+}
+
 export function createManager(input: CreateManagerInput): Promise<Manager> {
   return apiFetch<Manager>('/managers', { method: 'POST', body: JSON.stringify(input) });
 }

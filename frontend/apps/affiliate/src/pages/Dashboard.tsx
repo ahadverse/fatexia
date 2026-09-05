@@ -18,6 +18,7 @@ import { getOwnDashboard } from '../lib/portal-api';
 import { useAsync } from '../hooks/useAsync';
 import { compactMoney, money, number, percent } from '../lib/format';
 import { DateRangeFilter, defaultRange, toApiRange, type DateRange } from '../components/DateRangeFilter';
+import { LatestNews } from '../components/LatestNews';
 
 // The comparison window is always the period immediately before the selected one, of
 // the same length — see previousWindow() in the backend's dashboard module.
@@ -98,6 +99,10 @@ export function Dashboard() {
           </div>
         </>
       )}
+
+      {/* Outside the loading branch above: news doesn't depend on the date range, so
+          it renders as soon as it arrives rather than waiting on the traffic query. */}
+      <LatestNews limit={4} />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import type {
   AccessRequest,
   Affiliate,
   AffiliateDashboard,
+  AffiliateManagerContact,
   AffiliateGroupedReport,
   AffiliatePoint,
   AffiliateReportRow,
@@ -50,6 +51,16 @@ export function updateOwnProfile(input: Record<string, unknown>): Promise<Affili
 
 export function getOwnReferrals(): Promise<OwnReferral[]> {
   return apiFetch<OwnReferral[]>('/affiliates/me/referrals');
+}
+
+/**
+ * The affiliate's own manager, for the sidebar contact card (issue #6).
+ *
+* Always resolves — an affiliate with no assigned manager gets the network support
+ * desk back, so the sidebar card renders identically for everyone.
+ */
+export function getOwnManager(): Promise<AffiliateManagerContact> {
+  return apiFetch<AffiliateManagerContact>('/affiliates/me/manager');
 }
 
 // Dashboard & reports

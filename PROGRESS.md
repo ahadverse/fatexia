@@ -53,8 +53,14 @@ Every module the Admin portal needs now exists with the standard entity/reposito
 
 Not started yet:
 - [ ] `fraud-config` as its own module (the thresholds live in `network-settings` for now; the scoring pipeline itself is in the Tracker)
-- [ ] Manager assignment *scoping* — `requireRole` gates ADMIN vs MANAGER at the route level, but the service-layer filter restricting a manager to their own affiliates/offers (PLAN-backend.md's permission matrix) is not written yet
-- [ ] Automated tests (vitest is installed and configured, no test files written yet)
+- [x] Manager assignment *scoping* — built 2026-09-05. `attachManagerScope` pins the signed-in manager's own id to the request; `affiliateService.loadInScope` gates every affiliate read/write (out-of-scope reads 404, not 403, so a manager cannot probe ids); and `applyManagerScope` narrows reports, click logs, conversions, dashboard money figures and the message inbox to their own affiliates with a correlated subquery. Alongside it, per-manager permissions (`managers.permissions`, 15 capabilities) gate the verbs. Verified with `node scripts/dev/verify-issues-1-21.js`.
+- [x] Automated tests — first suites written 2026-09-05. 99 tests, `npm test`, no database or Redis needed (repositories are mocked), ~3s. Covers the money paths and the new permission boundary:
+  - `offers/payout-resolution.test.ts` (32) — flat vs percentage pricing, cent rounding, per-dimension targeting, and the rule that an *unknown* geo/device/OS never satisfies a targeted rule. Also pins the deliberate asymmetry between click-time routing (returns null so `fallbackUrl` is reachable) and conversion-time pricing (falls back rather than leaving money unpriced).
+  - `postback/postback.service.test.ts` (25) — the money-integrity rule under adversarial input: a payload claiming `payout=9999` is ignored and both amounts come from the offer's own rule. Plus secret/IP rejection, the identical generic failure that stops offer-id probing, orphan and cross-offer click handling, zero-value duplicates, and rule-hold beating auto-approve.
+  - `smart-links/smart-link-resolution.test.ts` (15) — both targeting gates and all three rotations, including the Redis-down path and the BEST_CR weight floor that keeps a new member from being starved.
+  - `common/guards/manager-scope.guard.test.ts` (14) — fails closed: a MANAGER with no manager row is rejected rather than treated as unscoped, a missing scope denies, and absent/`false` permissions behave identically.
+  - Validated by mutation testing, not just by passing: six deliberate regressions (percentage payout silently flat, conversions left unpriced, permission check disabled, half-provisioned manager granted admin scope, visitor sent to an unqualified offer, empty query parameter) were each introduced and each caught.
+- [ ] Test coverage beyond the above — invoice batching, the click pipeline's fraud scoring, and the affiliate-scoping SQL are still uncovered, and nothing runs in CI yet (no workflow file).
 
 ### Messaging (rebuilt 2026-07-26)
 
@@ -144,9 +150,11 @@ Runs as a second entrypoint (`src/tracking.ts`, `npm run dev:tracking` / port 40
 - Note: the WSL Redis instance was found to already contain ~5,660 keys of orphaned BullMQ state (queues named `click-flush`, `fraud-score`, `blocklist-refresh`, `geo-update`, `health-alert`, `postback-outbound` — matching this project's fraud-pipeline naming) with no corresponding source code anywhere on this machine. Left untouched (separate `proxy-detect:*` key namespace); flagged to the user, unresolved.
 - BullMQ itself — still not installed. The queue names above suggest a design already existed for click-write batching, fraud scoring, blocklist/geo refresh, and outbound postback delivery, but that code isn't in this checkout. A real batched click-write buffer (Redis/queue) is still not implemented — clicks currently insert directly (fire-and-forget) rather than batching, which is correct but not the scaled version PLAN-tracker.md describes.
 
+- [x] `/postback` endpoint — built and mounted on the Tracker (`tracking-routes.ts`). Payout is recomputed from the offer's own rule, never read from the payload.
+- [x] `/sl` smart-link resolution — built 2026-09-05. Two gates then a rotation: the link's own geo/device targeting (miss → the link's `fallbackUrl`), then each member offer's payout-rule targeting, so a member the visitor cannot convert on is dropped from the candidate list rather than picked and bounced to its own fallback. All three rotations are real: `TOP_PAYOUT` from the rules already loaded (no extra query), `ROUND_ROBIN` off a Redis counter so the split stays even across tracker instances, `BEST_CR` off a 5-minute cached CR snapshot with a weight floor so a new member is not starved by having no history. Shares `clickService.handleClick` with `/click` via a `ClickTarget` union — geo, fraud scoring, the click row and the macro substitution are one code path, not two. A link that resolves to nothing redirects without writing a click row (`clicks.offerId` is NOT NULL, and there is no honest offer to attribute it to). Verified with `node scripts/dev/verify-smart-links.js`.
+  - Two bugs found and fixed alongside it: `smartLinkUrl` was handed to affiliates with a literal `{affiliate_id}` in the query string (the DTO comment claimed the portal substituted it; it never did), now resolved server-side from the JWT; and `clickQuerySchema` rejected a malformed `affiliateId` with a 400, contradicting `click.entity.ts`'s documented intent that such a click still be logged with a null attribution.
+
 Not started yet:
-- [ ] `/postback` endpoint (needs a `postback-logs`/`conversions` module first — payout is always recomputed from the offer's rule, never trusted from the payload, per the money integrity rule)
-- [ ] `/sl` smart-link resolution (needs the `smart-links` Backend module first)
 - [ ] JS fingerprint client-side signal (Step 2 in PLAN-tracker.md) — doesn't fit the current pure-redirect flow (no interstitial page); would need a landing page to run in
 - [ ] CTIT scoring (applies at conversion time — waits on the `conversions` module)
 

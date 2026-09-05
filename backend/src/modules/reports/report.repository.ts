@@ -1,5 +1,6 @@
 import type { SelectQueryBuilder } from 'typeorm';
 import { AppDataSource } from '../../infra/database/data-source';
+import { applyManagerScope } from '../../common/manager-scope-sql';
 import { Click, ClickQualityStatus } from '../clicks/click.entity';
 import { Conversion, ConversionStatus } from '../conversions/conversion.entity';
 import type { ReportDimension, ReportFiltersDto } from './report.dto';
@@ -92,6 +93,7 @@ function applyClickFilters(qb: SelectQueryBuilder<Click>, filters: ReportFilters
   if (filters.affiliateId) {
     qb.andWhere('click."affiliateId" = :affiliateId', { affiliateId: filters.affiliateId });
   }
+  applyManagerScope(qb, 'click', filters.managerScopeId);
   if (filters.countryCode) {
     qb.andWhere('click."countryCode" = :countryCode', { countryCode: filters.countryCode });
   }
@@ -117,6 +119,7 @@ function applyConversionFilters(
   if (filters.affiliateId) {
     qb.andWhere('conversion."affiliateId" = :affiliateId', { affiliateId: filters.affiliateId });
   }
+  applyManagerScope(qb, 'conversion', filters.managerScopeId);
   if (filters.countryCode) {
     qb.andWhere('conversion."countryCode" = :countryCode', { countryCode: filters.countryCode });
   }

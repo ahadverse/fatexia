@@ -1,4 +1,4 @@
-import { Button, DataTable, EmptyState, PageHeader, TableSkeleton, toast, type DataTableColumn } from '@fatexia/ui';
+import { Button, DataTable, EmptyState, ExternalLinkButton, PageHeader, TableSkeleton, toast, type DataTableColumn } from '@fatexia/ui';
 import type { SmartLink } from '@fatexia/types';
 import { getSmartLinks } from '../../lib/portal-api';
 import { useAsync } from '../../hooks/useAsync';
@@ -28,16 +28,19 @@ export function SmartLinks() {
       key: 'link',
       header: '',
       render: (row) => (
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => {
-            void navigator.clipboard.writeText(row.smartLinkUrl);
-            toast.success('Smart-link copied');
-          }}
-        >
-          Copy link
-        </Button>
+        <div className="flex justify-end gap-1.5">
+          <ExternalLinkButton href={row.smartLinkUrl} label="Open smart-link in new tab" />
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              void navigator.clipboard.writeText(row.smartLinkUrl);
+              toast.success('Smart-link copied');
+            }}
+          >
+            Copy link
+          </Button>
+        </div>
       ),
     },
   ];

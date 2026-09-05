@@ -26,14 +26,19 @@ export function News() {
       ) : (
         <div className="space-y-4">
           {(posts.data ?? []).map((post) => (
-            <article key={post.id} className="rounded-lg border border-border bg-card p-5">
-              <div className="flex flex-wrap items-baseline gap-2">
-                {post.pinned && <span className="text-xs font-medium text-primary">Pinned</span>}
-                <h2 className="text-base font-semibold text-card-foreground">{post.title}</h2>
-                <span className="ml-auto text-xs text-muted-foreground">{date(post.publishedAt)}</span>
+            <article key={post.id} className="overflow-hidden rounded-lg border border-border bg-card">
+              {post.imageUrl && (
+                <img src={post.imageUrl} alt="" loading="lazy" className="aspect-[21/6] w-full object-cover" />
+              )}
+              <div className="p-5">
+                <div className="flex flex-wrap items-baseline gap-2">
+                  {post.pinned && <span className="text-xs font-medium text-primary">Pinned</span>}
+                  <h2 className="text-base font-semibold text-card-foreground">{post.title}</h2>
+                  <span className="ml-auto text-xs text-muted-foreground">{date(post.publishedAt)}</span>
+                </div>
+                {post.excerpt && <p className="mt-1 text-sm text-muted-foreground">{post.excerpt}</p>}
+                <p className="mt-3 whitespace-pre-wrap text-sm text-card-foreground">{post.body}</p>
               </div>
-              {post.excerpt && <p className="mt-1 text-sm text-muted-foreground">{post.excerpt}</p>}
-              <p className="mt-3 whitespace-pre-wrap text-sm text-card-foreground">{post.body}</p>
             </article>
           ))}
         </div>

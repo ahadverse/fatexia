@@ -20,3 +20,9 @@ export function updateOffer(id: string, input: CreateOfferInput): Promise<Offer>
 export function updateOfferStatus(id: string, status: OfferStatus): Promise<Offer> {
   return apiFetch<Offer>(`/offers/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
 }
+
+export function uploadOfferThumbnail(file: File): Promise<{ url: string }> {
+  const formData = new FormData();
+  formData.append('image', file);
+  return apiFetch<{ url: string }>('/uploads/offer-thumbnail', { method: 'POST', body: formData });
+}

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { validate } from '../../common/validate';
 import { requireAuth } from '../../common/guards/auth.guard';
 import { requireRole } from '../../common/guards/role.guard';
+import { attachManagerScope, requirePermission } from '../../common/guards/manager-scope.guard';
 import { UserRole } from '../users/user.entity';
 import { clickLogController } from './click-log.controller';
 import { clickLogFiltersSchema } from './click.dto';
@@ -22,7 +23,12 @@ clickLogRoutes.get(
   clickLogController.getOwnLogs,
 );
 
-clickLogRoutes.use(requireAuth, requireRole(UserRole.ADMIN, UserRole.MANAGER));
+clickLogRoutes.use(
+  requireAuth,
+  requireRole(UserRole.ADMIN, UserRole.MANAGER),
+  attachManagerScope,
+  requirePermission('reports.view'),
+);
 
 clickLogRoutes.get('/countries', clickLogController.getCountries);
 clickLogRoutes.get('/', validate(clickLogFiltersSchema, 'query'), clickLogController.getLogs);

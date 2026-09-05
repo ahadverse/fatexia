@@ -135,8 +135,8 @@ export const messageService = {
   },
 
   // Network-wide unread count for the admin badge.
-  async getUnreadCount(): Promise<{ unread: number }> {
-    return { unread: await messageRepository.countUnread(MessageDirection.INBOUND) };
+  async getUnreadCount(managerScopeId?: string): Promise<{ unread: number }> {
+    return { unread: await messageRepository.countUnread(MessageDirection.INBOUND, undefined, managerScopeId) };
   },
 
   // The affiliate's own unread count — messages the network sent them.

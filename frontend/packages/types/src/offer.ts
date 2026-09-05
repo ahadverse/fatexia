@@ -2,13 +2,14 @@ export type OfferStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'PAUSED' | 'DELE
 export type TrackingPlatform = 'DIRECT' | 'AFFISE' | 'HASOFFERS' | 'CAKE' | 'OTHER';
 export type PayoutMode = 'CPA' | 'CPC' | 'CPL' | 'CPI' | 'CPS';
 export type PayoutType = 'FLAT' | 'PERCENTAGE';
-export type RevenueModel = 'RPA' | 'RPC' | 'NONE';
+export type RevenueModel = 'RPA' | 'RPC' | 'RPS' | 'NONE';
 export type CapPeriod = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'OVERALL';
 export type CapMetric = 'CLICKS' | 'CONVERSIONS' | 'PAYOUT';
 
 export interface PayoutRuleTargeting {
   countries: string[];
   devices: string[];
+  os: string[];
   affiliateIds: string[];
   affiliateGroupIds: string[];
 }
@@ -50,6 +51,7 @@ export interface Offer {
   status: OfferStatus;
   trackingLink: string;
   trackingPlatform: TrackingPlatform;
+  isPublic: boolean;
   trafficTypes: string[];
   featured: boolean;
   networkOfferId?: string;
@@ -61,7 +63,9 @@ export interface Offer {
   caps: OfferCap[];
   createdAt: string;
   defaultPayoutAmount: number;
+  displayPayoutAmount: number;
   destinationUrl: string | null;
+  fallbackUrl: string | null;
   postbackSecret: string | null;
   allowedPostbackIps: string | null;
   postbackUrl: string | null;
@@ -100,6 +104,7 @@ export interface CreateOfferInput {
   endDate?: string;
   currency: string;
   trackingPlatform: TrackingPlatform;
+  isPublic: boolean;
   trafficTypes: string[];
   featured: boolean;
   networkOfferId?: string;
@@ -111,6 +116,7 @@ export interface CreateOfferInput {
   caps: OfferCapInput[];
   defaultPayoutAmount: number;
   destinationUrl?: string;
+  fallbackUrl?: string;
   postbackSecret?: string;
   allowedPostbackIps?: string;
   blockedRedirectUrl?: string;
@@ -133,6 +139,7 @@ export interface AffiliatePayoutRule {
   amount: number;
   countries: string[];
   devices: string[];
+  os: string[];
   holdSchedule: { enabled: boolean; days: number };
 }
 

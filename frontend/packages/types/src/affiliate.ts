@@ -59,6 +59,8 @@ export function describePayout(
 
 export interface Affiliate {
   id: string;
+  /** Sequential display id — `AFF-1001` upward (issue #21). */
+  publicId: string | null;
   userId: string;
   email: string;
   // Lives on the linked user account server-side — one source of truth, so the login

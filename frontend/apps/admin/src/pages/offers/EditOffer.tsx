@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { Offer } from '@fatexia/types';
 import { toast } from '@fatexia/ui';
-import { getOffer, updateOffer } from '../../lib/offers-api';
+import { getOffer, updateOffer, updateOfferStatus } from '../../lib/offers-api';
 import { OfferForm, offerToFormInput } from './OfferForm';
 
 export function EditOffer() {
@@ -28,8 +28,20 @@ export function EditOffer() {
       submitLabel="Save Changes"
       submittingLabel="Saving…"
       initial={offerToFormInput(offer)}
-      onSubmit={async (input) => {
+      initialStatus={offer.status}
+      onSubmit={async (input, status) => {
         await updateOffer(id, input);
+        if (status !== offer.status) {
+          try {
+            await updateOfferStatus(id, status);
+          } catch (err) {
+            toast.error(
+              `Offer saved, but status couldn't be changed to ${status}: ${err instanceof Error ? err.message : 'unknown error'}.`,
+            );
+            navigate(`/offers/${id}`);
+            return;
+          }
+        }
         toast.success('Offer updated');
         navigate(`/offers/${id}`);
       }}

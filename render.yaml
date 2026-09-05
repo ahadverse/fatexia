@@ -94,6 +94,10 @@ services:
       # This service's own public address.
       - key: PUBLIC_API_URL
         sync: false
+      # Where {portal_link} in an outbound email points — the affiliate portal, not
+      # this API. An affiliate clicking through to a REST endpoint is a dead end.
+      - key: AFFILIATE_PORTAL_URL
+        sync: false
       # Wordmark shown in outbound email. Fetched by the RECIPIENT's mail client, so it
       # has to be reachable from the public internet — pointing it at this service is
       # possible but worse: a sleeping free-tier instance means a broken logo in

@@ -20,6 +20,8 @@ export const createNewsSchema = z.object({
   title: z.string().trim().min(1).max(200),
   slug: slugSchema,
   excerpt: z.string().trim().max(300).optional(),
+  // Empty string clears the cover; a CDN URL from /uploads/news-image sets it.
+  imageUrl: z.string().trim().max(500).url().optional().or(z.literal('')),
   body: z.string().trim().min(1).max(20000),
   status: z.nativeEnum(NewsStatus).default(NewsStatus.DRAFT),
   audience: z.nativeEnum(NewsAudience).default(NewsAudience.ALL),
@@ -37,6 +39,7 @@ export interface NewsPostDto {
   title: string;
   slug: string;
   excerpt: string | null;
+  imageUrl: string | null;
   body: string;
   status: NewsStatus;
   audience: NewsAudience;
@@ -52,6 +55,7 @@ export function toNewsPostDto(post: NewsPost): NewsPostDto {
     title: post.title,
     slug: post.slug,
     excerpt: post.excerpt,
+    imageUrl: post.imageUrl,
     body: post.body,
     status: post.status,
     audience: post.audience,

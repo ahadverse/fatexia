@@ -1,13 +1,28 @@
 import { z } from 'zod';
+import { managerScopeField } from '../../common/manager-scope-sql';
 import { ClickQualityStatus } from './click.entity';
 
 // Sub-ids are affiliate-controlled free text on a public endpoint — length-capped so
 // a crafted link can't push oversized values into the click row.
 const subId = z.string().max(255).optional();
 
+/**
+ * A malformed affiliate id is dropped, not rejected.
+ *
+ * click.entity.ts states the intent plainly — "a click can arrive with a missing or
+ * invalid affiliateId (bad link, tampering); still logged, a null attribution is
+ * itself a fraud signal" — but a strict `.uuid()` here turned that into a 400, so the
+ * visitor never reached the advertiser and the click was never recorded at all.
+ * Rejecting the whole redirect punishes the visitor for the affiliate's broken link.
+ */
+const looseAffiliateId = z
+  .string()
+  .optional()
+  .transform((value) => (value && z.string().uuid().safeParse(value).success ? value : undefined));
+
 export const clickQuerySchema = z.object({
   offerId: z.string().uuid(),
-  affiliateId: z.string().uuid().optional(),
+  affiliateId: looseAffiliateId,
   sub1: subId,
   sub2: subId,
   sub3: subId,
@@ -19,6 +34,18 @@ export const clickQuerySchema = z.object({
 });
 
 export type ClickQueryDto = z.infer<typeof clickQuerySchema>;
+
+// Same query surface as a tracking link minus `offerId` — a smart-link names its
+// target in the path, and the offer is chosen at redirect time.
+export const smartLinkClickQuerySchema = clickQuerySchema.omit({ offerId: true });
+
+export type SmartLinkClickQueryDto = z.infer<typeof smartLinkClickQuerySchema>;
+
+// Slugs are admin-authored and appear in a public URL. Validated here so a crafted
+// path can't reach the repository as an oversized or exotic string.
+export const smartLinkClickParamsSchema = z.object({
+  slug: z.string().min(1).max(120).regex(/^[a-zA-Z0-9_-]+$/, 'Invalid smart-link'),
+});
 
 // Whitelist, not free text: the value reaches an ORDER BY, so it is mapped to a fixed
 // column expression in the repository and never interpolated.
@@ -38,6 +65,8 @@ export const clickLogFiltersSchema = z.object({
   sortDir: z.enum(['ASC', 'DESC']).default('DESC'),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(50),
+  // Server-set from the session, never trusted from the query string (issue #5).
+  ...managerScopeField,
 });
 
 export type ClickLogFiltersDto = z.infer<typeof clickLogFiltersSchema>;

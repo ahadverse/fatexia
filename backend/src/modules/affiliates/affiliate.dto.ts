@@ -146,26 +146,25 @@ export const updateAffiliateStatusSchema = z.object({
 export type UpdateAffiliateStatusDto = z.infer<typeof updateAffiliateStatusSchema>;
 
 // Self-service: an affiliate can edit their own contact details and postback URL but
-// never their manager assignment, referrer, or account status (PLAN-backend.md).
-export const updateOwnProfileSchema = withCryptoPayoutCheck(
-  z.object({
-    fullName: z.string().trim().min(2).max(120).optional(),
-    country: z.string().trim().min(2).max(80).optional(),
-    messengerType: z.nativeEnum(AffiliateMessenger).optional(),
-    messengerHandle: optionalText(120),
-    websiteUrl: optionalText(255),
-    companyName: optionalText(120),
-    phone: optionalText(40),
-    postbackUrl: optionalText(500),
-    payoutMethod: z.nativeEnum(AffiliatePayoutMethod).optional().nullable(),
-    payoutDetails: z.record(z.unknown()).optional(),
-  }),
-);
+// never their manager assignment, referrer, account status, or payout method/details
+// (PLAN-backend.md — payout method changes go through a manager/admin, per issue #7).
+export const updateOwnProfileSchema = z.object({
+  fullName: z.string().trim().min(2).max(120).optional(),
+  country: z.string().trim().min(2).max(80).optional(),
+  messengerType: z.nativeEnum(AffiliateMessenger).optional(),
+  messengerHandle: optionalText(120),
+  websiteUrl: optionalText(255),
+  companyName: optionalText(120),
+  phone: optionalText(40),
+  postbackUrl: optionalText(500),
+});
 
 export type UpdateOwnProfileDto = z.infer<typeof updateOwnProfileSchema>;
 
 export interface AffiliateDto {
   id: string;
+  /** Sequential display id — `AFF-1001` upward (issue #21). */
+  publicId: string | null;
   userId: string;
   email: string;
   status: UserStatus;
@@ -197,6 +196,7 @@ export interface AffiliateDto {
 export function toAffiliateDto(affiliate: Affiliate): AffiliateDto {
   return {
     id: affiliate.id,
+    publicId: affiliate.publicId,
     userId: affiliate.userId,
     email: affiliate.user?.email ?? '',
     status: affiliate.user?.status ?? UserStatus.PENDING,

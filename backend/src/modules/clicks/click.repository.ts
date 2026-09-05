@@ -1,6 +1,7 @@
 import type { SelectQueryBuilder } from 'typeorm';
 import { AppDataSource } from '../../infra/database/data-source';
 import { offsetOf } from '../../common/pagination';
+import { applyManagerScope } from '../../common/manager-scope-sql';
 import { Click } from './click.entity';
 import type { ClickLogFiltersDto, ClickSortField, ClickSummaryDto } from './click.dto';
 
@@ -28,6 +29,7 @@ function applyFilters(qb: SelectQueryBuilder<Click>, filters: ClickLogFiltersDto
   if (filters.affiliateId) {
     qb.andWhere('click."affiliateId" = :affiliateId', { affiliateId: filters.affiliateId });
   }
+  applyManagerScope(qb, 'click', filters.managerScopeId);
   if (filters.qualityStatus) {
     qb.andWhere('click."qualityStatus" = :qualityStatus', { qualityStatus: filters.qualityStatus });
   }

@@ -24,6 +24,7 @@ import { emailRoutes } from './modules/emails/email.routes';
 import { networkSettingRoutes } from './modules/network-settings/network-setting.routes';
 import { geoipRoutes } from './modules/geoip/geoip.routes';
 import { integrationRoutes } from './modules/integrations/integration.routes';
+import { uploadRoutes } from './modules/uploads/upload.routes';
 import { reportRoutes } from './modules/reports/report.routes';
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes';
 
@@ -61,6 +62,7 @@ export function mountMainRoutes(app: Express): void {
   app.use('/network-settings', networkSettingRoutes);
   app.use('/integrations', integrationRoutes);
   app.use('/geoip', geoipRoutes);
+  app.use('/uploads', uploadRoutes);
 
   app.use('/reports', reportRoutes);
   app.use('/dashboard', dashboardRoutes);

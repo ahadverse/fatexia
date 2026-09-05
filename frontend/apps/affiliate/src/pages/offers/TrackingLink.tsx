@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Input, PageHeader, Select, Skeleton, toast } from '@fatexia/ui';
+import { Button, ExternalLinkButton, Input, PageHeader, Select, Skeleton, toast } from '@fatexia/ui';
 import type { AffiliateOffer } from '@fatexia/types';
 import { getAvailableOffers } from '../../lib/offers-api';
 import { useAsync } from '../../hooks/useAsync';
@@ -78,7 +78,8 @@ export function TrackingLink() {
             <p className="mt-3 break-all rounded-md border border-border bg-background p-3 font-mono text-xs text-foreground">
               {link}
             </p>
-            <div className="mt-3 flex justify-end">
+            <div className="mt-3 flex justify-end gap-2">
+              <ExternalLinkButton href={link} label="Open tracking link in new tab" />
               <Button
                 onClick={() => {
                   void navigator.clipboard.writeText(link);

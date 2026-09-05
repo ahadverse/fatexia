@@ -13,6 +13,10 @@ import {
 
 export const managerRoutes = Router();
 
+// A manager's own profile — how the portal learns which capabilities to render
+// (issue #20). Registered ahead of `/:id`, which would otherwise match `/me`.
+managerRoutes.get('/me', requireAuth, requireRole(UserRole.MANAGER), managerController.getOwnManager);
+
 // Managers are readable by MANAGER-role staff (an affiliate form needs the assignable
 // list), but creating/editing staff accounts is ADMIN-only per PLAN-backend.md's
 // permission matrix.

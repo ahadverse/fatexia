@@ -12,6 +12,21 @@ export const managerController = {
     }
   },
 
+  /**
+   * The signed-in manager's own profile, permissions included (issue #20).
+   *
+   * The portal needs this to decide what to render — showing a "Create affiliate"
+   * button that returns 403 is worse than not showing it. Serving it from the JWT
+   * rather than an id keeps a manager from reading a colleague's permission set.
+   */
+  async getOwnManager(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      res.json(await managerService.getOwnProfile(req.user!.id));
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async getManager(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       res.json(await managerService.getManager(req.params.id!));

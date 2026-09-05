@@ -5,6 +5,13 @@ import { useAsync } from '../../hooks/useAsync';
 import { date, number } from '../../lib/format';
 import { StatusPill } from '../../components/StatusPill';
 
+// Built from the portal's own origin rather than a VITE_ variable: this page only ever
+// renders inside the affiliate portal, so where it is running IS the address to share,
+// and there is no build-time setting to forget.
+function inviteLink(referralCode: string): string {
+  return `${window.location.origin}/register?ref=${encodeURIComponent(referralCode)}`;
+}
+
 /**
  * The affiliate's own referral code and who they brought in.
  *
@@ -43,17 +50,33 @@ export function ReferralProgram() {
               <p className="mt-3 font-mono text-2xl font-semibold tracking-wider text-card-foreground">
                 {profile.data.referralCode}
               </p>
-              <Button
-                className="mt-3"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  void navigator.clipboard.writeText(profile.data!.referralCode!);
-                  toast.success('Referral code copied');
-                }}
-              >
-                Copy code
-              </Button>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(profile.data!.referralCode!);
+                    toast.success('Referral code copied');
+                  }}
+                >
+                  Copy code
+                </Button>
+                {/* The link is the useful thing to share: `?ref=` prefills the code on
+                    the register form, so an invitee never has to type it correctly. */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(inviteLink(profile.data!.referralCode!));
+                    toast.success('Invite link copied');
+                  }}
+                >
+                  Copy invite link
+                </Button>
+              </div>
+              <p className="mt-2 break-all font-mono text-xs text-muted-foreground">
+                {inviteLink(profile.data.referralCode)}
+              </p>
             </>
           ) : (
             <p className="mt-3 text-sm text-muted-foreground">

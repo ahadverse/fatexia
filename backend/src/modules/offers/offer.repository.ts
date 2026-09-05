@@ -1,3 +1,4 @@
+import { In } from 'typeorm';
 import { AppDataSource } from '../../infra/database/data-source';
 import { Offer, OfferStatus } from './offer.entity';
 import type { OfferFiltersDto } from './offer.dto';
@@ -17,6 +18,22 @@ export const offerRepository = {
 
   findByIdWithChildren(id: string): Promise<Offer | null> {
     return repository.findOne({ where: { id }, relations: ['payoutRules', 'caps'] });
+  },
+
+  /**
+   * A smart-link's candidate members, in one query on the click hot path.
+   *
+   * Filtering to APPROVED here rather than in the resolver is deliberate: a member
+   * that was paused after being added to the link must drop out of the rotation
+   * immediately, and doing that in SQL means a paused offer never even reaches the
+   * selection code where it could be picked by mistake.
+   */
+  findApprovedByIdsWithPayoutRules(ids: string[]): Promise<Offer[]> {
+    if (ids.length === 0) return Promise.resolve([]);
+    return repository.find({
+      where: { id: In(ids), status: OfferStatus.APPROVED },
+      relations: ['payoutRules'],
+    });
   },
 
   findAll(filters: OfferFiltersDto): Promise<Offer[]> {
@@ -50,13 +67,29 @@ export const offerRepository = {
   // Affiliate offer browse: APPROVED offers only, with the advertiser joined so the
   // DTO can denormalize advertiserName (affiliates can't call the admin-only
   // /advertisers API). One query, no N+1.
-  findAvailableForAffiliate(): Promise<Offer[]> {
+  //
+  // Gating (issue #19): a public offer (isPublic=true) is visible to every affiliate.
+  // A gated offer only shows up once this specific affiliate has an APPROVED row in
+  // offer_access_requests — joined in raw (not via the entity relation, which would
+  // create a circular module dependency between offers and offer-access-requests).
+  findAvailableForAffiliate(affiliateId: string): Promise<Offer[]> {
     return repository
       .createQueryBuilder('offer')
       .leftJoinAndSelect('offer.payoutRules', 'payoutRules')
       .leftJoinAndSelect('offer.caps', 'caps')
       .leftJoinAndSelect('offer.advertiser', 'advertiser')
+      .leftJoin(
+        // Lowercase alias, deliberately: TypeORM quotes whatever alias string it's
+        // given (e.g. `"accessreq"`), and Postgres case-folds an *unquoted* identifier
+        // in a later raw andWhere to lowercase — a camelCase alias would mismatch its
+        // own join and fail with "missing FROM-clause entry".
+        'offer_access_requests',
+        'accessreq',
+        'accessreq."offerId" = offer.id AND accessreq."affiliateId" = :affiliateId AND accessreq.status = :approvedStatus',
+        { affiliateId, approvedStatus: 'APPROVED' },
+      )
       .andWhere('offer.status = :status', { status: OfferStatus.APPROVED })
+      .andWhere('(offer."isPublic" = true OR accessreq.id IS NOT NULL)')
       .orderBy('offer."createdAt"', 'DESC')
       .getMany();
   },

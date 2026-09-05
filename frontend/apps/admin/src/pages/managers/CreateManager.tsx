@@ -1,9 +1,54 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Input, PageHeader, Select, Textarea, toast } from '@fatexia/ui';
-import type { Manager, ManagerRole, UserStatus } from '@fatexia/types';
+import type { Manager, ManagerPermissions, ManagerRole, UserStatus } from '@fatexia/types';
 import { createManager, getManagers } from '../../lib/managers-api';
+import { PermissionGrid } from '../../components/PermissionGrid';
 import { useAsync } from '../../hooks/useAsync';
+
+/**
+ * A sensible opening position per role (issue #20) — not a hard rule, just what the
+ * grid starts ticked as so an admin adjusts rather than builds from nothing. An
+ * affiliate manager can run their book but not touch payouts; an account manager
+ * works on the advertiser side; a general manager gets everything.
+ */
+const ROLE_DEFAULT_PERMISSIONS: Record<ManagerRole, ManagerPermissions> = {
+  AFFILIATE: {
+    'affiliates.view': true,
+    'affiliates.create': true,
+    'affiliates.edit': true,
+    'affiliates.approve': true,
+    'affiliates.reject': true,
+    'affiliates.suspend': true,
+    'offers.view': true,
+    'reports.view': true,
+    'messages.send': true,
+  },
+  ACCOUNT: {
+    'affiliates.view': true,
+    'offers.view': true,
+    'offers.create': true,
+    'offers.edit': true,
+    'advertisers.manage': true,
+    'reports.view': true,
+  },
+  GENERAL: {
+    'affiliates.view': true,
+    'affiliates.create': true,
+    'affiliates.edit': true,
+    'affiliates.approve': true,
+    'affiliates.reject': true,
+    'affiliates.suspend': true,
+    'affiliates.payout': true,
+    'affiliates.impersonate': true,
+    'offers.view': true,
+    'offers.create': true,
+    'offers.edit': true,
+    'advertisers.manage': true,
+    'reports.view': true,
+    'messages.send': true,
+  },
+};
 
 const ROLES: { value: ManagerRole; label: string; hint: string }[] = [
   { value: 'AFFILIATE', label: 'Affiliate manager', hint: 'Owns affiliate relationships — recruiting, approvals, messaging.' },
@@ -25,7 +70,17 @@ export function CreateManager() {
   const [reportsToId, setReportsToId] = useState('');
   const [status, setStatus] = useState<UserStatus>('ACTIVE');
   const [notes, setNotes] = useState('');
+  const [permissions, setPermissions] = useState<ManagerPermissions>(ROLE_DEFAULT_PERMISSIONS.AFFILIATE);
+  // Tracks whether the admin has touched the grid: changing the role re-seeds the
+  // defaults only while they haven't, so switching roles early is helpful and
+  // switching roles after deliberate edits never silently discards them.
+  const [permissionsTouched, setPermissionsTouched] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  function handleRoleChange(nextRole: ManagerRole) {
+    setManagerRole(nextRole);
+    if (!permissionsTouched) setPermissions(ROLE_DEFAULT_PERMISSIONS[nextRole]);
+  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -40,6 +95,7 @@ export function CreateManager() {
         skype: skype || undefined,
         defaultCommissionPercent: Number(defaultCommissionPercent) || 0,
         reportsToId: reportsToId || null,
+        permissions,
         notes: notes || undefined,
         status,
       });
@@ -85,7 +141,7 @@ export function CreateManager() {
           </label>
           <label className="block">
             <span className="text-xs font-medium text-muted-foreground">Role</span>
-            <Select value={managerRole} onChange={(event) => setManagerRole(event.target.value as ManagerRole)} className="mt-1">
+            <Select value={managerRole} onChange={(event) => handleRoleChange(event.target.value as ManagerRole)} className="mt-1">
               {ROLES.map((role) => (
                 <option key={role.value} value={role.value}>
                   {role.label}
@@ -140,6 +196,23 @@ export function CreateManager() {
             <span className="text-xs font-medium text-muted-foreground">Notes</span>
             <Textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} className="mt-1" />
           </label>
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-border bg-card p-4">
+        <h2 className="text-sm font-semibold text-card-foreground">Permissions</h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Exactly what this manager can do. Whatever you grant applies only to the affiliates assigned to them — never
+          to the whole network.
+        </p>
+        <div className="mt-4">
+          <PermissionGrid
+            value={permissions}
+            onChange={(next) => {
+              setPermissionsTouched(true);
+              setPermissions(next);
+            }}
+          />
         </div>
       </section>
     </form>

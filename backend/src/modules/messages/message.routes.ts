@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { validate } from '../../common/validate';
 import { requireAuth } from '../../common/guards/auth.guard';
 import { requireRole } from '../../common/guards/role.guard';
+import { attachManagerScope, requirePermission } from '../../common/guards/manager-scope.guard';
 import { UserRole } from '../users/user.entity';
 import { messageController } from './message.controller';
 import { messageFiltersSchema, replyMessageSchema, sendMessageSchema, threadFiltersSchema } from './message.dto';
@@ -31,11 +32,13 @@ messageRoutes.post(
   messageController.reply,
 );
 
-messageRoutes.use(requireAuth, requireRole(UserRole.ADMIN, UserRole.MANAGER));
+messageRoutes.use(requireAuth, requireRole(UserRole.ADMIN, UserRole.MANAGER), attachManagerScope);
 
 messageRoutes.get('/unread-count', messageController.getUnreadCount);
 messageRoutes.get('/threads', validate(threadFiltersSchema, 'query'), messageController.getThreads);
 messageRoutes.get('/threads/:affiliateId', messageController.getThread);
 messageRoutes.patch('/threads/:affiliateId/read', messageController.markThreadRead);
 messageRoutes.get('/', validate(messageFiltersSchema, 'query'), messageController.getMessages);
-messageRoutes.post('/', validate(sendMessageSchema), messageController.send);
+// Reading threads is part of every manager's job; writing into one on the network's
+// behalf is the grant an admin controls (issue #20).
+messageRoutes.post('/', requirePermission('messages.send'), validate(sendMessageSchema), messageController.send);

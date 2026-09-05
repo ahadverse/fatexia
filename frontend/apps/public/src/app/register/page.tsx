@@ -15,6 +15,15 @@ import { AFFILIATE_REGISTER_URL } from '@/lib/urls';
  */
 export const dynamic = 'force-dynamic';
 
-export default function RegisterRedirect() {
-  redirect(AFFILIATE_REGISTER_URL);
+export default async function RegisterRedirect({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  // A referral link shared as `fatexia.com/register?ref=CODE` has to survive the hop,
+  // or the referrer loses the attribution for every signup that came through this
+  // domain rather than the portal's.
+  const ref = (await searchParams).ref;
+  const code = Array.isArray(ref) ? ref[0] : ref;
+  redirect(code ? `${AFFILIATE_REGISTER_URL}?ref=${encodeURIComponent(code)}` : AFFILIATE_REGISTER_URL);
 }

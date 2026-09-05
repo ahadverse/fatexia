@@ -65,6 +65,13 @@ export class Offer {
   @Column({ type: 'enum', enum: OfferStatus, default: OfferStatus.PENDING })
   status!: OfferStatus;
 
+  // True (default): any affiliate can see and run this offer once it's APPROVED.
+  // False: it's gated — an affiliate must have an APPROVED row in
+  // offer_access_requests for this offer before it appears in their Browse/available
+  // list (see offerRepository.findAvailableForAffiliate).
+  @Column({ type: 'boolean', default: true })
+  isPublic!: boolean;
+
   @Column({ type: 'enum', enum: TrackingPlatform, default: TrackingPlatform.DIRECT })
   trackingPlatform!: TrackingPlatform;
 
@@ -94,6 +101,12 @@ export class Offer {
   // offer can move to APPROVED — see offer.service.ts assertActivationGate.
   @Column({ type: 'varchar', nullable: true })
   destinationUrl!: string | null;
+
+  // Where a click goes when it matches none of the offer's payout-rule targeting
+  // (issue #15 — geo/device/OS gating). Null falls back to destinationUrl itself, so
+  // an offer with no targeting configured behaves exactly as before this existed.
+  @Column({ type: 'varchar', nullable: true })
+  fallbackUrl!: string | null;
 
   @Column({ type: 'varchar', nullable: true })
   postbackSecret!: string | null;

@@ -1,25 +1,32 @@
 import { useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
-import type {
-  Advertiser,
-  CreateOfferInput,
-  Offer,
-  OfferCapInput,
-  OfferCategory,
-  PayoutMode,
-  PayoutRuleInput,
-  PayoutType,
-  RevenueModel,
-  TrackingPlatform,
-} from '@fatexia/types';
-import { Input, Toggle, toast } from '@fatexia/ui';
+import type { Advertiser, Affiliate, CreateOfferInput, Offer, OfferCapInput, OfferCategory, OfferStatus, PayoutMode, PayoutRuleInput, PayoutType, RevenueModel } from '@fatexia/types';
+import { COUNTRY_CODES } from '@fatexia/types';
+import { Input, MultiSelectCombobox, Toggle, toast } from '@fatexia/ui';
 import { getAdvertisers, createAdvertiser } from '../../lib/advertisers-api';
 import { getOfferCategories, createOfferCategory } from '../../lib/offer-categories-api';
+import { getAffiliates } from '../../lib/affiliates-api';
+import { uploadOfferThumbnail } from '../../lib/offers-api';
 
 const PAYOUT_MODES: PayoutMode[] = ['CPA', 'CPC', 'CPL', 'CPI', 'CPS'];
 const PAYOUT_TYPES: PayoutType[] = ['FLAT', 'PERCENTAGE'];
-const REVENUE_MODELS: RevenueModel[] = ['NONE', 'RPA', 'RPC'];
-const TRACKING_PLATFORMS: TrackingPlatform[] = ['DIRECT', 'AFFISE', 'HASOFFERS', 'CAKE', 'OTHER'];
+const REVENUE_MODELS: RevenueModel[] = ['NONE', 'RPA', 'RPC', 'RPS'];
+// Matches UAParser's device.type taxonomy plus the "desktop" fallback click.service.ts
+// applies — the exact same values a click's deviceType is stored as.
+const DEVICE_TYPE_OPTIONS = ['desktop', 'mobile', 'tablet', 'console', 'smarttv', 'wearable', 'embedded'];
+// UAParser's os.name is free text, not a closed enum — this is the common subset
+// worth targeting on. A rule matches by exact string, so this must stay in sync with
+// what UAParser actually reports for these platforms.
+const OS_OPTIONS = ['Windows', 'Mac OS', 'iOS', 'Android', 'Linux', 'Chrome OS'];
+const COUNTRY_OPTIONS = COUNTRY_CODES.map((c) => ({ value: c.code, label: c.name, sublabel: c.code }));
+// DELETED isn't offered here — that's a destructive row action on All Offers, not a
+// state to create/save an offer into directly.
+const STATUS_OPTIONS: { value: OfferStatus; label: string }[] = [
+  { value: 'PENDING', label: 'Pending' },
+  { value: 'APPROVED', label: 'Approved' },
+  { value: 'REJECTED', label: 'Rejected' },
+  { value: 'PAUSED', label: 'Paused' },
+];
 const CAP_PERIODS: OfferCapInput['period'][] = ['DAILY', 'WEEKLY', 'MONTHLY', 'OVERALL'];
 const CAP_METRICS: OfferCapInput['metric'][] = ['CLICKS', 'CONVERSIONS', 'PAYOUT'];
 const TRAFFIC_TYPE_OPTIONS = ['Search', 'Social', 'Native', 'Email', 'Push', 'Display', 'Incent', 'Non-Incent'];
@@ -30,7 +37,7 @@ const EMPTY_RULE: PayoutRuleInput = {
   amount: 0,
   revenueModel: 'NONE',
   revenueAmount: 0,
-  targeting: { countries: [], devices: [], affiliateIds: [], affiliateGroupIds: [] },
+  targeting: { countries: [], devices: [], os: [], affiliateIds: [], affiliateGroupIds: [] },
   managerCommissionPercent: 0,
   referAffiliateCommissionPercent: 0,
   holdSchedule: { enabled: false, days: 0 },
@@ -68,6 +75,7 @@ export function offerToFormInput(offer: Offer): CreateOfferInput {
     trafficTypes: offer.trafficTypes,
     featured: offer.featured,
     networkOfferId: offer.networkOfferId,
+    isPublic: offer.isPublic,
     autoApproveConversions: offer.autoApproveConversions,
     allowDeepLinking: offer.allowDeepLinking,
     remarksForAdmin: offer.remarksForAdmin,
@@ -76,6 +84,7 @@ export function offerToFormInput(offer: Offer): CreateOfferInput {
     caps: offer.caps,
     defaultPayoutAmount: offer.defaultPayoutAmount,
     destinationUrl: offer.destinationUrl ?? undefined,
+    fallbackUrl: offer.fallbackUrl ?? undefined,
     postbackSecret: offer.postbackSecret ?? undefined,
     allowedPostbackIps: offer.allowedPostbackIps ?? undefined,
     blockedRedirectUrl: offer.blockedRedirectUrl ?? undefined,
@@ -113,12 +122,17 @@ interface OfferFormProps {
   submitLabel: string;
   submittingLabel: string;
   initial?: CreateOfferInput;
-  onSubmit: (input: CreateOfferInput) => Promise<void>;
+  // Separate from `initial` because CreateOfferInput has no status field — status is
+  // changed through its own endpoint (see offer.service.ts's updateOfferStatus), not
+  // folded into create/update. Defaults to PENDING for a brand-new offer.
+  initialStatus?: OfferStatus;
+  onSubmit: (input: CreateOfferInput, status: OfferStatus) => Promise<void>;
 }
 
-export function OfferForm({ heading, submitLabel, submittingLabel, initial, onSubmit }: OfferFormProps) {
+export function OfferForm({ heading, submitLabel, submittingLabel, initial, initialStatus, onSubmit }: OfferFormProps) {
   const [advertisers, setAdvertisers] = useState<Advertiser[]>([]);
   const [categories, setCategories] = useState<OfferCategory[]>([]);
+  const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
   const [newAdvertiserName, setNewAdvertiserName] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
   const [showNewCategory, setShowNewCategory] = useState(false);
@@ -135,15 +149,19 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, onSu
   const [endDate, setEndDate] = useState(initial?.endDate ?? '');
   const [currency, setCurrency] = useState(initial?.currency ?? 'USD');
   const [defaultPayoutAmount, setDefaultPayoutAmount] = useState(initial ? String(initial.defaultPayoutAmount || '') : '');
-  const [trackingPlatform, setTrackingPlatform] = useState<TrackingPlatform>(initial?.trackingPlatform ?? 'DIRECT');
+  const [status, setStatus] = useState<OfferStatus>(initialStatus ?? 'PENDING');
   const [trafficTypes, setTrafficTypes] = useState<string[]>(initial?.trafficTypes ?? []);
   const [featured, setFeatured] = useState(initial?.featured ?? false);
   const [networkOfferId, setNetworkOfferId] = useState(initial?.networkOfferId ?? '');
+  const [isPublic, setIsPublic] = useState(initial?.isPublic ?? true);
+  const [iconUrl, setIconUrl] = useState(initial?.iconUrl ?? '');
+  const [uploadingIcon, setUploadingIcon] = useState(false);
 
   const [destinationUrl, setDestinationUrl] = useState(initial?.destinationUrl ?? '');
   const [postbackSecret, setPostbackSecret] = useState(initial?.postbackSecret ?? '');
   const [allowedPostbackIps, setAllowedPostbackIps] = useState(initial?.allowedPostbackIps ?? '');
   const [blockedRedirectUrl, setBlockedRedirectUrl] = useState(initial?.blockedRedirectUrl ?? '');
+  const [fallbackUrl, setFallbackUrl] = useState(initial?.fallbackUrl ?? '');
 
   const [payoutRules, setPayoutRules] = useState<PayoutRuleInput[]>(initial?.payoutRules ?? []);
   const [draftRule, setDraftRule] = useState<PayoutRuleInput>(EMPTY_RULE);
@@ -158,7 +176,15 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, onSu
   useEffect(() => {
     getAdvertisers().then(setAdvertisers);
     getOfferCategories().then(setCategories);
+    // Swallowed rather than surfaced: a manager can hold offers.create without
+    // affiliates.view, and a 403 here should cost them the "dedicate to affiliate"
+    // dropdown, not block the whole offer form with an error toast.
+    getAffiliates()
+      .then(setAffiliates)
+      .catch(() => setAffiliates([]));
   }, []);
+
+  const affiliateOptions = affiliates.map((a) => ({ value: a.id, label: a.fullName ?? a.email, sublabel: a.email }));
 
   const valid = name.trim().length > 0 && !!advertiserId && payoutRules.length > 0;
 
@@ -168,6 +194,19 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, onSu
     setAdvertisers((prev) => [...prev, created]);
     setAdvertiserId(created.id);
     setNewAdvertiserName('');
+  }
+
+  async function handleIconUpload(file: File | undefined) {
+    if (!file) return;
+    setUploadingIcon(true);
+    try {
+      const { url } = await uploadOfferThumbnail(file);
+      setIconUrl(url);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to upload thumbnail');
+    } finally {
+      setUploadingIcon(false);
+    }
   }
 
   async function handleAddCategory() {
@@ -211,31 +250,39 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, onSu
     }
     setSubmitting(true);
     try {
-      await onSubmit({
-        advertiserId,
-        name,
-        description: description || undefined,
-        kpi: kpi || undefined,
-        category: category || undefined,
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
-        currency,
-        defaultPayoutAmount: Number(defaultPayoutAmount) || 0,
-        trackingPlatform,
-        trafficTypes,
-        featured,
-        networkOfferId: networkOfferId || undefined,
-        autoApproveConversions,
-        allowDeepLinking,
-        remarksForAdmin: remarksForAdmin || undefined,
-        remarksForAffiliateManager: remarksForAffiliateManager || undefined,
-        destinationUrl: destinationUrl || undefined,
-        postbackSecret: postbackSecret || undefined,
-        allowedPostbackIps: allowedPostbackIps || undefined,
-        blockedRedirectUrl: blockedRedirectUrl || undefined,
-        payoutRules,
-        caps,
-      });
+      await onSubmit(
+        {
+          advertiserId,
+          name,
+          description: description || undefined,
+          kpi: kpi || undefined,
+          category: category || undefined,
+          iconUrl: iconUrl || undefined,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          currency,
+          defaultPayoutAmount: Number(defaultPayoutAmount) || 0,
+          // No longer admin-configurable (issue #8) — every offer routes directly, no
+          // separate tracking-platform integration exists to select between.
+          trackingPlatform: 'DIRECT',
+          isPublic,
+          trafficTypes,
+          featured,
+          networkOfferId: networkOfferId || undefined,
+          autoApproveConversions,
+          allowDeepLinking,
+          remarksForAdmin: remarksForAdmin || undefined,
+          remarksForAffiliateManager: remarksForAffiliateManager || undefined,
+          destinationUrl: destinationUrl || undefined,
+          fallbackUrl: fallbackUrl || undefined,
+          postbackSecret: postbackSecret || undefined,
+          allowedPostbackIps: allowedPostbackIps || undefined,
+          blockedRedirectUrl: blockedRedirectUrl || undefined,
+          payoutRules,
+          caps,
+        },
+        status,
+      );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save offer');
     } finally {
@@ -321,15 +368,27 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, onSu
             )}
           </div>
 
-          <Field label="Tracking Platform">
-            <select value={trackingPlatform} onChange={(e) => setTrackingPlatform(e.target.value as TrackingPlatform)} className={selectClass}>
-              {TRACKING_PLATFORMS.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-          </Field>
+          <div className="space-y-1.5 sm:col-span-2">
+            <label className="text-sm font-medium text-foreground">Thumbnail image</label>
+            <div className="flex items-center gap-3">
+              {iconUrl && <img src={iconUrl} alt="" className="size-14 shrink-0 rounded-md border border-border object-cover" />}
+              <div className="space-y-1">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  disabled={uploadingIcon}
+                  onChange={(e) => void handleIconUpload(e.target.files?.[0])}
+                  className="text-xs text-muted-foreground file:mr-3 file:rounded-md file:border file:border-border file:bg-secondary file:px-3 file:py-1.5 file:text-xs file:text-secondary-foreground hover:file:bg-accent"
+                />
+                {uploadingIcon && <p className="text-xs text-muted-foreground">Uploading…</p>}
+                {iconUrl && !uploadingIcon && (
+                  <button type="button" onClick={() => setIconUrl('')} className="text-xs text-destructive hover:underline">
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
 
           <Field label="Start Date">
             <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
@@ -343,6 +402,24 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, onSu
           </Field>
           <Field label="Default Payout Amount">
             <Input type="number" step="0.01" value={defaultPayoutAmount} onChange={(e) => setDefaultPayoutAmount(e.target.value)} />
+            <p className="text-xs text-muted-foreground">
+              Informational only — the Offers list and actual payouts are driven by the payout rules below, not this field.
+            </p>
+          </Field>
+          <Field label="Status">
+            <select value={status} onChange={(e) => setStatus(e.target.value as OfferStatus)} className={selectClass}>
+              {STATUS_OPTIONS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+            {status === 'APPROVED' && (
+              <p className="text-xs text-muted-foreground">
+                Approving requires the Destination URL, Postback Secret and Allowed Postback IPs below to be filled in
+                first.
+              </p>
+            )}
           </Field>
 
           <div className="space-y-1.5 sm:col-span-2">
@@ -366,6 +443,15 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, onSu
             <p className="mt-1 text-xs text-muted-foreground">Featured offers appear in the Featured Offers section of the affiliate dashboard.</p>
           </div>
 
+          <div className="sm:col-span-2">
+            <Toggle checked={isPublic} onCheckedChange={setIsPublic} label="Public offer" />
+            <p className="mt-1 text-xs text-muted-foreground">
+              {isPublic
+                ? 'Any affiliate can see and run this offer once it is Approved.'
+                : 'Gated — only affiliates with an approved access request can see or run this offer.'}
+            </p>
+          </div>
+
           <div className="space-y-1.5 sm:col-span-2">
             <Field label="Advertiser Network Offer ID (Optional)">
               <Input value={networkOfferId} onChange={(e) => setNetworkOfferId(e.target.value)} />
@@ -379,8 +465,25 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, onSu
         hint="Where the Tracker sends clicks, and the credentials the advertiser uses to report conversions back. All three are required before this offer can go Approved."
       >
         <Field label="Destination URL" required>
-          <Input value={destinationUrl} onChange={(e) => setDestinationUrl(e.target.value)} placeholder="https://advertiser-landing-page.com?click_id={click_id}" />
-          <p className="text-xs text-muted-foreground">Must contain the {'{click_id}'} macro.</p>
+          <Input value={destinationUrl} onChange={(e) => setDestinationUrl(e.target.value)} placeholder="https://advertiser-landing-page.com/lp" />
+          <p className="text-xs text-muted-foreground">
+            Just the landing page — {'{click_id}'} and {'{payout_amount}'} are appended automatically on save. Write
+            them in yourself only when the advertiser needs them under different parameter names; whatever you type is
+            kept as-is.
+          </p>
+        </Field>
+
+        <Field label="Fallback URL (optional)">
+          <Input
+            type="url"
+            value={fallbackUrl}
+            onChange={(e) => setFallbackUrl(e.target.value)}
+            placeholder="Leave blank to use the Destination URL"
+          />
+          <p className="text-xs text-muted-foreground">
+            Where a click goes if it doesn't match any payout rule's geo/device/OS targeting below. Leave blank to
+            send unmatched traffic to the Destination URL anyway.
+          </p>
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -421,7 +524,20 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, onSu
         {showMacros && (
           <div className="space-y-1 rounded-md bg-secondary p-3 text-sm">
             <p>
-              <code className="text-foreground">{'{click_id}'}</code> <span className="text-muted-foreground">— unique click identifier, required in destinationUrl</span>
+              <code className="text-foreground">{'{click_id}'}</code>{' '}
+              <span className="text-muted-foreground">
+                — the unique click identifier. Added to the Destination URL for you if you don&apos;t type it, and it is
+                what the advertiser must send back on the postback for a conversion to be attributed.
+              </span>
+            </p>
+            <p>
+              <code className="text-foreground">{'{payout_amount}'}</code>{' '}
+              <span className="text-muted-foreground">
+                — the payout for the rule matching this click&apos;s geo/device/OS, substituted at redirect time and
+                always computed from the offer&apos;s own payout rule, never trusted from an inbound call. Also added
+                automatically. Worth knowing: this puts your affiliate payout in the advertiser&apos;s query string,
+                so they can read what you pay per conversion.
+              </span>
             </p>
           </div>
         )}
@@ -442,6 +558,15 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, onSu
                   <p className="text-muted-foreground">
                     Manager Commission: {rule.managerCommissionPercent}% · Refer Affiliate Commission: {rule.referAffiliateCommissionPercent}%
                   </p>
+                  <p className="text-muted-foreground">
+                    {rule.targeting.affiliateIds.length > 0
+                      ? `Dedicated to ${rule.targeting.affiliateIds.length} affiliate${rule.targeting.affiliateIds.length === 1 ? '' : 's'}`
+                      : 'Available to every affiliate'}
+                  </p>
+                  <p className="text-muted-foreground">
+                    Geo: {rule.targeting.countries.length ? rule.targeting.countries.join(', ') : 'All'} · Device:{' '}
+                    {rule.targeting.devices.length ? rule.targeting.devices.join(', ') : 'All'} · OS: {rule.targeting.os.length ? rule.targeting.os.join(', ') : 'All'}
+                  </p>
                 </div>
                 <button type="button" onClick={() => removePayoutRule(i)} className="rounded-md border border-destructive/50 px-2 py-1 text-xs text-destructive">
                   Remove
@@ -454,7 +579,17 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, onSu
 
         <div className="grid gap-3 rounded-md border border-border p-3 sm:grid-cols-3">
           <Field label="Payout Mode">
-            <select value={draftRule.payoutMode} onChange={(e) => setDraftRule((r) => ({ ...r, payoutMode: e.target.value as PayoutMode }))} className={selectClass}>
+            <select
+              value={draftRule.payoutMode}
+              onChange={(e) => {
+                const payoutMode = e.target.value as PayoutMode;
+                // PERCENTAGE only makes sense for CPS (a sale has a value to take a %
+                // of; a lead/click/install doesn't) — switching away from CPS drops
+                // back to FLAT rather than leaving an invalid combination selected.
+                setDraftRule((r) => ({ ...r, payoutMode, payoutType: payoutMode === 'CPS' ? r.payoutType : 'FLAT' }));
+              }}
+              className={selectClass}
+            >
               {PAYOUT_MODES.map((m) => (
                 <option key={m} value={m}>
                   {m}
@@ -463,16 +598,24 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, onSu
             </select>
           </Field>
           <Field label="Payout Type">
-            <select value={draftRule.payoutType} onChange={(e) => setDraftRule((r) => ({ ...r, payoutType: e.target.value as PayoutType }))} className={selectClass}>
-              {PAYOUT_TYPES.map((t) => (
+            <select
+              value={draftRule.payoutType}
+              onChange={(e) => setDraftRule((r) => ({ ...r, payoutType: e.target.value as PayoutType }))}
+              className={selectClass}
+            >
+              {PAYOUT_TYPES.filter((t) => t !== 'PERCENTAGE' || draftRule.payoutMode === 'CPS').map((t) => (
                 <option key={t} value={t}>
                   {t}
                 </option>
               ))}
             </select>
+            {draftRule.payoutMode !== 'CPS' && (
+              <p className="text-xs text-muted-foreground">Percentage payout is only available for CPS (Cost Per Sale).</p>
+            )}
           </Field>
           <Field label="Payout Amount" required>
             <Input type="number" step="0.01" value={draftRule.amount || ''} onChange={(e) => setDraftRule((r) => ({ ...r, amount: Number(e.target.value) }))} />
+            {draftRule.payoutType === 'PERCENTAGE' && <p className="text-xs text-muted-foreground">Percent of Revenue Amount, e.g. 20 = 20%.</p>}
           </Field>
           <Field label="Revenue Model">
             <select value={draftRule.revenueModel} onChange={(e) => setDraftRule((r) => ({ ...r, revenueModel: e.target.value as RevenueModel }))} className={selectClass}>
@@ -483,10 +626,74 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, onSu
               ))}
             </select>
           </Field>
-          <Field label="Revenue Amount">
+          <Field label={draftRule.payoutType === 'PERCENTAGE' ? 'Revenue Amount (base the % is calculated against)' : 'Revenue Amount'}>
             <Input type="number" step="0.01" value={draftRule.revenueAmount || ''} onChange={(e) => setDraftRule((r) => ({ ...r, revenueAmount: Number(e.target.value) }))} />
           </Field>
-          <div className="flex items-end">
+          <div className="space-y-1.5 sm:col-span-3">
+            <label className="text-sm font-medium text-foreground">Dedicate to affiliate(s) (optional)</label>
+            <p className="text-xs text-muted-foreground">Leave empty to make this rule available to every affiliate. Search by name, email or id.</p>
+            <MultiSelectCombobox
+              options={affiliateOptions}
+              value={draftRule.targeting.affiliateIds}
+              onChange={(affiliateIds) => setDraftRule((r) => ({ ...r, targeting: { ...r.targeting, affiliateIds } }))}
+              placeholder="All affiliates"
+              emptyLabel="Available to every affiliate"
+            />
+          </div>
+          <div className="space-y-1.5 sm:col-span-3">
+            <label className="text-sm font-medium text-foreground">Geo targeting (optional)</label>
+            <p className="text-xs text-muted-foreground">
+              Leave empty for all countries. A click outside every rule's geo/device/OS targeting goes to the offer's Fallback URL.
+            </p>
+            <MultiSelectCombobox
+              options={COUNTRY_OPTIONS}
+              value={draftRule.targeting.countries}
+              onChange={(countries) => setDraftRule((r) => ({ ...r, targeting: { ...r.targeting, countries } }))}
+              placeholder="All countries"
+              emptyLabel="Available in every country"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground">Device targeting (optional)</label>
+            <div className="flex flex-wrap gap-3 rounded-md border border-border p-3">
+              {DEVICE_TYPE_OPTIONS.map((d) => (
+                <label key={d} className="flex items-center gap-1.5 text-sm text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={draftRule.targeting.devices.includes(d)}
+                    onChange={(e) =>
+                      setDraftRule((r) => ({
+                        ...r,
+                        targeting: { ...r.targeting, devices: e.target.checked ? [...r.targeting.devices, d] : r.targeting.devices.filter((v) => v !== d) },
+                      }))
+                    }
+                  />
+                  {d}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <label className="text-sm font-medium text-foreground">OS targeting (optional)</label>
+            <div className="flex flex-wrap gap-3 rounded-md border border-border p-3">
+              {OS_OPTIONS.map((o) => (
+                <label key={o} className="flex items-center gap-1.5 text-sm text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={draftRule.targeting.os.includes(o)}
+                    onChange={(e) =>
+                      setDraftRule((r) => ({
+                        ...r,
+                        targeting: { ...r.targeting, os: e.target.checked ? [...r.targeting.os, o] : r.targeting.os.filter((v) => v !== o) },
+                      }))
+                    }
+                  />
+                  {o}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-end sm:col-span-3">
             <button type="button" onClick={addPayoutRule} className="w-full rounded-md border border-border px-3 py-2 text-sm hover:bg-accent">
               + Add Payout Rule
             </button>

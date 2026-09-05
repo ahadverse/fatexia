@@ -34,6 +34,14 @@ export class Affiliate {
   @Column({ type: 'uuid', unique: true })
   userId!: string;
 
+  // Sequential, human-quotable account id — `AFF-1001` upward (issue #21). Minted from
+  // the `affiliate_public_id_seq` Postgres sequence so two simultaneous registrations
+  // can never land on the same number. Nullable only so the column could be added to
+  // an existing table; every row written after that migration has one.
+  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  publicId!: string | null;
+
   @Column({ type: 'varchar', length: 120, nullable: true })
   fullName!: string | null;
 

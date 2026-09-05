@@ -14,10 +14,12 @@ import {
   type DataTableColumn,
 } from '@fatexia/ui';
 import { describePayout, readCryptoDetails } from '@fatexia/types';
-import type { Affiliate, UserStatus } from '@fatexia/types';
+import type { Affiliate, Manager, UserStatus } from '@fatexia/types';
 import { getAffiliates, impersonateAffiliate, markAffiliateEmailVerified, updateAffiliateStatus } from '../../lib/affiliates-api';
+import { getManagers } from '../../lib/managers-api';
 import { runAction, useAsync } from '../../hooks/useAsync';
 import { date, dateTime } from '../../lib/format';
+import { useAccess } from '../../session/AccessContext';
 import { StatusPill } from '../../components/StatusPill';
 
 const STATUS_OPTIONS: UserStatus[] = ['ACTIVE', 'PENDING', 'BLOCKED', 'REJECTED', 'INACTIVE'];
@@ -54,6 +56,10 @@ export function AllAffiliates({
   description = 'Everyone with an affiliate account and their current standing.',
 }: AllAffiliatesProps) {
   const navigate = useNavigate();
+  const { isAdmin, can } = useAccess();
+  // Only fetched for an admin: a manager's list is already scoped to their own book,
+  // so every row would print the same name.
+  const managers = useAsync<Manager[]>(() => (isAdmin ? getManagers() : Promise.resolve([])), [isAdmin]);
   const [status, setStatus] = useState<UserStatus | ''>(defaultStatus);
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState<Affiliate | null>(null);
@@ -124,7 +130,15 @@ export function AllAffiliates({
     if (result) setDetail(result);
   }
 
+  const managerName = (id: string | null) =>
+    id ? ((managers.data ?? []).find((manager) => manager.id === id)?.fullName ?? 'Assigned') : 'Admin';
+
   const columns: DataTableColumn<Affiliate>[] = [
+    {
+      key: 'publicId',
+      header: 'ID',
+      render: (row) => <span className="font-mono text-xs text-muted-foreground">{row.publicId ?? '—'}</span>,
+    },
     {
       key: 'name',
       header: 'Affiliate',
@@ -137,6 +151,17 @@ export function AllAffiliates({
     },
     { key: 'company', header: 'Company', render: (row) => row.companyName ?? '—' },
     { key: 'country', header: 'Country', render: (row) => row.country ?? '—' },
+    // Who owns the account (issue #5). Admin-only: a manager's list is their own book
+    // by definition, so the column would be a wall of their own name.
+    ...(isAdmin
+      ? [
+          {
+            key: 'manager',
+            header: 'Manager',
+            render: (row: Affiliate) => <span className="text-xs text-muted-foreground">{managerName(row.assignedManagerId)}</span>,
+          },
+        ]
+      : []),
     { key: 'status', header: 'Status', render: (row) => <StatusPill status={row.status} /> },
     {
       key: 'emailVerified',
@@ -152,19 +177,26 @@ export function AllAffiliates({
     {
       key: 'actions',
       header: '',
+      // Each action is behind its own grant (issue #20) — an admin passes them all, a
+      // manager sees only the buttons that would actually succeed.
       render: (row) => (
         <div className="flex justify-end gap-2">
-          {row.status !== 'ACTIVE' && (
+          {can('affiliates.edit') && (
+            <Button size="sm" variant="outline" onClick={() => navigate(`/affiliates/${row.id}/edit`)}>
+              Edit
+            </Button>
+          )}
+          {row.status !== 'ACTIVE' && can('affiliates.approve') && (
             <Button size="sm" variant="outline" onClick={() => openApprove(row)}>
               Approve
             </Button>
           )}
-          {row.status === 'PENDING' && (
+          {row.status === 'PENDING' && can('affiliates.reject') && (
             <Button size="sm" variant="destructive" onClick={() => setDecision({ affiliate: row, next: 'REJECTED' })}>
               Reject
             </Button>
           )}
-          {row.status === 'ACTIVE' && (
+          {row.status === 'ACTIVE' && can('affiliates.suspend') && (
             <Button size="sm" variant="destructive" onClick={() => setDecision({ affiliate: row, next: 'BLOCKED' })}>
               Suspend
             </Button>
@@ -179,7 +211,7 @@ export function AllAffiliates({
       <PageHeader
         title={title}
         description={description}
-        actions={<Button onClick={() => navigate('/affiliates/create')}>Create affiliate</Button>}
+        actions={can('affiliates.create') ? <Button onClick={() => navigate('/affiliates/create')}>Create affiliate</Button> : null}
       />
 
       <FilterBar>
@@ -206,7 +238,7 @@ export function AllAffiliates({
       {affiliates.error && <p className="text-sm text-destructive">{affiliates.error}</p>}
 
       {affiliates.loading ? (
-        <TableSkeleton columns={6} />
+        <TableSkeleton columns={isAdmin ? 8 : 7} />
       ) : (
         <DataTable
           columns={columns}
@@ -224,10 +256,17 @@ export function AllAffiliates({
       >
         {detail && (
           <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <Button size="sm" variant="outline" onClick={() => setImpersonating(detail)}>
-                Log in as this affiliate
-              </Button>
+            <div className="flex gap-2 sm:col-span-2">
+              {can('affiliates.edit') && (
+                <Button size="sm" variant="outline" onClick={() => navigate(`/affiliates/${detail.id}/edit`)}>
+                  Edit details &amp; payout
+                </Button>
+              )}
+              {can('affiliates.impersonate') && (
+                <Button size="sm" variant="outline" onClick={() => setImpersonating(detail)}>
+                  Log in as this affiliate
+                </Button>
+              )}
             </div>
             <div>
               <dt className="text-xs font-medium text-muted-foreground">Email verified</dt>
@@ -249,8 +288,10 @@ export function AllAffiliates({
               </dd>
             </div>
             {[
+              ['Affiliate ID', detail.publicId ?? '—'],
               ['Email', detail.email],
               ['Status', detail.status],
+              ['Manager', managerName(detail.assignedManagerId)],
               ['Company', detail.companyName ?? '—'],
               ['Country', detail.country ?? '—'],
               ['Phone', detail.phone ?? '—'],

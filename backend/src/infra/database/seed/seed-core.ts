@@ -63,8 +63,13 @@ export async function seedCore(dataSource: DataSource): Promise<CoreSeedResult> 
     }),
   );
 
+  // Public ids are assigned by position here rather than by pulling from the Postgres
+  // sequence (issue #21): a re-run of the seed must produce the same MAN-1001 for the
+  // same fixture, and `nextval` would hand out a fresh number every time. The sequences
+  // are realigned past the seeded block at the end of this function so the first
+  // genuinely-created account continues the run instead of colliding.
   const managerIdByEmail = new Map<string, string>();
-  for (const fixture of MANAGERS) {
+  for (const [index, fixture] of MANAGERS.entries()) {
     const userId = ids.user(fixture.email);
     await userRepo.save(
       userRepo.create({
@@ -81,11 +86,13 @@ export async function seedCore(dataSource: DataSource): Promise<CoreSeedResult> 
       managerRepo.create({
         id: managerId,
         userId,
+        publicId: `MAN-${1001 + index}`,
         managerRole: fixture.managerRole,
         fullName: fixture.fullName,
         phone: fixture.phone,
         skype: fixture.skype,
         defaultCommissionPercent: fixture.defaultCommissionPercent,
+        permissions: fixture.permissions,
         // Both specialist managers report to the general manager, giving the org
         // chart on the Managers pages a real shape rather than a flat list.
         reportsToId: fixture.managerRole === 'GENERAL' ? null : ids.manager(MANAGERS[0]!.email),
@@ -99,7 +106,7 @@ export async function seedCore(dataSource: DataSource): Promise<CoreSeedResult> 
   // A single pass would fail whenever a fixture references a referrer that has not
   // been inserted yet.
   const affiliateIdByEmail = new Map<string, string>();
-  for (const fixture of AFFILIATES) {
+  for (const [index, fixture] of AFFILIATES.entries()) {
     const userId = ids.user(fixture.email);
     await userRepo.save(
       userRepo.create({
@@ -116,6 +123,7 @@ export async function seedCore(dataSource: DataSource): Promise<CoreSeedResult> 
       affiliateRepo.create({
         id: affiliateId,
         userId,
+        publicId: `AFF-${1001 + index}`,
         fullName: fixture.fullName,
         country: fixture.country,
         messengerType: fixture.messengerType,
@@ -223,6 +231,7 @@ export async function seedCore(dataSource: DataSource): Promise<CoreSeedResult> 
         targeting: {
           countries: fixture.countries,
           devices: [],
+          os: [],
           affiliateIds: [],
           affiliateGroupIds: [],
         },
@@ -335,6 +344,12 @@ export async function seedCore(dataSource: DataSource): Promise<CoreSeedResult> 
       }),
     );
   }
+
+  // Realign the public-id sequences past everything seeded above, so the next account
+  // created through the app gets the number after the last fixture rather than
+  // colliding with one (issue #21). `true` marks the value as consumed.
+  await dataSource.query(`SELECT setval('affiliate_public_id_seq', $1, true)`, [1000 + AFFILIATES.length]);
+  await dataSource.query(`SELECT setval('manager_public_id_seq', $1, true)`, [1000 + MANAGERS.length]);
 
   const activeAffiliateIds = AFFILIATES.filter((a) => a.status === UserStatus.ACTIVE).map(
     (a) => affiliateIdByEmail.get(a.email)!,

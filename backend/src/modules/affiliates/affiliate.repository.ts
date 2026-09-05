@@ -46,9 +46,12 @@ export const affiliateRepository = {
       });
     }
     if (filters.search) {
-      qb.andWhere('(affiliate."fullName" ILIKE :search OR user.email ILIKE :search OR affiliate."companyName" ILIKE :search)', {
-        search: `%${filters.search}%`,
-      });
+      // publicId is in here because AFF-1042 is what staff and affiliates actually
+      // quote at each other (issue #21) — searching it has to work like a name does.
+      qb.andWhere(
+        '(affiliate."fullName" ILIKE :search OR user.email ILIKE :search OR affiliate."companyName" ILIKE :search OR affiliate."publicId" ILIKE :search)',
+        { search: `%${filters.search}%` },
+      );
     }
     if (filters.dateFrom) {
       qb.andWhere('affiliate."createdAt" >= :dateFrom', { dateFrom: filters.dateFrom });
@@ -67,7 +70,14 @@ export const affiliateRepository = {
   // The cast is TypeORM's jsonb typing, not a real looseness: QueryDeepPartialEntity
   // rejects a plain `Record<string, unknown>` for the payoutDetails column even though
   // it is exactly what the entity declares.
+  //
+  // The empty-object guard is load-bearing: callers build the patch by spreading only
+  // the fields the caller actually sent, so a PATCH whose every field was dropped —
+  // which is exactly what happens now that payout fields are stripped from an
+  // affiliate's own profile update (issue #7) — arrives here as `{}`, and TypeORM
+  // throws "update values are not defined" on that rather than treating it as a no-op.
   async update(id: string, fields: Partial<Affiliate>): Promise<void> {
+    if (Object.keys(fields).length === 0) return;
     await repository.update({ id }, fields as QueryDeepPartialEntity<Affiliate>);
   },
 };

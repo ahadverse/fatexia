@@ -11,7 +11,9 @@ export const newsRoutes = Router();
 // Affiliate feed — published posts only, ahead of the admin guard and of `/:id`.
 newsRoutes.get('/published', requireAuth, newsController.getPublished);
 
-newsRoutes.use(requireAuth, requireRole(UserRole.ADMIN, UserRole.MANAGER));
+// Admin-only, matching the nav: a news post goes to every affiliate on the network,
+// not just one manager's book, so it isn't a per-manager capability (issue #20).
+newsRoutes.use(requireAuth, requireRole(UserRole.ADMIN));
 
 newsRoutes.get('/', validate(newsFiltersSchema, 'query'), newsController.getPosts);
 newsRoutes.get('/:id', newsController.getPost);

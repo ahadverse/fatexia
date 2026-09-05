@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { paginationSchema } from '../../common/pagination';
+import { managerScopeField } from '../../common/manager-scope-sql';
 import { MessageDirection, type Message } from './message.entity';
 
 export const messageFiltersSchema = paginationSchema.extend({
@@ -13,6 +14,8 @@ export type MessageFiltersDto = z.infer<typeof messageFiltersSchema>;
 // Paginates over conversations, not messages.
 export const threadFiltersSchema = paginationSchema.extend({
   unreadOnly: z.coerce.boolean().optional(),
+  // Server-set from the session, never trusted from the query string (issue #5).
+  ...managerScopeField,
 });
 
 export type ThreadFiltersDto = z.infer<typeof threadFiltersSchema>;

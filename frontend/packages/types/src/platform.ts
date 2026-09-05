@@ -161,6 +161,8 @@ export interface NewsPost {
   title: string;
   slug: string;
   excerpt: string | null;
+  /** Cover image for the news card. Null renders a tinted fallback panel. */
+  imageUrl: string | null;
   body: string;
   status: NewsStatus;
   audience: NewsAudience;
@@ -174,6 +176,8 @@ export interface CreateNewsInput {
   title: string;
   slug: string;
   excerpt?: string;
+  /** Empty string clears the cover image. */
+  imageUrl?: string;
   body: string;
   status?: NewsStatus;
   audience?: NewsAudience;
@@ -186,6 +190,7 @@ export type EmailTemplateKey =
   | 'ACCESS_REQUEST_APPROVED'
   | 'ACCESS_REQUEST_REJECTED'
   | 'AFFILIATE_APPROVED'
+  | 'AFFILIATE_REJECTED'
   | 'AFFILIATE_SUSPENDED'
   | 'PAYOUT_SENT'
   | 'OFFER_LIVE';
@@ -224,7 +229,7 @@ export interface NetworkSettings {
   updatedAt: string;
 }
 
-export type IntegrationProvider = 'IPHUB' | 'IPAPI_IS' | 'IPQS' | 'MAXMIND' | 'SMTP' | 'PAYPAL' | 'WISE';
+export type IntegrationProvider = 'IPHUB' | 'IPAPI_IS' | 'IPQS' | 'MAXMIND' | 'SMTP' | 'PAYPAL' | 'WISE' | 'S3';
 export type IntegrationStatus = 'NOT_CONFIGURED' | 'ACTIVE' | 'DISABLED' | 'ERROR';
 
 export interface Integration {

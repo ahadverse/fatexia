@@ -1,12 +1,16 @@
 import type { NextFunction, Response } from 'express';
 import type { AuthenticatedRequest } from '../../common/guards/auth.guard';
+import type { ScopedRequest } from '../../common/guards/manager-scope.guard';
+import { scopedQuery } from '../../common/manager-scope-sql';
 import { conversionService } from './conversion.service';
 import type { ConversionFiltersDto, OwnConversionFiltersDto, UpdateConversionStatusDto } from './conversion.dto';
 
 export const conversionController = {
-  async getConversions(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+  // Scoped to the signed-in manager's own affiliates; unrestricted for an admin
+  // (issue #5). The session value is applied last, so it overrides any in the query.
+  async getConversions(req: ScopedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      res.json(await conversionService.getConversions(req.query as unknown as ConversionFiltersDto));
+      res.json(await conversionService.getConversions(scopedQuery<ConversionFiltersDto>(req.query, req.managerScope?.managerId)));
     } catch (err) {
       next(err);
     }

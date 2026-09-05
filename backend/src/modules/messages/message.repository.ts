@@ -1,6 +1,6 @@
-import { IsNull } from 'typeorm';
 import { AppDataSource } from '../../infra/database/data-source';
 import { offsetOf } from '../../common/pagination';
+import { applyManagerScope } from '../../common/manager-scope-sql';
 import { Message, MessageDirection } from './message.entity';
 import type { MessageFiltersDto, ThreadFiltersDto } from './message.dto';
 
@@ -65,6 +65,10 @@ export const messageRepository = {
         .setParameter('inbound', MessageDirection.INBOUND)
         .groupBy('message."affiliateId"');
 
+      // A manager's inbox is their own affiliates only (issue #5) — applied before the
+      // grouping so an out-of-scope thread never becomes a row at all.
+      applyManagerScope(qb, 'message', filters.managerScopeId);
+
       // Applied as HAVING, not WHERE: "threads with something unread" is a property
       // of the group, not of an individual message.
       if (filters.unreadOnly) {
@@ -108,10 +112,18 @@ export const messageRepository = {
     return repository.find({ where: { affiliateId }, order: { createdAt: 'ASC' } });
   },
 
-  countUnread(direction: MessageDirection, affiliateId?: string): Promise<number> {
-    return repository.count({
-      where: { direction, readAt: IsNull(), ...(affiliateId ? { affiliateId } : {}) },
-    });
+  // `managerScopeId` keeps the network-side unread badge honest for a manager: it
+  // should count the threads they can actually open, not every unread on the network.
+  countUnread(direction: MessageDirection, affiliateId?: string, managerScopeId?: string): Promise<number> {
+    const qb = repository
+      .createQueryBuilder('message')
+      .where('message.direction = :direction', { direction })
+      .andWhere('message."readAt" IS NULL');
+    if (affiliateId) {
+      qb.andWhere('message."affiliateId" = :affiliateId', { affiliateId });
+    }
+    applyManagerScope(qb, 'message', managerScopeId);
+    return qb.getCount();
   },
 
   create(data: Partial<Message>): Promise<Message> {

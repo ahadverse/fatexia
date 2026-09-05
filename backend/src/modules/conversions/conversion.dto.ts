@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { paginationSchema } from '../../common/pagination';
+import { managerScopeField } from '../../common/manager-scope-sql';
 import { ConversionStatus, type Conversion } from './conversion.entity';
 
 export const conversionFiltersSchema = paginationSchema.extend({
@@ -12,6 +13,8 @@ export const conversionFiltersSchema = paginationSchema.extend({
   isOrphan: z.coerce.boolean().optional(),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
+  // Server-set from the session, never trusted from the query string (issue #5).
+  ...managerScopeField,
 });
 
 export type ConversionFiltersDto = z.infer<typeof conversionFiltersSchema>;

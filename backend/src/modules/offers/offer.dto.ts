@@ -3,10 +3,12 @@ import { env } from '../../common/env';
 import { OfferStatus, TrackingPlatform, type Offer } from './offer.entity';
 import { PayoutMode, PayoutType, RevenueModel, type PayoutRule } from './payout-rule.entity';
 import { CapMetric, CapPeriod, type OfferCap } from './offer-cap.entity';
+import { computeAmounts, pickRepresentativeRule } from './payout-resolution';
 
 const targetingSchema = z.object({
   countries: z.array(z.string()),
   devices: z.array(z.string()),
+  os: z.array(z.string()),
   affiliateIds: z.array(z.string()),
   affiliateGroupIds: z.array(z.string()),
 });
@@ -16,18 +18,26 @@ const holdScheduleSchema = z.object({
   days: z.number().int().nonnegative(),
 });
 
-export const payoutRuleInputSchema = z.object({
-  payoutMode: z.nativeEnum(PayoutMode),
-  payoutType: z.nativeEnum(PayoutType),
-  amount: z.coerce.number().nonnegative(),
-  revenueModel: z.nativeEnum(RevenueModel),
-  revenueAmount: z.coerce.number().nonnegative(),
-  targeting: targetingSchema,
-  managerCommissionPercent: z.number().int().min(0).max(100),
-  referAffiliateCommissionPercent: z.number().int().min(0).max(100),
-  holdSchedule: holdScheduleSchema,
-  commissionPercent: z.number().int().min(0).max(100),
-});
+export const payoutRuleInputSchema = z
+  .object({
+    payoutMode: z.nativeEnum(PayoutMode),
+    payoutType: z.nativeEnum(PayoutType),
+    amount: z.coerce.number().nonnegative(),
+    revenueModel: z.nativeEnum(RevenueModel),
+    revenueAmount: z.coerce.number().nonnegative(),
+    targeting: targetingSchema,
+    managerCommissionPercent: z.number().int().min(0).max(100),
+    referAffiliateCommissionPercent: z.number().int().min(0).max(100),
+    holdSchedule: holdScheduleSchema,
+    commissionPercent: z.number().int().min(0).max(100),
+  })
+  // Server-side backstop for the same rule OfferForm enforces in the UI: percentage
+  // payout only has a meaningful base for a sale — a lead/click/install has nothing to
+  // take a % of.
+  .refine((rule) => rule.payoutType !== PayoutType.PERCENTAGE || rule.payoutMode === PayoutMode.CPS, {
+    message: 'PERCENTAGE payout type is only valid with payoutMode CPS',
+    path: ['payoutType'],
+  });
 
 export type PayoutRuleInputDto = z.infer<typeof payoutRuleInputSchema>;
 
@@ -65,6 +75,7 @@ export const createOfferSchema = z.object({
   endDate: z.string().optional(),
   currency: z.string().min(1),
   trackingPlatform: z.nativeEnum(TrackingPlatform),
+  isPublic: z.boolean(),
   trafficTypes: z.array(z.string()),
   featured: z.boolean(),
   networkOfferId: z.string().optional(),
@@ -76,6 +87,10 @@ export const createOfferSchema = z.object({
   caps: z.array(offerCapInputSchema),
   defaultPayoutAmount: z.coerce.number().nonnegative(),
   destinationUrl: z.string().optional(),
+  // Where a click goes when it matches none of the offer's payout-rule targeting
+  // (issue #15). Blank/omitted means "use destinationUrl", same as blockedRedirectUrl
+  // falling back to the network default.
+  fallbackUrl: z.union([z.string().trim().url().max(500), z.literal('')]).optional(),
   postbackSecret: z.string().optional(),
   allowedPostbackIps: z.string().optional(),
   // Per-offer override for where BLOCKED traffic goes; blank uses the network setting.
@@ -152,6 +167,7 @@ export interface OfferDto {
   status: OfferStatus;
   trackingLink: string;
   trackingPlatform: TrackingPlatform;
+  isPublic: boolean;
   trafficTypes: string[];
   featured: boolean;
   networkOfferId?: string;
@@ -163,7 +179,12 @@ export interface OfferDto {
   caps: OfferCapDto[];
   createdAt: string;
   defaultPayoutAmount: number;
+  // What the offer actually pays right now, per its own payout rules (issue #16) —
+  // the wildcard/first rule's computed amount, not the separate defaultPayoutAmount
+  // field, which is easy to leave at 0 while payoutRules is fully configured.
+  displayPayoutAmount: number;
   destinationUrl: string | null;
+  fallbackUrl: string | null;
   postbackSecret: string | null;
   allowedPostbackIps: string | null;
   // Computed, not stored — null until postbackSecret is set, since the secret is part
@@ -191,6 +212,7 @@ export interface AffiliatePayoutRuleDto {
   amount: number;
   countries: string[];
   devices: string[];
+  os: string[];
   holdSchedule: { enabled: boolean; days: number };
 }
 
@@ -203,6 +225,7 @@ function toAffiliatePayoutRuleDto(rule: PayoutRule): AffiliatePayoutRuleDto {
     amount: Number(rule.amount),
     countries: rule.targeting?.countries ?? [],
     devices: rule.targeting?.devices ?? [],
+    os: rule.targeting?.os ?? [],
     holdSchedule: { enabled: rule.holdEnabled, days: rule.holdDays },
   };
 }
@@ -293,6 +316,8 @@ export function toAffiliateOfferDto(offer: Offer, affiliateId?: string): Affilia
 }
 
 export function toOfferDto(offer: Offer): OfferDto {
+  const representativeRule = pickRepresentativeRule(offer.payoutRules);
+  const displayPayoutAmount = representativeRule ? computeAmounts(representativeRule).payoutAmount : 0;
   return {
     id: offer.id,
     advertiserId: offer.advertiserId,
@@ -308,6 +333,7 @@ export function toOfferDto(offer: Offer): OfferDto {
     status: offer.status,
     trackingLink: trackingLinkFor(offer.id),
     trackingPlatform: offer.trackingPlatform,
+    isPublic: offer.isPublic,
     trafficTypes: offer.trafficTypes,
     featured: offer.featured,
     networkOfferId: offer.networkOfferId ?? undefined,
@@ -319,7 +345,9 @@ export function toOfferDto(offer: Offer): OfferDto {
     caps: offer.caps.map(toOfferCapDto),
     createdAt: offer.createdAt.toISOString(),
     defaultPayoutAmount: Number(offer.defaultPayoutAmount),
+    displayPayoutAmount,
     destinationUrl: offer.destinationUrl,
+    fallbackUrl: offer.fallbackUrl,
     postbackSecret: offer.postbackSecret,
     allowedPostbackIps: offer.allowedPostbackIps,
     postbackUrl: postbackUrlFor(offer.id, offer.postbackSecret),

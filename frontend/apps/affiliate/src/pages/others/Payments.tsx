@@ -126,13 +126,13 @@ export function Payments() {
                 </p>
               )}
             </div>
-            <Link to="/profile" className="text-xs text-primary hover:underline">
-              {profile.data.payoutMethod ? 'Change' : 'Set a payout method'}
+            <Link to="/messages" className="text-xs text-primary hover:underline">
+              {profile.data.payoutMethod ? 'Message your manager to change it' : 'Message your manager to set it up'}
             </Link>
           </div>
           {!profile.data.payoutMethod && (
             <p className="mt-2 text-xs text-warning">
-              No payout method is set, so your balance cannot be paid out yet.
+              No payout method is set, so your balance cannot be paid out yet. Only your manager or admin can set this — reach out via Messages.
             </p>
           )}
         </section>

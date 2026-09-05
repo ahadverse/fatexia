@@ -25,9 +25,11 @@ async function assertOffersApproved(offerIds: string[]): Promise<void> {
 }
 
 export const smartLinkService = {
-  async getSmartLinks(filters: SmartLinkFiltersDto): Promise<SmartLinkDto[]> {
+  // `affiliateId` is passed only for an affiliate caller, so their copy of every link
+  // already carries their own id (see toSmartLinkDto).
+  async getSmartLinks(filters: SmartLinkFiltersDto, affiliateId?: string): Promise<SmartLinkDto[]> {
     const links = await smartLinkRepository.findAll(filters);
-    return links.map(toSmartLinkDto);
+    return links.map((link) => toSmartLinkDto(link, affiliateId));
   },
 
   async getSmartLink(id: string): Promise<SmartLinkDto> {

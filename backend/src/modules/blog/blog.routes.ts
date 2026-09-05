@@ -12,7 +12,10 @@ export const blogRoutes = Router();
 blogRoutes.get('/published', blogController.getPublished);
 blogRoutes.get('/published/:slug', blogController.getPublishedBySlug);
 
-blogRoutes.use(requireAuth, requireRole(UserRole.ADMIN, UserRole.MANAGER));
+// Admin-only: these posts are published on the public marketing site under the
+// network's name, which is not a per-manager capability (issue #20) — so this matches
+// the nav, where Blogs is admin-only too.
+blogRoutes.use(requireAuth, requireRole(UserRole.ADMIN));
 
 blogRoutes.get('/', validate(blogFiltersSchema, 'query'), blogController.getPosts);
 blogRoutes.get('/:id', blogController.getPost);

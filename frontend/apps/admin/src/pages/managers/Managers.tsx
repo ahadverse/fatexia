@@ -14,10 +14,12 @@ import {
   Textarea,
   type DataTableColumn,
 } from '@fatexia/ui';
-import type { Manager, ManagerRole, UserStatus } from '@fatexia/types';
+import { MANAGER_PERMISSION_KEYS } from '@fatexia/types';
+import type { Manager, ManagerPermissions, ManagerRole, UserStatus } from '@fatexia/types';
 import { getManagers, updateManager, updateManagerStatus } from '../../lib/managers-api';
 import { runAction, useAsync } from '../../hooks/useAsync';
 import { date, dateTime } from '../../lib/format';
+import { PermissionGrid } from '../../components/PermissionGrid';
 import { StatusPill } from '../../components/StatusPill';
 
 const ROLE_LABELS: Record<ManagerRole, string> = {
@@ -34,6 +36,7 @@ interface EditState {
   managerRole: ManagerRole;
   defaultCommissionPercent: string;
   reportsToId: string;
+  permissions: ManagerPermissions;
   notes: string;
 }
 
@@ -88,6 +91,7 @@ export function Managers({
           managerRole: edit.managerRole,
           defaultCommissionPercent: Number(edit.defaultCommissionPercent) || 0,
           reportsToId: edit.reportsToId || null,
+          permissions: edit.permissions,
           notes: edit.notes || undefined,
         }),
       { success: 'Manager updated', onDone: managers.reload },
@@ -97,6 +101,11 @@ export function Managers({
   }
 
   const columns: DataTableColumn<Manager>[] = [
+    {
+      key: 'publicId',
+      header: 'ID',
+      render: (row) => <span className="font-mono text-xs text-muted-foreground">{row.publicId ?? '—'}</span>,
+    },
     {
       key: 'name',
       header: 'Manager',
@@ -110,6 +119,20 @@ export function Managers({
     { key: 'role', header: 'Role', render: (row) => ROLE_LABELS[row.managerRole] },
     { key: 'reportsTo', header: 'Reports to', render: (row) => managerName(row.reportsToId) },
     { key: 'affiliates', header: 'Affiliates', render: (row) => String(row.assignedAffiliateCount) },
+    {
+      key: 'permissions',
+      header: 'Access',
+      render: (row) => {
+        const granted = MANAGER_PERMISSION_KEYS.filter((key) => row.permissions?.[key] === true).length;
+        return granted === 0 ? (
+          <span className="text-xs text-warning">No access</span>
+        ) : (
+          <span className="text-xs text-muted-foreground">
+            {granted}/{MANAGER_PERMISSION_KEYS.length}
+          </span>
+        );
+      },
+    },
     { key: 'commission', header: 'Default commission', render: (row) => `${row.defaultCommissionPercent}%` },
     { key: 'status', header: 'Status', render: (row) => <StatusPill status={row.status} /> },
     { key: 'lastLogin', header: 'Last login', render: (row) => dateTime(row.lastLogin) },
@@ -131,6 +154,7 @@ export function Managers({
                 managerRole: row.managerRole,
                 defaultCommissionPercent: String(row.defaultCommissionPercent),
                 reportsToId: row.reportsToId ?? '',
+                permissions: row.permissions ?? {},
                 notes: row.notes ?? '',
               })
             }
@@ -176,7 +200,7 @@ export function Managers({
       {managers.error && <p className="text-sm text-destructive">{managers.error}</p>}
 
       {managers.loading ? (
-        <TableSkeleton columns={9} />
+        <TableSkeleton columns={11} />
       ) : (
         <DataTable
           columns={columns}
@@ -186,7 +210,7 @@ export function Managers({
         />
       )}
 
-      <Modal open={!!edit} onOpenChange={(open) => !open && setEdit(null)} title="Edit manager" className="max-w-2xl">
+      <Modal open={!!edit} onOpenChange={(open) => !open && setEdit(null)} title="Edit manager" className="max-w-4xl">
         {edit && (
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
@@ -248,6 +272,13 @@ export function Managers({
               <span className="text-xs font-medium text-muted-foreground">Notes</span>
               <Textarea rows={3} value={edit.notes} onChange={(event) => setEdit({ ...edit, notes: event.target.value })} className="mt-1" />
             </label>
+            <div className="sm:col-span-2">
+              <p className="text-xs font-medium text-muted-foreground">Permissions</p>
+              <p className="mb-3 mt-0.5 text-xs text-muted-foreground">
+                Applies only to the affiliates assigned to this manager. Un-ticking a box revokes it immediately.
+              </p>
+              <PermissionGrid value={edit.permissions} onChange={(permissions) => setEdit({ ...edit, permissions })} />
+            </div>
             <div className="flex justify-end gap-2 sm:col-span-2">
               <Button variant="outline" onClick={() => setEdit(null)}>
                 Cancel

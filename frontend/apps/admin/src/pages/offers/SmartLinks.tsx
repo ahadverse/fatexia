@@ -3,6 +3,7 @@ import {
   Button,
   ConfirmModal,
   DataTable,
+  ExternalLinkButton,
   Input,
   Modal,
   PageHeader,
@@ -145,6 +146,7 @@ export function SmartLinks() {
       header: '',
       render: (row) => (
         <div className="flex gap-1.5">
+          <ExternalLinkButton href={row.smartLinkUrl} label="Open smart-link in new tab" />
           <Button
             size="sm"
             variant="outline"
@@ -173,6 +175,14 @@ export function SmartLinks() {
         description="One link that resolves to the best matching member offer at click time, based on the visitor's geo and device."
         actions={<Button onClick={openCreate}>New smart-link</Button>}
       />
+
+      {/* Staff copy the template, not a runnable link — affiliates get the same URL
+          with their own id already filled in, so the macro here is the honest thing
+          to show rather than a link that would attribute traffic to nobody. */}
+      <p className="rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+        The URLs below contain the <code className="text-foreground">{'{affiliate_id}'}</code> macro. Affiliates see
+        their own id already substituted in their portal — replace it yourself if you are testing a link by hand.
+      </p>
 
       {links.error && <p className="text-sm text-destructive">{links.error}</p>}
 

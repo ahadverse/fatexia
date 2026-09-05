@@ -1,6 +1,7 @@
 import type { SelectQueryBuilder } from 'typeorm';
 import { AppDataSource } from '../../infra/database/data-source';
 import { offsetOf } from '../../common/pagination';
+import { applyManagerScope } from '../../common/manager-scope-sql';
 import { Conversion, ConversionStatus } from './conversion.entity';
 import type { ConversionFiltersDto } from './conversion.dto';
 
@@ -13,6 +14,7 @@ function applyFilters(qb: SelectQueryBuilder<Conversion>, filters: ConversionFil
   if (filters.affiliateId) {
     qb.andWhere('conversion."affiliateId" = :affiliateId', { affiliateId: filters.affiliateId });
   }
+  applyManagerScope(qb, 'conversion', filters.managerScopeId);
   if (filters.status) {
     qb.andWhere('conversion.status = :status', { status: filters.status });
   }

@@ -271,3 +271,14 @@ export function updateIntegration(
 export function testIntegration(id: string): Promise<Integration> {
   return apiFetch<Integration>(`/integrations/${id}/test`, { method: 'POST' });
 }
+
+/**
+ * Cover image for a news card. Same S3-backed endpoint family as the offer
+ * thumbnail upload — the server picks the bucket folder from the route, so the
+ * client never names a storage path.
+ */
+export function uploadNewsImage(file: File): Promise<{ url: string }> {
+  const formData = new FormData();
+  formData.append('image', file);
+  return apiFetch<{ url: string }>('/uploads/news-image', { method: 'POST', body: formData });
+}

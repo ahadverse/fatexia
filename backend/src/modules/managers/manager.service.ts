@@ -1,11 +1,16 @@
 import { AppDataSource } from '../../infra/database/data-source';
 import { NotFoundError, ValidationError } from '../../common/errors';
-import { User, UserRole } from '../users/user.entity';
+import { nextPublicId } from '../../common/public-id';
+import { User, UserRole, UserStatus } from '../users/user.entity';
 import { userProvisioningService } from '../users/user-provisioning.service';
+import { networkSettingService } from '../network-settings/network-setting.service';
 import { Manager } from './manager.entity';
 import { managerRepository } from './manager.repository';
 import {
+  toManagerContactDto,
   toManagerDto,
+  toSupportContactDto,
+  type AffiliateManagerContactDto,
   type CreateManagerDto,
   type ManagerDto,
   type ManagerFiltersDto,
@@ -33,6 +38,16 @@ export const managerService = {
     return toManagerDto(manager, count ? Number(count.count) : 0);
   },
 
+  // Resolved from the JWT, never from a client-supplied id, so a manager can only ever
+  // read their own permission set.
+  async getOwnProfile(userId: string): Promise<ManagerDto> {
+    const manager = await managerRepository.findByUserId(userId);
+    if (!manager) {
+      throw new NotFoundError('Manager profile not found');
+    }
+    return this.getManager(manager.id);
+  },
+
   // Same transactional shape as affiliate creation — the MANAGER-role login and the
   // manager profile are created together or not at all.
   async createManager(dto: CreateManagerDto): Promise<ManagerDto> {
@@ -56,12 +71,16 @@ export const managerService = {
       const manager = await repo.save(
         repo.create({
           userId: user.id,
+          publicId: await nextPublicId('MAN', entityManager),
           fullName: dto.fullName,
           managerRole: dto.managerRole,
           phone: dto.phone ?? null,
           skype: dto.skype ?? null,
           defaultCommissionPercent: dto.defaultCommissionPercent,
           reportsToId: dto.reportsToId ?? null,
+          // Nothing ticked unless the admin ticked it — a new manager starts with no
+          // capabilities rather than inheriting the admin surface (issue #20).
+          permissions: dto.permissions ?? {},
           notes: dto.notes ?? null,
         }),
       );
@@ -91,6 +110,9 @@ export const managerService = {
       ...(dto.skype !== undefined && { skype: dto.skype ?? null }),
       ...(dto.defaultCommissionPercent !== undefined && { defaultCommissionPercent: dto.defaultCommissionPercent }),
       ...(dto.reportsToId !== undefined && { reportsToId: dto.reportsToId ?? null }),
+      // Replaced wholesale, not merged: the checkbox grid always submits the complete
+      // set, so a merge would make un-ticking a permission impossible.
+      ...(dto.permissions !== undefined && { permissions: dto.permissions }),
       ...(dto.notes !== undefined && { notes: dto.notes ?? null }),
     });
     return this.getManager(id);
@@ -103,5 +125,25 @@ export const managerService = {
     }
     await AppDataSource.getRepository(User).update({ id: manager.userId }, { status: dto.status });
     return this.getManager(id);
+  },
+
+  /**
+   * The contact card an affiliate sees in their sidebar (issue #6).
+   *
+   * Always resolves to something. An affiliate with no manager — or one whose manager
+   * is no longer active, since pointing someone at a suspended colleague is worse than
+   * pointing them at the network — gets the support desk instead. That keeps the
+   * sidebar card identical for every affiliate rather than degrading to a paragraph
+   * for the majority who sit under the admin directly.
+   */
+  async getContactForAffiliate(assignedManagerId: string | null): Promise<AffiliateManagerContactDto> {
+    if (assignedManagerId) {
+      const manager = await managerRepository.findById(assignedManagerId);
+      if (manager && manager.user?.status === UserStatus.ACTIVE) {
+        return toManagerContactDto(manager);
+      }
+    }
+    const settings = await networkSettingService.getSettings();
+    return toSupportContactDto(settings.networkName, settings.supportEmail);
   },
 };

@@ -20,7 +20,7 @@ export const managerRepository = {
       qb.andWhere('user.status = :status', { status: filters.status });
     }
     if (filters.search) {
-      qb.andWhere('(manager."fullName" ILIKE :search OR user.email ILIKE :search)', {
+      qb.andWhere('(manager."fullName" ILIKE :search OR user.email ILIKE :search OR manager."publicId" ILIKE :search)', {
         search: `%${filters.search}%`,
       });
     }
@@ -47,7 +47,11 @@ export const managerRepository = {
       .getRawMany<ManagerAffiliateCountRow>();
   },
 
+  // Same empty-patch guard as affiliateRepository.update — the caller spreads only the
+  // fields that were actually sent, and TypeORM throws on an empty update rather than
+  // treating it as the no-op it is.
   async update(id: string, fields: Partial<Manager>): Promise<void> {
+    if (Object.keys(fields).length === 0) return;
     await repository.update({ id }, fields);
   },
 };

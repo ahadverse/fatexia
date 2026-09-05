@@ -31,6 +31,11 @@ interface Env {
   PUBLIC_TRACKING_URL: string;
   // Public base URL of this API. Used for absolute links back to the app.
   PUBLIC_API_URL: string;
+  // Public base URL of the affiliate portal — the {portal_link} an outbound email
+  // (approval, offer-live) tells the recipient to click. Separate from PUBLIC_API_URL
+  // because that is the REST API, which an affiliate has no reason to open in a
+  // browser; sending them there is a dead end.
+  AFFILIATE_PORTAL_URL: string;
   // Absolute URL of the wordmark shown in outbound email.
   //
   // Its own setting rather than derived from PUBLIC_API_URL, because the recipient's
@@ -159,6 +164,7 @@ export const env: Env = {
   CORS_ORIGIN: parseCorsOrigins(process.env.CORS_ORIGIN),
   PUBLIC_TRACKING_URL: stripTrailingSlash(readRequired('PUBLIC_TRACKING_URL', 'http://localhost:4001')),
   PUBLIC_API_URL: stripTrailingSlash(readRequired('PUBLIC_API_URL', 'http://localhost:4000')),
+  AFFILIATE_PORTAL_URL: stripTrailingSlash(readRequired('AFFILIATE_PORTAL_URL', 'http://localhost:5174')),
   EMAIL_LOGO_URL: readRequired('EMAIL_LOGO_URL', 'https://i.ibb.co.com/gbhCjYwD/logo.png'),
   GEOIP_DB_DIR: readRequired('GEOIP_DB_DIR', 'data/geoip'),
   MAXMIND_LICENSE_KEY: process.env.MAXMIND_LICENSE_KEY || undefined,

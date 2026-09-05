@@ -12,10 +12,11 @@ import {
   TableSkeleton,
   Textarea,
   Toggle,
+  toast,
   type DataTableColumn,
 } from '@fatexia/ui';
 import type { NewsAudience, NewsPost, NewsStatus } from '@fatexia/types';
-import { createNewsPost, deleteNewsPost, getNewsPosts, updateNewsPost } from '../../lib/platform-api';
+import { createNewsPost, deleteNewsPost, getNewsPosts, updateNewsPost, uploadNewsImage } from '../../lib/platform-api';
 import { runAction, useAsync } from '../../hooks/useAsync';
 import { date } from '../../lib/format';
 import { StatusPill } from '../../components/StatusPill';
@@ -25,6 +26,7 @@ interface FormState {
   title: string;
   slug: string;
   excerpt: string;
+  imageUrl: string;
   body: string;
   status: NewsStatus;
   audience: NewsAudience;
@@ -36,6 +38,7 @@ const EMPTY_FORM: FormState = {
   title: '',
   slug: '',
   excerpt: '',
+  imageUrl: '',
   body: '',
   status: 'DRAFT',
   audience: 'ALL',
@@ -58,6 +61,20 @@ export function News() {
   const [deleting, setDeleting] = useState<NewsPost | null>(null);
   const [publishing, setPublishing] = useState<NewsPost | null>(null);
   const [publishSaving, setPublishSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  async function handleImageUpload(file: File | undefined) {
+    if (!file) return;
+    setUploadingImage(true);
+    try {
+      const { url } = await uploadNewsImage(file);
+      setForm((current) => (current ? { ...current, imageUrl: url } : current));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to upload image');
+    } finally {
+      setUploadingImage(false);
+    }
+  }
 
   const posts = useAsync(() => getNewsPosts({ status: status || undefined }), [status]);
 
@@ -67,6 +84,9 @@ export function News() {
       title: form.title,
       slug: form.slug,
       excerpt: form.excerpt || undefined,
+      // Empty string rather than undefined so clearing the cover actually clears it —
+      // undefined would leave the stored URL untouched on an update.
+      imageUrl: form.imageUrl,
       body: form.body,
       status: form.status,
       audience: form.audience,
@@ -113,6 +133,7 @@ export function News() {
                 title: row.title,
                 slug: row.slug,
                 excerpt: row.excerpt ?? '',
+                imageUrl: row.imageUrl ?? '',
                 body: row.body,
                 status: row.status,
                 audience: row.audience,
@@ -197,6 +218,33 @@ export function News() {
               <span className="text-xs font-medium text-muted-foreground">Excerpt</span>
               <Input value={form.excerpt} onChange={(event) => setForm({ ...form, excerpt: event.target.value })} className="mt-1" />
             </label>
+
+            <div className="space-y-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Cover image</span>
+              <div className="flex items-center gap-3">
+                {form.imageUrl && (
+                  <img src={form.imageUrl} alt="" className="h-16 w-28 shrink-0 rounded-md border border-border object-cover" />
+                )}
+                <div className="space-y-1">
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    disabled={uploadingImage}
+                    onChange={(event) => void handleImageUpload(event.target.files?.[0])}
+                    className="text-xs text-muted-foreground file:mr-3 file:rounded-md file:border file:border-border file:bg-secondary file:px-3 file:py-1.5 file:text-xs file:text-secondary-foreground hover:file:bg-accent"
+                  />
+                  {uploadingImage && <p className="text-xs text-muted-foreground">Uploading…</p>}
+                  {form.imageUrl && !uploadingImage && (
+                    <button type="button" onClick={() => setForm({ ...form, imageUrl: '' })} className="text-xs text-destructive hover:underline">
+                      Remove
+                    </button>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Shown on the affiliate dashboard&apos;s news cards. Landscape crops best.
+                  </p>
+                </div>
+              </div>
+            </div>
 
             <label className="block">
               <span className="text-xs font-medium text-muted-foreground">Body</span>

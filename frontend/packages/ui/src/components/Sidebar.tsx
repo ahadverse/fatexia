@@ -47,6 +47,39 @@ const ICONS: Record<string, LucideIcon> = {
   logout: LogOut,
 };
 
+/**
+ * Issue #3 — the affiliate portal's nav reads as an undifferentiated grey list.
+ *
+ * A colour per destination, not per state: the point is that "Payments" and "Offers"
+ * are visually distinct at a glance, so the eye lands on the right row without
+ * reading. Kept to one hue per icon and expressed as a tint (`/10` background) rather
+ * than a solid fill, so the sidebar stays a sidebar instead of a colour chart, and so
+ * every pair works on both the light and dark ground without a second definition.
+ *
+ * Opt-in via the `colorful` prop — the admin portal deliberately stays monochrome,
+ * where the nav is twice as long and the colour would be noise.
+ */
+const ICON_COLORS: Record<string, string> = {
+  dashboard: 'text-sky-500 bg-sky-500/10',
+  offers: 'text-violet-500 bg-violet-500/10',
+  affiliates: 'text-emerald-500 bg-emerald-500/10',
+  advertisers: 'text-amber-500 bg-amber-500/10',
+  managers: 'text-indigo-500 bg-indigo-500/10',
+  reports: 'text-cyan-500 bg-cyan-500/10',
+  notifications: 'text-orange-500 bg-orange-500/10',
+  settings: 'text-slate-500 bg-slate-500/10',
+  billing: 'text-teal-500 bg-teal-500/10',
+  subscription: 'text-fuchsia-500 bg-fuchsia-500/10',
+  email: 'text-blue-500 bg-blue-500/10',
+  integrations: 'text-lime-600 bg-lime-500/10',
+  messages: 'text-pink-500 bg-pink-500/10',
+  news: 'text-yellow-600 bg-yellow-500/10',
+  profile: 'text-purple-500 bg-purple-500/10',
+  logout: 'text-rose-500 bg-rose-500/10',
+};
+
+const DEFAULT_ICON_COLOR = 'text-muted-foreground bg-muted';
+
 function resolveIcon(name?: string): LucideIcon {
   return (name && ICONS[name]) || Circle;
 }
@@ -61,6 +94,13 @@ export interface SidebarProps {
   logoText?: string;
   userName?: string;
   userRole?: string;
+  /** Tints each nav icon and gives the active row a coloured treatment (issue #3). */
+  colorful?: boolean;
+  /**
+   * Rendered under the nav, above the user chip — the affiliate portal's manager
+   * contact card (issue #6). Hidden while collapsed, where there is no room for it.
+   */
+  footer?: ReactNode;
 }
 
 function initials(name: string): string {
@@ -78,31 +118,51 @@ function SidebarItem({
   onNavigate,
   collapsed,
   depth,
+  colorful,
 }: {
   item: MenuItem;
   currentPath: string;
   onNavigate: (path: string) => void;
   collapsed: boolean;
   depth: number;
+  colorful: boolean;
 }) {
   const active = isActive(item, currentPath);
   const [open, setOpen] = useState(active);
   const hasChildren = !!item.children?.length;
   const Icon = depth === 0 ? resolveIcon(item.icon) : null;
+  const iconColor = (item.icon && ICON_COLORS[item.icon]) ?? DEFAULT_ICON_COLOR;
 
   return (
-    <li>
+    <li className="relative">
+      {/* The active marker is a positioned bar rather than a border on the button, so
+          turning it on doesn't shift the row's contents by a pixel. */}
+      {colorful && active && depth === 0 && (
+        <span className="absolute inset-y-1 left-0 w-1 rounded-r-full bg-primary" aria-hidden="true" />
+      )}
       <button
         type="button"
         onClick={() => (hasChildren ? setOpen((o) => !o) : onNavigate(item.path))}
         className={cn(
-          'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
-          'hover:bg-accent hover:text-accent-foreground',
+          'flex w-full items-center rounded-md text-sm transition-colors',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-          active ? 'bg-accent text-accent-foreground' : 'text-muted-foreground',
+          colorful ? 'gap-2.5 py-1.5 pl-2 pr-3' : 'gap-2 px-3 py-2',
+          colorful ? 'hover:bg-accent' : 'hover:bg-accent hover:text-accent-foreground',
+          active
+            ? colorful
+              ? 'bg-primary/10 font-medium text-foreground'
+              : 'bg-accent text-accent-foreground'
+            : 'text-muted-foreground',
         )}
       >
-        {Icon && <Icon className="size-4 shrink-0" />}
+        {Icon &&
+          (colorful ? (
+            <span className={cn('flex size-7 shrink-0 items-center justify-center rounded-md', iconColor)}>
+              <Icon className="size-4" />
+            </span>
+          ) : (
+            <Icon className="size-4 shrink-0" />
+          ))}
         <span className={cn('flex-1 truncate text-left', collapsed && 'sr-only')}>{item.label}</span>
         {hasChildren && !collapsed && (
           <ChevronDown className={cn('size-4 shrink-0 transition-transform duration-200', open && 'rotate-180')} />
@@ -111,9 +171,17 @@ function SidebarItem({
       {hasChildren && !collapsed && (
         <div className="grid transition-[grid-template-rows] duration-200 ease-out" style={{ gridTemplateRows: open ? '1fr' : '0fr' }}>
           <div className="overflow-hidden">
-            <ul className="ml-3 mt-1 space-y-0.5 border-l border-border pl-3">
+            <ul className={cn('mt-1 space-y-0.5 border-l pl-3', colorful ? 'ml-5 border-primary/25' : 'ml-3 border-border')}>
               {item.children!.map((child) => (
-                <SidebarItem key={child.path} item={child} currentPath={currentPath} onNavigate={onNavigate} collapsed={collapsed} depth={depth + 1} />
+                <SidebarItem
+                  key={child.path}
+                  item={child}
+                  currentPath={currentPath}
+                  onNavigate={onNavigate}
+                  collapsed={collapsed}
+                  depth={depth + 1}
+                  colorful={colorful}
+                />
               ))}
             </ul>
           </div>
@@ -123,7 +191,19 @@ function SidebarItem({
   );
 }
 
-export function Sidebar({ menu, currentPath, onNavigate, collapsed = false, onCollapsedChange, logoMark, logoText, userName, userRole }: SidebarProps) {
+export function Sidebar({
+  menu,
+  currentPath,
+  onNavigate,
+  collapsed = false,
+  onCollapsedChange,
+  logoMark,
+  logoText,
+  userName,
+  userRole,
+  colorful = false,
+  footer,
+}: SidebarProps) {
   return (
     <aside className={cn('flex h-full flex-col border-r border-border bg-card transition-[width]', collapsed ? 'w-16' : 'w-64')}>
       <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
@@ -143,12 +223,21 @@ export function Sidebar({ menu, currentPath, onNavigate, collapsed = false, onCo
             )}
             <ul className="space-y-0.5">
               {group.items.map((item) => (
-                <SidebarItem key={item.path} item={item} currentPath={currentPath} onNavigate={onNavigate} collapsed={collapsed} depth={0} />
+                <SidebarItem
+                  key={item.path}
+                  item={item}
+                  currentPath={currentPath}
+                  onNavigate={onNavigate}
+                  collapsed={collapsed}
+                  depth={0}
+                  colorful={colorful}
+                />
               ))}
             </ul>
           </div>
         ))}
       </nav>
+      {footer && !collapsed && <div className="shrink-0 border-t border-border p-3">{footer}</div>}
       {(userName || userRole) && (
         <div className="flex items-center gap-2 border-t border-border px-3 py-3">
           <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">

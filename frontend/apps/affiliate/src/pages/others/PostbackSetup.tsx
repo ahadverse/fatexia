@@ -4,30 +4,67 @@ import type { Affiliate } from '@fatexia/types';
 import { getOwnProfile, updateOwnProfile } from '../../lib/portal-api';
 import { useAsync } from '../../hooks/useAsync';
 
-const MACROS: { token: string; meaning: string }[] = [
-  { token: '{click_id}', meaning: 'The click that produced the conversion — match this to your own click id.' },
-  { token: '{payout}', meaning: 'What you earned, as a decimal number.' },
-  { token: '{currency}', meaning: 'Currency of the payout, e.g. USD.' },
-  { token: '{status}', meaning: 'Conversion status at the time we fired the postback.' },
-  { token: '{offer_id}', meaning: 'The offer the conversion belongs to.' },
+const MACROS: { token: string; paramKey: string; meaning: string }[] = [
+  { token: '{click_id}', paramKey: 'click_id', meaning: 'The click that produced the conversion — match this to your own click id.' },
+  { token: '{payout}', paramKey: 'payout', meaning: 'What you earned, as a decimal number.' },
+  { token: '{currency}', paramKey: 'currency', meaning: 'Currency of the payout, e.g. USD.' },
+  { token: '{status}', paramKey: 'status', meaning: 'Conversion status at the time we fired the postback.' },
+  { token: '{offer_id}', paramKey: 'offer_id', meaning: 'The offer the conversion belongs to.' },
 ];
 
+// Splits a saved URL into its base (everything before the query string) and which of
+// our standard macros it was already using, so re-opening this page doesn't blank out
+// a URL saved before this checklist existed.
+function parseExisting(url: string): { baseUrl: string; checked: Set<string> } {
+  const [base = '', query = ''] = url.split('?');
+  const checked = new Set<string>();
+  for (const pair of query.split('&')) {
+    const [key, val] = pair.split('=');
+    const macro = MACROS.find((m) => m.paramKey === key && val === m.token);
+    if (macro) checked.add(macro.token);
+  }
+  return { baseUrl: base, checked };
+}
+
+function buildUrl(baseUrl: string, checked: Set<string>): string {
+  const params = MACROS.filter((m) => checked.has(m.token))
+    .map((m) => `${m.paramKey}=${m.token}`)
+    .join('&');
+  return params ? `${baseUrl}?${params}` : baseUrl;
+}
+
 // Self-service postback URL. Changes go through PATCH /affiliates/me, which cannot
-// touch manager assignment or account status.
+// touch manager assignment or account status. Macros are checkbox-driven (issue #11)
+// rather than typed, so a saved URL can never carry a mistyped token.
 export function PostbackSetup() {
   const profile = useAsync<Affiliate>(() => getOwnProfile(), []);
-  const [postbackUrl, setPostbackUrl] = useState('');
+  const [baseUrl, setBaseUrl] = useState('');
+  const [checkedMacros, setCheckedMacros] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [confirmSave, setConfirmSave] = useState(false);
 
   useEffect(() => {
-    if (profile.data) setPostbackUrl(profile.data.postbackUrl ?? '');
+    if (!profile.data) return;
+    const { baseUrl: base, checked } = parseExisting(profile.data.postbackUrl ?? '');
+    setBaseUrl(base);
+    setCheckedMacros(checked);
   }, [profile.data]);
+
+  const postbackUrl = buildUrl(baseUrl.trim(), checkedMacros);
+
+  function toggleMacro(token: string) {
+    setCheckedMacros((current) => {
+      const next = new Set(current);
+      if (next.has(token)) next.delete(token);
+      else next.add(token);
+      return next;
+    });
+  }
 
   async function save() {
     setSaving(true);
     try {
-      await updateOwnProfile({ postbackUrl: postbackUrl.trim() });
+      await updateOwnProfile({ postbackUrl });
       toast.success('Postback URL saved');
       profile.reload();
       setConfirmSave(false);
@@ -56,42 +93,46 @@ export function PostbackSetup() {
 
       <section className="rounded-lg border border-border bg-card p-4">
         <label className="block">
-          <span className="text-xs font-medium text-muted-foreground">Your postback URL</span>
+          <span className="text-xs font-medium text-muted-foreground">Your postback URL (without query parameters)</span>
           <Input
-            value={postbackUrl}
-            onChange={(event) => setPostbackUrl(event.target.value)}
-            placeholder="https://your-tracker.com/postback?click_id={click_id}&payout={payout}&status={status}"
+            value={baseUrl}
+            onChange={(event) => setBaseUrl(event.target.value)}
+            placeholder="https://your-tracker.com/postback"
             className="mt-1 font-mono text-xs"
           />
         </label>
+
+        <div className="mt-4">
+          <span className="text-xs font-medium text-muted-foreground">Include these values</span>
+          <p className="mt-0.5 text-xs text-muted-foreground">Check the ones your tracker needs — we build the URL for you, so there's no macro to type or mistype.</p>
+          <div className="mt-2 space-y-2">
+            {MACROS.map((macro) => (
+              <label key={macro.token} className="flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent">
+                <input
+                  type="checkbox"
+                  checked={checkedMacros.has(macro.token)}
+                  onChange={() => toggleMacro(macro.token)}
+                  className="mt-0.5 size-3.5 accent-[hsl(var(--primary))]"
+                />
+                <span>
+                  <span className="font-mono text-xs text-card-foreground">{macro.paramKey}</span>
+                  <span className="text-muted-foreground"> — {macro.meaning}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-md bg-secondary p-3">
+          <span className="text-xs font-medium text-muted-foreground">Preview</span>
+          <p className="mt-1 break-all font-mono text-xs text-card-foreground">{postbackUrl || '—'}</p>
+        </div>
+
         <div className="mt-4 flex justify-end">
-          <Button disabled={saving} onClick={() => setConfirmSave(true)}>
+          <Button disabled={saving || !baseUrl.trim()} onClick={() => setConfirmSave(true)}>
             {saving ? 'Saving…' : 'Save postback URL'}
           </Button>
         </div>
-      </section>
-
-      <section className="rounded-lg border border-border bg-card p-4">
-        <h2 className="text-sm font-semibold text-card-foreground">Available macros</h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Put these in your URL and we substitute the real values when we fire it.
-        </p>
-        <dl className="mt-4 space-y-3">
-          {MACROS.map((macro) => (
-            <div key={macro.token} className="flex flex-wrap items-baseline gap-3">
-              <dt>
-                <button
-                  type="button"
-                  onClick={() => setPostbackUrl((current) => `${current}${macro.token}`)}
-                  className="rounded-full border border-border px-2 py-0.5 font-mono text-xs text-muted-foreground hover:border-primary hover:text-foreground"
-                >
-                  {macro.token}
-                </button>
-              </dt>
-              <dd className="text-xs text-muted-foreground">{macro.meaning}</dd>
-            </div>
-          ))}
-        </dl>
       </section>
 
       <section className="rounded-lg border border-border bg-card p-4">

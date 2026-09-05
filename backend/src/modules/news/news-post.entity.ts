@@ -28,6 +28,11 @@ export class NewsPost {
   @Column({ type: 'varchar', nullable: true })
   excerpt!: string | null;
 
+  // Cover image for the news card on the affiliate dashboard. A CDN URL from the
+  // `/uploads` module, never the bytes. Null renders a tinted fallback panel.
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  imageUrl!: string | null;
+
   @Column({ type: 'text' })
   body!: string;
 

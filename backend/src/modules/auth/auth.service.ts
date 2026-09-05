@@ -9,6 +9,8 @@ import { toPublicUser, type PublicUserDto } from '../users/user.dto';
 import { User, UserRole, UserStatus } from '../users/user.entity';
 import { Affiliate } from '../affiliates/affiliate.entity';
 import { affiliateRepository } from '../affiliates/affiliate.repository';
+import { generateReferralCode } from '../affiliates/referral-code';
+import { nextPublicId } from '../../common/public-id';
 import { loginLogService } from '../login-logs/login-log.service';
 import { notificationService } from '../notifications/notification.service';
 import { NotificationCategory, NotificationLevel } from '../notifications/notification.entity';
@@ -67,6 +69,17 @@ export const authService = {
 
     const verificationCode = generateVerificationCode();
 
+    /**
+     * Issue #5's ownership rule for self-registration.
+     *
+     * Referred through another affiliate's code → the new account joins that
+     * affiliate's manager, so a manager keeps the whole tree they recruited. No code
+     * (or one nobody recognises) → no manager, which is how "under the admin directly"
+     * is stored. An unknown code is not an error: a typo in a shared link should cost
+     * the referrer their commission, not cost the applicant their application.
+     */
+    const referrer = dto.referralCode ? await affiliateRepository.findByReferralCode(dto.referralCode.trim()) : null;
+
     const user = await AppDataSource.transaction(async (manager) => {
       const createdUser = await userProvisioningService.createUser(manager, {
         email: dto.email,
@@ -89,6 +102,7 @@ export const authService = {
       await manager.getRepository(Affiliate).save(
         manager.getRepository(Affiliate).create({
           userId: createdUser.id,
+          publicId: await nextPublicId('AFF', manager),
           fullName: dto.fullName,
           country: dto.country,
           messengerType: dto.messengerType,
@@ -100,6 +114,9 @@ export const authService = {
           verticals: dto.verticals ?? null,
           monthlyVolume: dto.monthlyVolume ?? null,
           referralSource: dto.referralSource ?? null,
+          referredByAffiliateId: referrer?.id ?? null,
+          assignedManagerId: referrer?.assignedManagerId ?? null,
+          referralCode: generateReferralCode(),
           notes: dto.notes ?? null,
         }),
       );

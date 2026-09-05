@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { validate } from '../../common/validate';
 import { requireAuth } from '../../common/guards/auth.guard';
 import { requireRole } from '../../common/guards/role.guard';
+import { attachManagerScope, requirePermission } from '../../common/guards/manager-scope.guard';
 import { UserRole } from '../users/user.entity';
 import { postbackLogController } from './postback-log.controller';
 import { postbackLogFiltersSchema } from './postback-log.dto';
@@ -10,6 +11,11 @@ import { postbackLogFiltersSchema } from './postback-log.dto';
 // delivery worker, never by a portal action.
 export const postbackLogRoutes = Router();
 
-postbackLogRoutes.use(requireAuth, requireRole(UserRole.ADMIN, UserRole.MANAGER));
+postbackLogRoutes.use(
+  requireAuth,
+  requireRole(UserRole.ADMIN, UserRole.MANAGER),
+  attachManagerScope,
+  requirePermission('reports.view'),
+);
 
 postbackLogRoutes.get('/', validate(postbackLogFiltersSchema, 'query'), postbackLogController.getLogs);

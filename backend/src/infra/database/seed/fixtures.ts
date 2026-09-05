@@ -1,5 +1,5 @@
 import { AffiliateMessenger, AffiliatePayoutMethod } from '../../../modules/affiliates/affiliate.entity';
-import { ManagerRole } from '../../../modules/managers/manager.entity';
+import { ManagerRole, type ManagerPermissions } from '../../../modules/managers/manager.entity';
 import { AdvertiserStatus } from '../../../modules/advertisers/advertiser.entity';
 import { UserStatus } from '../../../modules/users/user.entity';
 import { OfferStatus, TrackingPlatform } from '../../../modules/offers/offer.entity';
@@ -38,7 +38,29 @@ export interface ManagerFixture {
   phone: string;
   skype: string;
   defaultCommissionPercent: number;
+  permissions: ManagerPermissions;
 }
+
+// Three deliberately different permission sets (issue #20), so the grid on the
+// Managers page has something real to show and the guards are exercised by the seed:
+// a general manager with everything, an affiliate manager who can approve but not
+// touch payouts, and an account manager confined to advertisers and offers.
+const GENERAL_MANAGER_PERMISSIONS: ManagerPermissions = {
+  'affiliates.view': true,
+  'affiliates.create': true,
+  'affiliates.edit': true,
+  'affiliates.approve': true,
+  'affiliates.suspend': true,
+  'affiliates.reject': true,
+  'affiliates.payout': true,
+  'affiliates.impersonate': true,
+  'offers.view': true,
+  'offers.create': true,
+  'offers.edit': true,
+  'advertisers.manage': true,
+  'reports.view': true,
+  'messages.send': true,
+};
 
 export const MANAGERS: ManagerFixture[] = [
   {
@@ -48,6 +70,7 @@ export const MANAGERS: ManagerFixture[] = [
     phone: '+1 415 555 0142',
     skype: 'dana.whitfield',
     defaultCommissionPercent: 5,
+    permissions: GENERAL_MANAGER_PERMISSIONS,
   },
   {
     email: 'am.rivera@fatexia.dev',
@@ -56,6 +79,17 @@ export const MANAGERS: ManagerFixture[] = [
     phone: '+1 415 555 0177',
     skype: 'marco.rivera',
     defaultCommissionPercent: 8,
+    permissions: {
+      'affiliates.view': true,
+      'affiliates.create': true,
+      'affiliates.edit': true,
+      'affiliates.approve': true,
+      'affiliates.suspend': true,
+      'affiliates.reject': true,
+      'offers.view': true,
+      'reports.view': true,
+      'messages.send': true,
+    },
   },
   {
     email: 'acct.lindqvist@fatexia.dev',
@@ -64,6 +98,14 @@ export const MANAGERS: ManagerFixture[] = [
     phone: '+46 8 555 0110',
     skype: 'elin.lindqvist',
     defaultCommissionPercent: 6,
+    permissions: {
+      'affiliates.view': true,
+      'offers.view': true,
+      'offers.create': true,
+      'offers.edit': true,
+      'advertisers.manage': true,
+      'reports.view': true,
+    },
   },
 ];
 
@@ -585,6 +627,13 @@ export const EMAIL_TEMPLATES: EmailTemplateFixture[] = [
     availableMacros: ['{affiliate_name}', '{network_name}', '{manager_name}', '{portal_link}'],
   },
   {
+    templateKey: EmailTemplateKey.AFFILIATE_REJECTED,
+    name: 'Application declined',
+    subject: 'Update on your {network_name} application',
+    body: 'Hi {affiliate_name},\n\nThanks for your interest in {network_name}. After reviewing your application we are not able to approve an account for you at this time.\n\nThis is not always final — traffic sources and volumes change, and you are welcome to apply again later or reply to this email if you would like to talk it through.\n\n— The {network_name} team',
+    availableMacros: ['{affiliate_name}', '{network_name}', '{support_email}'],
+  },
+  {
     templateKey: EmailTemplateKey.AFFILIATE_SUSPENDED,
     name: 'Account suspended',
     subject: 'Your {network_name} account has been suspended',
@@ -658,6 +707,12 @@ export const INTEGRATIONS: IntegrationFixture[] = [
     name: 'Wise',
     description: 'Bank transfer rails for affiliates paid by wire.',
     config: { mode: 'sandbox' },
+  },
+  {
+    provider: IntegrationProvider.S3,
+    name: 'Amazon S3',
+    description: 'Stores offer thumbnails and news cover images, served through a CDN.',
+    config: { bucket: '', region: '', cdnBaseUrl: '' },
   },
 ];
 

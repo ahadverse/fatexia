@@ -93,7 +93,7 @@ export function AllOffers() {
     },
     { key: 'advertiser', header: 'Advertiser', render: (o) => advertiserNames.get(o.advertiserId) ?? o.advertiserId },
     { key: 'category', header: 'Category', render: (o) => o.category ?? '—' },
-    { key: 'payout', header: 'Payout', render: (o) => `${o.currency} ${o.defaultPayoutAmount.toFixed(2)}` },
+    { key: 'payout', header: 'Payout', render: (o) => `${o.currency} ${o.displayPayoutAmount.toFixed(2)}` },
     {
       key: 'status',
       header: 'Status',

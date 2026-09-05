@@ -17,14 +17,20 @@ export enum PayoutType {
 export enum RevenueModel {
   RPA = 'RPA',
   RPC = 'RPC',
+  // Revenue Per Sale — issue #12. Computed the same way as every other revenue/payout
+  // figure here: admin-entered on the rule (revenueAmount), never from postback data.
+  RPS = 'RPS',
   NONE = 'NONE',
 }
 
-// Empty array on any dimension means "ALL" (unrestricted) for that dimension — the
-// Tracker's targeting-match logic (built alongside clicks) treats it that way.
+// Empty array on any dimension means "ALL" (unrestricted) for that dimension — see
+// payout-resolution.ts's ruleMatchesClick. `os` matches Click.os (UAParser's OS name,
+// e.g. "Windows", "iOS", "Android") — added for issue #15's click-time geo/device/OS
+// routing; existing rows predate this key, so every reader treats it as `os ?? []`.
 export interface PayoutRuleTargeting {
   countries: string[];
   devices: string[];
+  os: string[];
   affiliateIds: string[];
   affiliateGroupIds: string[];
 }
