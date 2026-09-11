@@ -83,6 +83,22 @@ export class Manager {
   @Column({ type: 'varchar', length: 120, nullable: true })
   skype!: string | null;
 
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  telegram!: string | null;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  teams!: string | null;
+
+  // A public-facing contact address, separate from the login email on `user` — an
+  // affiliate's contact card falls back to the login email when this is unset.
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  contactEmail!: string | null;
+
+  // CDN URL, not the bytes — uploaded through the same `/uploads` module as offer
+  // thumbnails and news images.
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  avatarUrl!: string | null;
+
   // Default commission share on conversions from affiliates this manager owns. A
   // payout rule's own managerCommissionPercent overrides it per-offer.
   @Column({ type: 'int', default: 0 })

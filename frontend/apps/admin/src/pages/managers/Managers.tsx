@@ -12,11 +12,12 @@ import {
   Select,
   TableSkeleton,
   Textarea,
+  toast,
   type DataTableColumn,
 } from '@fatexia/ui';
 import { MANAGER_PERMISSION_KEYS } from '@fatexia/types';
 import type { Manager, ManagerPermissions, ManagerRole, UserStatus } from '@fatexia/types';
-import { getManagers, updateManager, updateManagerStatus } from '../../lib/managers-api';
+import { getManagers, updateManager, updateManagerStatus, uploadManagerAvatar } from '../../lib/managers-api';
 import { runAction, useAsync } from '../../hooks/useAsync';
 import { date, dateTime } from '../../lib/format';
 import { PermissionGrid } from '../../components/PermissionGrid';
@@ -33,6 +34,10 @@ interface EditState {
   fullName: string;
   phone: string;
   skype: string;
+  telegram: string;
+  teams: string;
+  contactEmail: string;
+  avatarUrl: string;
   managerRole: ManagerRole;
   defaultCommissionPercent: string;
   reportsToId: string;
@@ -59,6 +64,7 @@ export function Managers({
   const [saving, setSaving] = useState(false);
   const [decision, setDecision] = useState<{ manager: Manager; next: UserStatus } | null>(null);
   const [decisionSaving, setDecisionSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const managers = useAsync(
     () => getManagers({ managerRole: role, status: status || undefined, search: search || undefined }),
@@ -88,6 +94,10 @@ export function Managers({
           fullName: edit.fullName,
           phone: edit.phone || undefined,
           skype: edit.skype || undefined,
+          telegram: edit.telegram || undefined,
+          teams: edit.teams || undefined,
+          contactEmail: edit.contactEmail || undefined,
+          avatarUrl: edit.avatarUrl || undefined,
           managerRole: edit.managerRole,
           defaultCommissionPercent: Number(edit.defaultCommissionPercent) || 0,
           reportsToId: edit.reportsToId || null,
@@ -98,6 +108,19 @@ export function Managers({
     );
     setSaving(false);
     if (result) setEdit(null);
+  }
+
+  async function handleAvatarUpload(file: File | undefined) {
+    if (!file || !edit) return;
+    setUploadingAvatar(true);
+    try {
+      const { url } = await uploadManagerAvatar(file);
+      setEdit({ ...edit, avatarUrl: url });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to upload avatar');
+    } finally {
+      setUploadingAvatar(false);
+    }
   }
 
   const columns: DataTableColumn<Manager>[] = [
@@ -151,6 +174,10 @@ export function Managers({
                 fullName: row.fullName ?? '',
                 phone: row.phone ?? '',
                 skype: row.skype ?? '',
+                telegram: row.telegram ?? '',
+                teams: row.teams ?? '',
+                contactEmail: row.contactEmail ?? '',
+                avatarUrl: row.avatarUrl ?? '',
                 managerRole: row.managerRole,
                 defaultCommissionPercent: String(row.defaultCommissionPercent),
                 reportsToId: row.reportsToId ?? '',
@@ -213,6 +240,24 @@ export function Managers({
       <Modal open={!!edit} onOpenChange={(open) => !open && setEdit(null)} title="Edit manager" className="max-w-4xl">
         {edit && (
           <div className="grid gap-4 sm:grid-cols-2">
+            <div className="block sm:col-span-2">
+              <span className="text-xs font-medium text-muted-foreground">Avatar</span>
+              <div className="mt-1 flex items-center gap-3">
+                {edit.avatarUrl && (
+                  <img src={edit.avatarUrl} alt="" className="size-12 shrink-0 rounded-full border border-border object-cover" />
+                )}
+                <div className="space-y-1">
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    disabled={uploadingAvatar}
+                    onChange={(event) => void handleAvatarUpload(event.target.files?.[0])}
+                    className="text-xs text-muted-foreground file:mr-3 file:rounded-md file:border file:border-border file:bg-secondary file:px-3 file:py-1.5 file:text-xs file:text-secondary-foreground hover:file:bg-accent"
+                  />
+                  {uploadingAvatar && <p className="text-xs text-muted-foreground">Uploading…</p>}
+                </div>
+              </div>
+            </div>
             <label className="block">
               <span className="text-xs font-medium text-muted-foreground">Full name</span>
               <Input value={edit.fullName} onChange={(event) => setEdit({ ...edit, fullName: event.target.value })} className="mt-1" />
@@ -238,6 +283,24 @@ export function Managers({
             <label className="block">
               <span className="text-xs font-medium text-muted-foreground">Skype</span>
               <Input value={edit.skype} onChange={(event) => setEdit({ ...edit, skype: event.target.value })} className="mt-1" />
+            </label>
+            <label className="block">
+              <span className="text-xs font-medium text-muted-foreground">Telegram</span>
+              <Input value={edit.telegram} onChange={(event) => setEdit({ ...edit, telegram: event.target.value })} className="mt-1" />
+            </label>
+            <label className="block">
+              <span className="text-xs font-medium text-muted-foreground">Teams</span>
+              <Input value={edit.teams} onChange={(event) => setEdit({ ...edit, teams: event.target.value })} className="mt-1" />
+            </label>
+            <label className="block">
+              <span className="text-xs font-medium text-muted-foreground">Contact email</span>
+              <Input
+                type="email"
+                value={edit.contactEmail}
+                onChange={(event) => setEdit({ ...edit, contactEmail: event.target.value })}
+                placeholder="Shown to affiliates instead of the login email"
+                className="mt-1"
+              />
             </label>
             <label className="block">
               <span className="text-xs font-medium text-muted-foreground">Default commission %</span>

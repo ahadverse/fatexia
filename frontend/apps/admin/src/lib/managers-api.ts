@@ -37,3 +37,9 @@ export function updateManager(id: string, input: UpdateManagerInput): Promise<Ma
 export function updateManagerStatus(id: string, status: UserStatus): Promise<Manager> {
   return apiFetch<Manager>(`/managers/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
 }
+
+export function uploadManagerAvatar(file: File): Promise<{ url: string }> {
+  const formData = new FormData();
+  formData.append('image', file);
+  return apiFetch<{ url: string }>('/uploads/manager-avatar', { method: 'POST', body: formData });
+}

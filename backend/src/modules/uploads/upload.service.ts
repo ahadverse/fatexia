@@ -36,6 +36,7 @@ async function resolveS3Config(): Promise<S3Config> {
 const FOLDERS = {
   offerThumbnail: 'offer-thumbnails',
   newsImage: 'news-images',
+  managerAvatar: 'manager-avatars',
 } as const;
 
 export type UploadFolder = keyof typeof FOLDERS;

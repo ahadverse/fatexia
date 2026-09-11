@@ -1,4 +1,4 @@
-import { Mail, MessageSquare, Phone, Send } from 'lucide-react';
+import { Mail, MessageCircle, MessageSquare, Phone, Send, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { AffiliateManagerContact } from '@fatexia/types';
 
@@ -83,9 +83,13 @@ export function ManagerCard({
         {/* Avatar with the name on a badge across its foot, so the card reads as a
               person rather than a row of contact details. */}
         <div className="relative shrink-0">
-          <div className="flex size-16 items-center justify-center rounded-full bg-primary/15 text-lg font-semibold text-primary">
-            {initials(name)}
-          </div>
+          {manager.avatarUrl ? (
+            <img src={manager.avatarUrl} alt="" className="size-16 rounded-full object-cover" />
+          ) : (
+            <div className="flex size-16 items-center justify-center rounded-full bg-primary/15 text-lg font-semibold text-primary">
+              {initials(name)}
+            </div>
+          )}
           <span className="absolute -bottom-1 left-1/2 max-w-[4.5rem] -translate-x-1/2 truncate rounded-full bg-primary px-2 py-0.5 text-center text-[10px] font-semibold text-primary-foreground">
             {badge}
           </span>
@@ -104,7 +108,20 @@ export function ManagerCard({
           )}
           {manager.skype && (
             <ContactButton href={`skype:${manager.skype}?chat`} label={`Skype ${manager.skype}`}>
+              <MessageCircle className="size-3.5" />
+            </ContactButton>
+          )}
+          {manager.telegram && (
+            <ContactButton href={`https://t.me/${manager.telegram.replace(/^@/, '')}`} label={`Telegram ${manager.telegram}`}>
               <Send className="size-3.5" />
+            </ContactButton>
+          )}
+          {manager.teams && (
+            <ContactButton
+              href={`https://teams.microsoft.com/l/chat/0/0?users=${encodeURIComponent(manager.teams)}`}
+              label={`Teams ${manager.teams}`}
+            >
+              <Users className="size-3.5" />
             </ContactButton>
           )}
           {manager.phone && (
@@ -118,7 +135,6 @@ export function ManagerCard({
       <p className="mt-3 truncate text-xs font-medium text-foreground" title={name}>
         {name}
       </p>
-      {manager.publicId && <p className="font-mono text-[11px] text-muted-foreground">{manager.publicId}</p>}
     </div>
   );
 }

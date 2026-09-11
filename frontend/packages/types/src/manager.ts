@@ -87,6 +87,10 @@ export interface Manager {
   managerRole: ManagerRole;
   phone: string | null;
   skype: string | null;
+  telegram: string | null;
+  teams: string | null;
+  contactEmail: string | null;
+  avatarUrl: string | null;
   defaultCommissionPercent: number;
   reportsToId: string | null;
   permissions: ManagerPermissions;
@@ -108,6 +112,9 @@ export interface AffiliateManagerContact {
   email: string;
   phone: string | null;
   skype: string | null;
+  telegram: string | null;
+  teams: string | null;
+  avatarUrl: string | null;
   /** Null for the SUPPORT fallback, which is a desk rather than a person. */
   managerRole: ManagerRole | null;
 }
@@ -119,6 +126,10 @@ export interface CreateManagerInput {
   managerRole: ManagerRole;
   phone?: string;
   skype?: string;
+  telegram?: string;
+  teams?: string;
+  contactEmail?: string;
+  avatarUrl?: string;
   defaultCommissionPercent?: number;
   reportsToId?: string | null;
   permissions?: ManagerPermissions;

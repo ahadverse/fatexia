@@ -34,6 +34,15 @@ const permissionsSchema = z.record(z.string(), z.boolean()).transform((raw): Man
   return permissions;
 });
 
+const optionalEmail = () =>
+  z
+    .string()
+    .trim()
+    .email()
+    .max(255)
+    .optional()
+    .or(z.literal('').transform(() => undefined));
+
 export const createManagerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8).max(255),
@@ -41,6 +50,10 @@ export const createManagerSchema = z.object({
   managerRole: z.nativeEnum(ManagerRole),
   phone: optionalText(40),
   skype: optionalText(120),
+  telegram: optionalText(120),
+  teams: optionalText(120),
+  contactEmail: optionalEmail(),
+  avatarUrl: optionalText(500),
   defaultCommissionPercent: z.number().int().min(0).max(100).default(0),
   reportsToId: z.string().uuid().optional().nullable(),
   permissions: permissionsSchema.optional(),
@@ -70,6 +83,10 @@ export interface ManagerDto {
   managerRole: ManagerRole;
   phone: string | null;
   skype: string | null;
+  telegram: string | null;
+  teams: string | null;
+  contactEmail: string | null;
+  avatarUrl: string | null;
   defaultCommissionPercent: number;
   reportsToId: string | null;
   permissions: ManagerPermissions;
@@ -90,6 +107,10 @@ export function toManagerDto(manager: Manager, assignedAffiliateCount = 0): Mana
     managerRole: manager.managerRole,
     phone: manager.phone,
     skype: manager.skype,
+    telegram: manager.telegram,
+    teams: manager.teams,
+    contactEmail: manager.contactEmail,
+    avatarUrl: manager.avatarUrl,
     defaultCommissionPercent: manager.defaultCommissionPercent,
     reportsToId: manager.reportsToId,
     permissions: manager.permissions ?? {},
@@ -123,6 +144,9 @@ export interface AffiliateManagerContactDto {
   email: string;
   phone: string | null;
   skype: string | null;
+  telegram: string | null;
+  teams: string | null;
+  avatarUrl: string | null;
   /** Null for the SUPPORT fallback, which is a desk rather than a person. */
   managerRole: ManagerRole | null;
 }
@@ -132,9 +156,14 @@ export function toManagerContactDto(manager: Manager): AffiliateManagerContactDt
     kind: 'MANAGER',
     publicId: manager.publicId,
     fullName: manager.fullName,
-    email: manager.user?.email ?? '',
+    // The public-facing contact address wins over the login email when the manager
+    // has set one — an affiliate should never be pointed at a sign-in credential.
+    email: manager.contactEmail ?? manager.user?.email ?? '',
     phone: manager.phone,
     skype: manager.skype,
+    telegram: manager.telegram,
+    teams: manager.teams,
+    avatarUrl: manager.avatarUrl,
     managerRole: manager.managerRole,
   };
 }
@@ -147,6 +176,9 @@ export function toSupportContactDto(networkName: string, supportEmail: string | 
     email: supportEmail ?? '',
     phone: null,
     skype: null,
+    telegram: null,
+    teams: null,
+    avatarUrl: null,
     managerRole: null,
   };
 }

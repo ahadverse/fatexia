@@ -60,3 +60,4 @@ function handleUpload(folder: UploadFolder): RequestHandler {
 
 uploadRoutes.post('/offer-thumbnail', handleUpload('offerThumbnail'));
 uploadRoutes.post('/news-image', handleUpload('newsImage'));
+uploadRoutes.post('/manager-avatar', handleUpload('managerAvatar'));

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Input, PageHeader, Select, Textarea, toast } from '@fatexia/ui';
 import type { Manager, ManagerPermissions, ManagerRole, UserStatus } from '@fatexia/types';
-import { createManager, getManagers } from '../../lib/managers-api';
+import { createManager, getManagers, uploadManagerAvatar } from '../../lib/managers-api';
 import { PermissionGrid } from '../../components/PermissionGrid';
 import { useAsync } from '../../hooks/useAsync';
 
@@ -66,6 +66,11 @@ export function CreateManager() {
   const [managerRole, setManagerRole] = useState<ManagerRole>('AFFILIATE');
   const [phone, setPhone] = useState('');
   const [skype, setSkype] = useState('');
+  const [telegram, setTelegram] = useState('');
+  const [teams, setTeams] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [defaultCommissionPercent, setDefaultCommissionPercent] = useState('0');
   const [reportsToId, setReportsToId] = useState('');
   const [status, setStatus] = useState<UserStatus>('ACTIVE');
@@ -82,6 +87,19 @@ export function CreateManager() {
     if (!permissionsTouched) setPermissions(ROLE_DEFAULT_PERMISSIONS[nextRole]);
   }
 
+  async function handleAvatarUpload(file: File | undefined) {
+    if (!file) return;
+    setUploadingAvatar(true);
+    try {
+      const { url } = await uploadManagerAvatar(file);
+      setAvatarUrl(url);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to upload avatar');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  }
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setSaving(true);
@@ -93,6 +111,10 @@ export function CreateManager() {
         managerRole,
         phone: phone || undefined,
         skype: skype || undefined,
+        telegram: telegram || undefined,
+        teams: teams || undefined,
+        contactEmail: contactEmail || undefined,
+        avatarUrl: avatarUrl || undefined,
         defaultCommissionPercent: Number(defaultCommissionPercent) || 0,
         reportsToId: reportsToId || null,
         permissions,
@@ -127,6 +149,22 @@ export function CreateManager() {
 
       <section className="rounded-lg border border-border bg-card p-4">
         <div className="grid gap-4 sm:grid-cols-2">
+          <div className="block sm:col-span-2">
+            <span className="text-xs font-medium text-muted-foreground">Avatar</span>
+            <div className="mt-1 flex items-center gap-3">
+              {avatarUrl && <img src={avatarUrl} alt="" className="size-12 shrink-0 rounded-full border border-border object-cover" />}
+              <div className="space-y-1">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  disabled={uploadingAvatar}
+                  onChange={(event) => void handleAvatarUpload(event.target.files?.[0])}
+                  className="text-xs text-muted-foreground file:mr-3 file:rounded-md file:border file:border-border file:bg-secondary file:px-3 file:py-1.5 file:text-xs file:text-secondary-foreground hover:file:bg-accent"
+                />
+                {uploadingAvatar && <p className="text-xs text-muted-foreground">Uploading…</p>}
+              </div>
+            </div>
+          </div>
           <label className="block">
             <span className="text-xs font-medium text-muted-foreground">Email</span>
             <Input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1" />
@@ -159,6 +197,24 @@ export function CreateManager() {
           <label className="block">
             <span className="text-xs font-medium text-muted-foreground">Skype</span>
             <Input value={skype} onChange={(event) => setSkype(event.target.value)} className="mt-1" />
+          </label>
+          <label className="block">
+            <span className="text-xs font-medium text-muted-foreground">Telegram</span>
+            <Input value={telegram} onChange={(event) => setTelegram(event.target.value)} className="mt-1" />
+          </label>
+          <label className="block">
+            <span className="text-xs font-medium text-muted-foreground">Teams</span>
+            <Input value={teams} onChange={(event) => setTeams(event.target.value)} className="mt-1" />
+          </label>
+          <label className="block">
+            <span className="text-xs font-medium text-muted-foreground">Contact email</span>
+            <Input
+              type="email"
+              value={contactEmail}
+              onChange={(event) => setContactEmail(event.target.value)}
+              placeholder="Shown to affiliates instead of the login email"
+              className="mt-1"
+            />
           </label>
           <label className="block">
             <span className="text-xs font-medium text-muted-foreground">Default commission %</span>

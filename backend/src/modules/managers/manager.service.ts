@@ -76,6 +76,10 @@ export const managerService = {
           managerRole: dto.managerRole,
           phone: dto.phone ?? null,
           skype: dto.skype ?? null,
+          telegram: dto.telegram ?? null,
+          teams: dto.teams ?? null,
+          contactEmail: dto.contactEmail ?? null,
+          avatarUrl: dto.avatarUrl ?? null,
           defaultCommissionPercent: dto.defaultCommissionPercent,
           reportsToId: dto.reportsToId ?? null,
           // Nothing ticked unless the admin ticked it — a new manager starts with no
@@ -108,6 +112,10 @@ export const managerService = {
       ...(dto.managerRole !== undefined && { managerRole: dto.managerRole }),
       ...(dto.phone !== undefined && { phone: dto.phone ?? null }),
       ...(dto.skype !== undefined && { skype: dto.skype ?? null }),
+      ...(dto.telegram !== undefined && { telegram: dto.telegram ?? null }),
+      ...(dto.teams !== undefined && { teams: dto.teams ?? null }),
+      ...(dto.contactEmail !== undefined && { contactEmail: dto.contactEmail ?? null }),
+      ...(dto.avatarUrl !== undefined && { avatarUrl: dto.avatarUrl ?? null }),
       ...(dto.defaultCommissionPercent !== undefined && { defaultCommissionPercent: dto.defaultCommissionPercent }),
       ...(dto.reportsToId !== undefined && { reportsToId: dto.reportsToId ?? null }),
       // Replaced wholesale, not merged: the checkbox grid always submits the complete
