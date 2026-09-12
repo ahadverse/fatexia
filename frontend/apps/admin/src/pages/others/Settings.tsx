@@ -10,6 +10,7 @@ import {
 } from '../../lib/platform-api';
 import { useAsync, runAction } from '../../hooks/useAsync';
 import { dateTime } from '../../lib/format';
+import { GlobalPostbacksSection } from './GlobalPostbacksSection';
 
 function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -285,6 +286,8 @@ export function Settings() {
           />
         </Field>
       </Section>
+
+      <GlobalPostbacksSection />
 
       <GeoipSection />
     </div>

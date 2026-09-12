@@ -263,3 +263,38 @@ export interface Integration {
   lastError: string | null;
   updatedAt: string;
 }
+
+export type GlobalPostbackDirection = 'INBOUND' | 'OUTBOUND';
+
+/**
+ * A network-level postback, configured in Admin → Settings rather than per offer.
+ *
+ * INBOUND authorises conversions for every offer at once; OUTBOUND is called for every
+ * approved conversion. Which fields carry meaning depends on the direction.
+ */
+export interface GlobalPostback {
+  id: string;
+  name: string;
+  direction: GlobalPostbackDirection;
+  /** OUTBOUND only — the URL to call, with {macro} placeholders. */
+  url: string | null;
+  /** Masked; the raw secret is never returned once stored. */
+  secretPreview: string | null;
+  hasSecret: boolean;
+  /** INBOUND only. Null means any source IP. */
+  allowedIps: string | null;
+  enabled: boolean;
+  lastUsedAt: string | null;
+  createdAt: string;
+  /** INBOUND: the ready-made address to hand an advertiser, on the tracker host. */
+  postbackUrl: string | null;
+}
+
+export interface GlobalPostbackInput {
+  name: string;
+  direction: GlobalPostbackDirection;
+  url?: string | null;
+  secret?: string | null;
+  allowedIps?: string | null;
+  enabled?: boolean;
+}

@@ -14,11 +14,12 @@ import { postbackService } from './postback.service';
 
 // `vi.hoisted` because `vi.mock` is lifted above the imports (see the note in
 // payout-resolution.test.ts).
-const { findOffer, markPostbackVerified, findClick, findConversionByClickId, createConversion, createLog } = vi.hoisted(
+const { findOffer, markPostbackVerified, findClick, findConversionByClickId, createConversion, createLog, findGlobalPostbacks } = vi.hoisted(
   () => ({
     findOffer: vi.fn(),
     markPostbackVerified: vi.fn(),
     findClick: vi.fn(),
+    findGlobalPostbacks: vi.fn(async () => []),
     findConversionByClickId: vi.fn(),
     createConversion: vi.fn(),
     createLog: vi.fn(),
@@ -36,6 +37,13 @@ vi.mock('../postback-logs/postback-log.repository', () => ({ postbackLogReposito
 vi.mock('../affiliate-groups/affiliate-group.repository', () => ({
   affiliateGroupRepository: { findAll: async () => [] },
 }));
+// Consulted on every rejected postback, to see whether a network-level entry authorises
+// what the offer's own credentials did not. Empty here so these cases still test the
+// per-offer check in isolation; the global path has its own coverage below.
+vi.mock('../global-postbacks/global-postback.repository', () => ({
+  globalPostbackRepository: { findEnabled: findGlobalPostbacks, markUsed: vi.fn() },
+}));
+vi.mock('../smart-links/smart-link.repository', () => ({ smartLinkRepository: { findById: async () => null } }));
 
 const SECRET = 'sk_correct_secret';
 const IP = '203.0.113.10';

@@ -25,6 +25,7 @@ import { NewsPost } from '../../modules/news/news-post.entity';
 import { BlogPost } from '../../modules/blog/blog-post.entity';
 import { EmailTemplate } from '../../modules/email-templates/email-template.entity';
 import { NetworkSetting } from '../../modules/network-settings/network-setting.entity';
+import { GlobalPostback } from '../../modules/global-postbacks/global-postback.entity';
 import { Integration } from '../../modules/integrations/integration.entity';
 
 export const AppDataSource = new DataSource({
@@ -46,6 +47,7 @@ export const AppDataSource = new DataSource({
   // radius to that migration instead of leaving a mixed-state rollback.
   migrationsTransactionMode: 'each',
   entities: [
+    GlobalPostback,
     User,
     LoginLog,
     Affiliate,

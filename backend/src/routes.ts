@@ -22,6 +22,7 @@ import { blogRoutes } from './modules/blog/blog.routes';
 import { emailTemplateRoutes } from './modules/email-templates/email-template.routes';
 import { emailRoutes } from './modules/emails/email.routes';
 import { networkSettingRoutes } from './modules/network-settings/network-setting.routes';
+import { globalPostbackRoutes } from './modules/global-postbacks/global-postback.routes';
 import { geoipRoutes } from './modules/geoip/geoip.routes';
 import { integrationRoutes } from './modules/integrations/integration.routes';
 import { uploadRoutes } from './modules/uploads/upload.routes';
@@ -60,6 +61,7 @@ export function mountMainRoutes(app: Express): void {
   app.use('/emails', emailRoutes);
 
   app.use('/network-settings', networkSettingRoutes);
+  app.use('/global-postbacks', globalPostbackRoutes);
   app.use('/integrations', integrationRoutes);
   app.use('/geoip', geoipRoutes);
   app.use('/uploads', uploadRoutes);

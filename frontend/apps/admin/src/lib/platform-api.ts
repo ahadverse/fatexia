@@ -2,6 +2,8 @@ import type {
   AccessRequest,
   AccessRequestStatus,
   CreateNewsInput,
+  GlobalPostback,
+  GlobalPostbackInput,
   CreateSmartLinkInput,
   EmailTemplate,
   Integration,
@@ -281,4 +283,21 @@ export function uploadNewsImage(file: File): Promise<{ url: string }> {
   const formData = new FormData();
   formData.append('image', file);
   return apiFetch<{ url: string }>('/uploads/news-image', { method: 'POST', body: formData });
+}
+
+// Network-level postbacks (Admin → Settings). Admin-only on the server.
+export function getGlobalPostbacks(): Promise<GlobalPostback[]> {
+  return apiFetch<GlobalPostback[]>('/global-postbacks');
+}
+
+export function createGlobalPostback(input: GlobalPostbackInput): Promise<GlobalPostback> {
+  return apiFetch<GlobalPostback>('/global-postbacks', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function updateGlobalPostback(id: string, input: Partial<GlobalPostbackInput>): Promise<GlobalPostback> {
+  return apiFetch<GlobalPostback>(`/global-postbacks/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
+}
+
+export function deleteGlobalPostback(id: string): Promise<void> {
+  return apiFetch<void>(`/global-postbacks/${id}`, { method: 'DELETE' });
 }

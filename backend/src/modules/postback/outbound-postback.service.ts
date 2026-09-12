@@ -1,5 +1,8 @@
 import { logger } from '../../common/logger';
 import { affiliateRepository } from '../affiliates/affiliate.repository';
+import { offerRepository } from '../offers/offer.repository';
+import { globalPostbackRepository } from '../global-postbacks/global-postback.repository';
+import { PostbackDirectionKind } from '../global-postbacks/global-postback.entity';
 import { postbackLogRepository } from '../postback-logs/postback-log.repository';
 import { PostbackDirection } from '../postback-logs/postback-log.entity';
 import type { Conversion } from '../conversions/conversion.entity';
@@ -13,10 +16,40 @@ import type { Conversion } from '../conversions/conversion.entity';
  * promised "we ping this URL when one of your conversions is approved" and nothing did.
  */
 
-// Must stay in step with the MACROS list on the affiliate portal's Postback Setup page:
-// that page builds the URL from these tokens, so a token it offers and this does not
-// substitute would be delivered to the affiliate's tracker as the literal "{payout}".
-const MACROS = ['click_id', 'payout', 'currency', 'status', 'offer_id'] as const;
+/**
+ * Every token a postback URL may contain.
+ *
+ * The first five are what the affiliate portal's Postback Setup page offers and must
+ * stay in step with it — a token that page builds but this does not substitute reaches
+ * the affiliate's tracker as the literal "{payout}".
+ *
+ * The rest exist for network-level outbound postbacks, which feed BI and agency
+ * trackers rather than an affiliate's own: those need the whole conversion, not just
+ * enough to match a click.
+ */
+const MACROS = [
+  'click_id',
+  'payout',
+  'currency',
+  'status',
+  'offer_id',
+  'conversion_id',
+  'offer_name',
+  'affiliate_id',
+  'transaction_id',
+  'country',
+  'revenue',
+  'is_duplicate',
+  'timestamp',
+  'sub1',
+  'sub2',
+  'sub3',
+  'sub4',
+  'sub5',
+  'sub6',
+  'sub7',
+  'sub8',
+] as const;
 
 // An affiliate's endpoint being slow must not hold a request open indefinitely. Ten
 // seconds is generous for what should be a redirect-speed callback.
@@ -30,13 +63,33 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function buildValues(conversion: Conversion): Record<string, string> {
+function buildValues(conversion: Conversion, offerName: string): Record<string, string> {
   return {
     click_id: conversion.clickId ?? '',
     payout: Number(conversion.payoutAmount).toFixed(2),
     currency: conversion.currency,
     status: conversion.status,
     offer_id: conversion.offerId,
+    conversion_id: conversion.id,
+    offer_name: offerName,
+    affiliate_id: conversion.affiliateId ?? '',
+    transaction_id: conversion.transactionId ?? '',
+    country: conversion.countryCode ?? '',
+    // Revenue is the advertiser's side of the margin. It reaches network-level
+    // endpoints only — an affiliate's postback URL can carry the token, but the
+    // affiliate never sees the value anywhere else, so it is not offered on their
+    // setup page (money-visibility rule, PLAN.md).
+    revenue: Number(conversion.revenueAmount).toFixed(2),
+    is_duplicate: conversion.isDuplicate ? '1' : '0',
+    timestamp: new Date().toISOString(),
+    sub1: conversion.subId1 ?? '',
+    sub2: conversion.subId2 ?? '',
+    sub3: conversion.subId3 ?? '',
+    sub4: conversion.subId4 ?? '',
+    sub5: conversion.subId5 ?? '',
+    sub6: conversion.subId6 ?? '',
+    sub7: conversion.subId7 ?? '',
+    sub8: conversion.subId8 ?? '',
   };
 }
 
@@ -76,16 +129,35 @@ async function attempt(url: string): Promise<{ status: number | null; error: str
  * back a conversion they just approved.
  */
 export async function sendConversionPostback(conversion: Conversion): Promise<void> {
-  if (!conversion.affiliateId) return;
+  const offer = await offerRepository.findById(conversion.offerId);
+  const values = buildValues(conversion, offer?.name ?? '');
 
-  const affiliate = await affiliateRepository.findById(conversion.affiliateId);
-  const template = affiliate?.postbackUrl?.trim();
-  // Most affiliates never set one. That is not a failure and should not generate a log
-  // row, or the Postback Logs page fills with non-events.
-  if (!template) return;
+  const targets: { template: string; globalId: string | null }[] = [];
 
-  const values = buildValues(conversion);
-  const url = substitutePostbackMacros(template, values);
+  if (conversion.affiliateId) {
+    const affiliate = await affiliateRepository.findById(conversion.affiliateId);
+    const template = affiliate?.postbackUrl?.trim();
+    // Most affiliates never set one. That is not a failure and should not generate a
+    // log row, or the Postback Logs page fills with non-events.
+    if (template) targets.push({ template, globalId: null });
+  }
+
+  // Network-level endpoints fire for every conversion, including orphans with no
+  // affiliate — a BI warehouse wants those rows too.
+  for (const entry of await globalPostbackRepository.findEnabled(PostbackDirectionKind.OUTBOUND)) {
+    if (entry.url?.trim()) targets.push({ template: entry.url.trim(), globalId: entry.id });
+  }
+
+  // One failing endpoint must not stop the others, so each is delivered independently.
+  await Promise.all(targets.map((target) => deliver(conversion, target, values)));
+}
+
+async function deliver(
+  conversion: Conversion,
+  target: { template: string; globalId: string | null },
+  values: Record<string, string>,
+): Promise<void> {
+  const url = substitutePostbackMacros(target.template, values);
 
   let status: number | null = null;
   let error: string | null = null;
@@ -96,6 +168,10 @@ export async function sendConversionPostback(conversion: Conversion): Promise<vo
     attempts += 1;
     ({ status, error } = await attempt(url));
     if (!error) break;
+  }
+
+  if (!error && target.globalId) {
+    await globalPostbackRepository.markUsed(target.globalId).catch(() => undefined);
   }
 
   try {

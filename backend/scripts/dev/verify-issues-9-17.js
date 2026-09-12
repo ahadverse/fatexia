@@ -9,12 +9,12 @@ let fail = 0;
 function check(label, got, expected) {
   const ok = JSON.stringify(got) === JSON.stringify(expected);
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${label.padEnd(60)} got ${JSON.stringify(got)}, expected ${JSON.stringify(expected)}`);
-  ok ? pass++ : fail++;
+  if (ok) pass++; else fail++;
 }
 
 function assert(label, condition, detail = '') {
   console.log(`${condition ? 'ok  ' : 'FAIL'} ${label}${detail ? ` — ${detail}` : ''}`);
-  condition ? pass++ : fail++;
+  if (condition) pass++; else fail++;
 }
 
 async function login(email) {

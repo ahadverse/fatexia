@@ -6,6 +6,8 @@ import { conversionRepository } from '../conversions/conversion.repository';
 import { ConversionStatus } from '../conversions/conversion.entity';
 import { postbackLogRepository } from '../postback-logs/postback-log.repository';
 import { smartLinkRepository } from '../smart-links/smart-link.repository';
+import { globalPostbackRepository } from '../global-postbacks/global-postback.repository';
+import { PostbackDirectionKind } from '../global-postbacks/global-postback.entity';
 import { PostbackDirection } from '../postback-logs/postback-log.entity';
 import { resolvePayoutRuleForPricing, computeAmounts } from '../offers/payout-resolution';
 import { safeSendConversionPostback } from './outbound-postback.service';
@@ -29,6 +31,28 @@ function secretsMatch(provided: string, actual: string): boolean {
   const a = createHash('sha256').update(provided).digest();
   const b = createHash('sha256').update(actual).digest();
   return timingSafeEqual(a, b);
+}
+
+/**
+ * Returns the id of the enabled global inbound entry that accepts this request, or null.
+ *
+ * Every candidate is compared even after one matches — `secretsMatch` is constant-time
+ * per comparison, but bailing out early would still make the total time depend on which
+ * entry matched, and with a handful of rows the cost of checking them all is nothing.
+ *
+ * A null `allowedIps` means any address: a global entry usually fronts a platform whose
+ * egress addresses the operator does not control, and requiring a placeholder there
+ * would be a restriction in appearance only.
+ */
+async function matchGlobalInbound(secret: string, sourceIp: string): Promise<string | null> {
+  const entries = await globalPostbackRepository.findEnabled(PostbackDirectionKind.INBOUND);
+  let matched: string | null = null;
+  for (const entry of entries) {
+    if (!entry.secret) continue;
+    const ok = secretsMatch(secret, entry.secret) && (!entry.allowedIps || ipAllowed(sourceIp, entry.allowedIps));
+    if (ok && !matched) matched = entry.id;
+  }
+  return matched;
 }
 
 function ipAllowed(sourceIp: string, allowedPostbackIps: string): boolean {
@@ -68,8 +92,15 @@ export const postbackService = {
       throw new NotFoundError('Offer not available');
     }
     if (!secretsMatch(req.secret, offer.postbackSecret) || !ipAllowed(req.sourceIp, offer.allowedPostbackIps)) {
-      await logAttempt(req, { offerId: offer.id, success: false, errorMessage: 'Secret or source IP not authorized' });
-      throw new NotFoundError('Offer not available');
+      // Fall back to the network-level entries before rejecting. A global postback is
+      // how one advertiser integration covers every offer instead of needing fresh
+      // credentials per offer — see global-postback.entity.ts.
+      const authorisedBy = await matchGlobalInbound(req.secret, req.sourceIp);
+      if (!authorisedBy) {
+        await logAttempt(req, { offerId: offer.id, success: false, errorMessage: 'Secret or source IP not authorized' });
+        throw new NotFoundError('Offer not available');
+      }
+      await globalPostbackRepository.markUsed(authorisedBy);
     }
 
     const click = await clickRepository.findById(req.clickId);

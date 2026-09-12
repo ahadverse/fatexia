@@ -77,6 +77,7 @@ export const createOfferSchema = z.object({
   trackingPlatform: z.nativeEnum(TrackingPlatform),
   isPublic: z.boolean(),
   trafficTypes: z.array(z.string()),
+  disallowedTrafficTypes: z.array(z.string()).optional().default([]),
   featured: z.boolean(),
   networkOfferId: z.string().optional(),
   autoApproveConversions: z.boolean(),
@@ -169,6 +170,7 @@ export interface OfferDto {
   trackingPlatform: TrackingPlatform;
   isPublic: boolean;
   trafficTypes: string[];
+  disallowedTrafficTypes: string[];
   featured: boolean;
   networkOfferId?: string;
   autoApproveConversions: boolean;
@@ -253,6 +255,7 @@ export interface AffiliateOfferDto {
   trackingLink: string;
   trackingPlatform: TrackingPlatform;
   trafficTypes: string[];
+  disallowedTrafficTypes: string[];
   featured: boolean;
   networkOfferId?: string;
   autoApproveConversions: boolean;
@@ -304,6 +307,7 @@ export function toAffiliateOfferDto(offer: Offer, affiliateId?: string): Affilia
     trackingLink: affiliateId ? affiliateTrackingLinkFor(offer.id, affiliateId) : trackingLinkFor(offer.id),
     trackingPlatform: offer.trackingPlatform,
     trafficTypes: offer.trafficTypes,
+    disallowedTrafficTypes: offer.disallowedTrafficTypes ?? [],
     featured: offer.featured,
     networkOfferId: offer.networkOfferId ?? undefined,
     autoApproveConversions: offer.autoApproveConversions,
@@ -335,6 +339,7 @@ export function toOfferDto(offer: Offer): OfferDto {
     trackingPlatform: offer.trackingPlatform,
     isPublic: offer.isPublic,
     trafficTypes: offer.trafficTypes,
+    disallowedTrafficTypes: offer.disallowedTrafficTypes ?? [],
     featured: offer.featured,
     networkOfferId: offer.networkOfferId ?? undefined,
     autoApproveConversions: offer.autoApproveConversions,

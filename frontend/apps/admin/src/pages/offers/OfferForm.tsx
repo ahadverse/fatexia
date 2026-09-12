@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, X } from 'lucide-react';
 import type { Advertiser, Affiliate, CreateOfferInput, Offer, OfferCapInput, OfferCategory, OfferStatus, PayoutMode, PayoutRuleInput, PayoutType, RevenueModel } from '@fatexia/types';
 import { COUNTRY_CODES } from '@fatexia/types';
-import { Input, MultiSelectCombobox, Toggle, cn, toast } from '@fatexia/ui';
+import { CountryFlag, Input, MultiSelectCombobox, Toggle, cn, toast } from '@fatexia/ui';
 import { getAdvertisers, createAdvertiser } from '../../lib/advertisers-api';
 import { getOfferCategories, createOfferCategory } from '../../lib/offer-categories-api';
 import { getAffiliates } from '../../lib/affiliates-api';
@@ -19,7 +19,12 @@ const DEVICE_TYPE_OPTIONS = ['desktop', 'mobile', 'tablet', 'console', 'smarttv'
 // worth targeting on. A rule matches by exact string, so this must stay in sync with
 // what UAParser actually reports for these platforms.
 const OS_OPTIONS = ['Windows', 'Mac OS', 'iOS', 'Android', 'Linux', 'Chrome OS'];
-const COUNTRY_OPTIONS = COUNTRY_CODES.map((c) => ({ value: c.code, label: c.name, sublabel: c.code }));
+const COUNTRY_OPTIONS = COUNTRY_CODES.map((c) => ({
+  value: c.code,
+  label: c.name,
+  sublabel: c.code,
+  icon: <CountryFlag code={c.code} title={c.name} />,
+}));
 // DELETED isn't offered here — that's a destructive row action on All Offers, not a
 // state to create/save an offer into directly.
 const STATUS_OPTIONS: { value: OfferStatus; label: string }[] = [
@@ -74,6 +79,7 @@ export function offerToFormInput(offer: Offer): CreateOfferInput {
     currency: offer.currency,
     trackingPlatform: offer.trackingPlatform,
     trafficTypes: offer.trafficTypes,
+    disallowedTrafficTypes: offer.disallowedTrafficTypes,
     featured: offer.featured,
     networkOfferId: offer.networkOfferId,
     isPublic: offer.isPublic,
@@ -152,6 +158,16 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
   const [defaultPayoutAmount, setDefaultPayoutAmount] = useState(initial ? String(initial.defaultPayoutAmount || '') : '');
   const [status, setStatus] = useState<OfferStatus>(initialStatus ?? 'PENDING');
   const [trafficTypes, setTrafficTypes] = useState<string[]>(initial?.trafficTypes ?? []);
+  const [disallowedTrafficTypes, setDisallowedTrafficTypes] = useState<string[]>(initial?.disallowedTrafficTypes ?? []);
+  // Custom sources the admin typed on this offer. Seeded from whatever the offer
+  // already carries, so re-opening one that used a custom source still lists it —
+  // otherwise the row would vanish from the editor while staying in the data.
+  const [customTrafficSources, setCustomTrafficSources] = useState<string[]>(() =>
+    [...(initial?.trafficTypes ?? []), ...(initial?.disallowedTrafficTypes ?? [])].filter(
+      (source) => !TRAFFIC_TYPE_OPTIONS.includes(source),
+    ),
+  );
+  const [newTrafficSource, setNewTrafficSource] = useState('');
   const [featured, setFeatured] = useState(initial?.featured ?? false);
   const [networkOfferId, setNetworkOfferId] = useState(initial?.networkOfferId ?? '');
   const [isPublic, setIsPublic] = useState(initial?.isPublic ?? true);
@@ -186,7 +202,15 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
       .catch(() => setAffiliates([]));
   }, []);
 
-  const affiliateOptions = affiliates.map((a) => ({ value: a.id, label: a.fullName ?? a.email, sublabel: a.email }));
+  // `keywords` carries the public id so "1011" finds AFF-1011 — the combobox matches
+  // with punctuation stripped, and the id is what an operator reads off the affiliate
+  // list, not the internal uuid in `value`.
+  const affiliateOptions = affiliates.map((a) => ({
+    value: a.id,
+    label: a.fullName ?? a.email,
+    sublabel: a.publicId ?? a.email,
+    keywords: `${a.publicId ?? ''} ${a.email}`,
+  }));
 
   const valid = name.trim().length > 0 && !!advertiserId && payoutRules.length > 0;
 
@@ -230,6 +254,30 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
     setCategory(created.name);
     setNewCategoryName('');
     setShowNewCategory(false);
+  }
+
+  const trafficSourceOptions = [...TRAFFIC_TYPE_OPTIONS, ...customTrafficSources];
+
+  function addTrafficSource() {
+    const name = newTrafficSource.trim();
+    if (!name) return;
+    // Case-insensitive so "email" doesn't sit beside the built-in "Email" as a second,
+    // separately-toggleable row that means the same thing.
+    if (trafficSourceOptions.some((source) => source.toLowerCase() === name.toLowerCase())) {
+      toast.error(`"${name}" is already listed`);
+      setNewTrafficSource('');
+      return;
+    }
+    setCustomTrafficSources((sources) => [...sources, name]);
+    setNewTrafficSource('');
+  }
+
+  // Cleared from all three places at once — leaving the name in `trafficTypes` while
+  // dropping its row would keep saving a permission with no way to see or undo it.
+  function removeTrafficSource(name: string) {
+    setCustomTrafficSources((sources) => sources.filter((source) => source !== name));
+    setTrafficTypes((types) => types.filter((type) => type !== name));
+    setDisallowedTrafficTypes((types) => types.filter((type) => type !== name));
   }
 
   function addPayoutRule() {
@@ -289,6 +337,7 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
           trackingPlatform: 'DIRECT',
           isPublic,
           trafficTypes,
+          disallowedTrafficTypes,
           featured,
           networkOfferId: networkOfferId || undefined,
           autoApproveConversions,
@@ -424,6 +473,11 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
             </div>
           </div>
 
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Schedule & Defaults" hint="When the offer runs, and the figures the payout rules below start from.">
+        <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Start Date">
             <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
           </Field>
@@ -456,22 +510,123 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
             )}
           </Field>
 
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Traffic Sources" hint="What affiliates may and may not send. Shown on the offer in their portal.">
+        <div className="grid gap-4 sm:grid-cols-2">
+          {/* Three states per source, not a checkbox: allowed, disallowed, and unstated.
+              A plain "Traffic Allowed" list could only say yes — an offer that forbids
+              incent or email traffic had nowhere to say so, and an affiliate found out
+              when their conversions were voided. Unstated stays available for sources
+              the advertiser genuinely has no rule about. */}
           <div className="space-y-1.5 sm:col-span-2">
-            <label className="text-sm font-medium text-foreground">Traffic Allowed</label>
-            <div className="flex flex-wrap gap-3 rounded-md border border-border p-3">
-              {TRAFFIC_TYPE_OPTIONS.map((t) => (
-                <label key={t} className="flex items-center gap-1.5 text-sm text-foreground">
-                  <input
-                    type="checkbox"
-                    checked={trafficTypes.includes(t)}
-                    onChange={(e) => setTrafficTypes((types) => (e.target.checked ? [...types, t] : types.filter((v) => v !== t)))}
-                  />
-                  {t}
-                </label>
-              ))}
+            <label className="text-sm font-medium text-foreground">Traffic sources</label>
+            <p className="text-xs text-muted-foreground">
+              Affiliates see these on the offer — allowed in green, not allowed in red. Leave a source unset if the
+              advertiser has no rule about it.
+            </p>
+            <div className="space-y-1 rounded-md border border-border p-3">
+              {trafficSourceOptions.map((t) => {
+                const state = trafficTypes.includes(t) ? 'allowed' : disallowedTrafficTypes.includes(t) ? 'disallowed' : 'unset';
+                // Each click sets one state and clears the other, so a source can never
+                // end up in both lists — which would be a contradiction the affiliate
+                // portal has no way to render.
+                const choose = (next: 'allowed' | 'disallowed' | 'unset') => {
+                  setTrafficTypes((types) => (next === 'allowed' ? [...types.filter((v) => v !== t), t] : types.filter((v) => v !== t)));
+                  setDisallowedTrafficTypes((types) =>
+                    next === 'disallowed' ? [...types.filter((v) => v !== t), t] : types.filter((v) => v !== t),
+                  );
+                };
+                // A custom source lives only in the two lists. Left unset it is stored
+                // nowhere and is gone on reopen — said here rather than discovered
+                // after saving. A built-in left unset is fine: it comes back from the
+                // constant either way.
+                const unsavedCustom = state === 'unset' && customTrafficSources.includes(t);
+                return (
+                  <div key={t} className="flex items-center justify-between gap-3 py-1 text-sm">
+                    <span className={cn(unsavedCustom ? 'text-muted-foreground' : 'text-foreground')}>
+                      {t}
+                      {unsavedCustom && <span className="ml-2 text-xs text-amber-500">pick one, or this is not saved</span>}
+                    </span>
+                    <div className="flex shrink-0 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => choose(state === 'allowed' ? 'unset' : 'allowed')}
+                        className={cn(
+                          'flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors',
+                          state === 'allowed'
+                            ? 'border-emerald-500 bg-emerald-500/15 text-emerald-500'
+                            : 'border-border text-muted-foreground hover:bg-accent',
+                        )}
+                      >
+                        <Check className="size-3.5" /> Allowed
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => choose(state === 'disallowed' ? 'unset' : 'disallowed')}
+                        className={cn(
+                          'flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors',
+                          state === 'disallowed'
+                            ? 'border-rose-500 bg-rose-500/15 text-rose-500'
+                            : 'border-border text-muted-foreground hover:bg-accent',
+                        )}
+                      >
+                        <X className="size-3.5" /> Not allowed
+                      </button>
+                      {/* Only custom sources can be removed. The eight built-ins are a
+                          fixed vocabulary — deleting one from a single offer would make
+                          the list mean something different on each offer. */}
+                      {customTrafficSources.includes(t) && (
+                        <button
+                          type="button"
+                          onClick={() => removeTrafficSource(t)}
+                          aria-label={`Remove ${t}`}
+                          title={`Remove ${t}`}
+                          className="rounded-md border border-border px-1.5 text-muted-foreground hover:bg-accent hover:text-destructive"
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* The eight defaults cover the common cases, not every advertiser's
+                  vocabulary — "Brand bidding", "SMS", "Pop" and the like come up per
+                  offer. A custom source is stored exactly like a built-in one (a string
+                  in one of the two lists), so nothing downstream has to know which is
+                  which. */}
+              <div className="flex gap-2 border-t border-border pt-3">
+                <Input
+                  value={newTrafficSource}
+                  onChange={(e) => setNewTrafficSource(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addTrafficSource();
+                    }
+                  }}
+                  placeholder="Add another source, e.g. Brand bidding"
+                  className="h-8 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={addTrafficSource}
+                  className="shrink-0 rounded-md border border-border px-3 text-sm hover:bg-accent"
+                >
+                  + Add
+                </button>
+              </div>
             </div>
           </div>
 
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Visibility" hint="Who can see this offer, and where it appears.">
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <Toggle checked={featured} onCheckedChange={setFeatured} label="Set as Featured Offer" />
             <p className="mt-1 text-xs text-muted-foreground">Featured offers appear in the Featured Offers section of the affiliate dashboard.</p>

@@ -218,7 +218,219 @@ The second is worth running against production specifically: it asserts no affil
 
 ## Known gaps at deploy time
 
-- **Realtime is one instance only** — see above.
-- **No `/postback` or `/sl` endpoint yet.** The tracker serves `/click` only. Smart-link URLs handed out by the admin panel will 404 until `/sl` is built, and conversions cannot arrive until `/postback` exists.
+- **Realtime is one instance only** — see above. Still true: no Socket.IO Redis adapter is installed, so `fatexia-api` must stay at one instance.
 - **Clicks are written per-request**, not batched. Correct, but it is a database write on the redirect path — the ceiling is Postgres connections, so watch that before a large campaign.
-- **No composite indexes** on `clicks`/`conversions` yet (`(offerId, createdAt)`, `(affiliateId, createdAt)`). Fine at current volume, will hurt reporting at scale.
+- **Reporting indexes are partial.** `clicks` has `(offerId, ip, createdAt)`, which serves the unique-click check rather than reporting. The report-shaped composites — `(offerId, createdAt)` and `(affiliateId, createdAt)` — do not exist yet. Fine at current volume, will hurt reporting at scale.
+- **`sshkey` is in git history.** Removed from the index and gitignored, but commit `ca86efb` still contains it. Treat that key as exposed: rotate it wherever it is authorised, and rewrite history if the repo is ever shared.
+
+The tracker now serves `/click`, `/sl` and `/postback`, and outbound postbacks to affiliates fire on conversion approval — all three were listed here as missing and are not.
+
+---
+
+# DigitalOcean Deployment (Droplet) — backend only
+
+Replaces the **Render** half above. The three frontends stay on Vercel exactly as documented in "Frontend — Vercel"; only their API URL changes to `https://api.fatexia.com`.
+
+On the Droplet: API (`4000`) + Tracker (`4001`) under PM2, Postgres, Redis, Nginx for TLS.
+
+## Step 1 — Create the Droplet
+
+DigitalOcean → Create → Droplets:
+
+- Image: **Ubuntu 24.04 LTS**
+- Plan: **1 vCPU / 2 GB RAM** minimum
+- Authentication: **SSH key** (generate a fresh one: `ssh-keygen -t ed25519 -C fatexia-deploy`)
+- Enable backups
+
+Copy the Droplet's public IP.
+
+## Step 2 — Point DNS at the Droplet
+
+Two `A` records → Droplet IP:
+
+| Host | Serves |
+|---|---|
+| `api` | API (REST + Socket.IO) |
+| `track` | Tracker (`/click`) |
+
+The Vercel projects keep their own DNS records — nothing changes there.
+
+## Step 3 — Server setup
+
+SSH in as root:
+
+```bash
+adduser fatexia
+usermod -aG sudo fatexia
+rsync --archive --chown=fatexia:fatexia ~/.ssh /home/fatexia
+
+ufw allow OpenSSH && ufw allow 80/tcp && ufw allow 443/tcp && ufw --force enable
+```
+
+Reconnect as `fatexia` for every step below.
+
+## Step 4 — Install runtime
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs nginx certbot python3-certbot-nginx postgresql redis-server git
+sudo npm install -g pm2
+```
+
+## Step 5 — Postgres
+
+```bash
+sudo -u postgres psql -c "CREATE USER fatexia WITH PASSWORD 'CHANGE_ME';"
+sudo -u postgres psql -c "CREATE DATABASE fatexia OWNER fatexia;"
+```
+
+Using a DO Managed Database instead? Skip this step, add the Droplet to the cluster's Trusted Sources, and set `DATABASE_SSL=true` in Step 7.
+
+## Step 6 — Redis
+
+```bash
+sudo sed -i 's/^# *maxmemory-policy .*/maxmemory-policy noeviction/' /etc/redis/redis.conf
+sudo systemctl enable --now redis-server
+```
+
+Default config binds to `127.0.0.1` — leave it that way.
+
+## Step 7 — Clone and configure
+
+```bash
+sudo mkdir -p /var/www/fatexia && sudo chown fatexia:fatexia /var/www/fatexia
+git clone https://github.com/ahadverse/fatexia.git /var/www/fatexia
+cd /var/www/fatexia
+
+cat > backend/.env <<EOF
+NODE_ENV=production
+PORT=4000
+TRACKING_PORT=4001
+DATABASE_URL=postgres://fatexia:CHANGE_ME@127.0.0.1:5432/fatexia
+DATABASE_SSL=false
+REDIS_URL=redis://127.0.0.1:6379
+JWT_ACCESS_SECRET=$(openssl rand -hex 32)
+JWT_REFRESH_SECRET=$(openssl rand -hex 32)
+TRUST_PROXY=1
+CORS_ORIGIN=https://fatexia.com,https://admin.fatexia.com,https://affiliates.fatexia.com
+PUBLIC_API_URL=https://api.fatexia.com
+PUBLIC_TRACKING_URL=https://track.fatexia.com
+AFFILIATE_PORTAL_URL=https://affiliates.fatexia.com
+GEOIP_DB_DIR=data/geoip
+MAXMIND_LICENSE_KEY=
+GEOIP_ADMIN_SECRET=$(openssl rand -hex 32)
+EOF
+```
+
+Both processes read this one file. `TRUST_PROXY=1` because Nginx is the only proxy in front — add a hop if you later put Cloudflare or a DO Load Balancer ahead of it.
+
+## Step 8 — Build
+
+```bash
+cd /var/www/fatexia/backend
+npm ci --include=dev
+npm run build
+```
+
+## Step 9 — Migrate and seed
+
+```bash
+npm run migration:run:prod
+SUPERADMIN_EMAIL=you@yourdomain.com SUPERADMIN_PASSWORD='<strong>' npm run seed:prod
+```
+
+## Step 10 — Start the processes
+
+```bash
+cat > /var/www/fatexia/ecosystem.config.js <<'EOF'
+module.exports = {
+  apps: [
+    { name: 'fatexia-api',     cwd: '/var/www/fatexia/backend', script: 'dist/main.js' },
+    { name: 'fatexia-tracker', cwd: '/var/www/fatexia/backend', script: 'dist/tracking.js' },
+  ],
+};
+EOF
+
+cd /var/www/fatexia
+pm2 start ecosystem.config.js
+pm2 save
+pm2 startup      # run the command it prints
+```
+
+Keep `fatexia-api` at one instance — Socket.IO rooms live in process memory (see "Realtime is single-instance today" above).
+
+## Step 11 — Nginx
+
+```bash
+sudo tee /etc/nginx/sites-available/fatexia > /dev/null <<'EOF'
+server {
+    listen 80;
+    server_name api.fatexia.com;
+    location / {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+server {
+    listen 80;
+    server_name track.fatexia.com;
+    location / {
+        proxy_pass http://127.0.0.1:4001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+EOF
+
+sudo ln -s /etc/nginx/sites-available/fatexia /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+The `Upgrade`/`Connection` headers on `api` are required for Socket.IO; without them the websocket never upgrades and the admin panel falls back to polling.
+
+## Step 12 — SSL
+
+```bash
+sudo certbot --nginx -d api.fatexia.com -d track.fatexia.com
+```
+
+Auto-renewal is already installed: `systemctl status certbot.timer`.
+
+## Step 13 — Repoint the Vercel frontends
+
+In each Vercel project, set the API URL to the Droplet and **redeploy** (Vite bakes it in at build time):
+
+| Project | Variable | Value |
+|---|---|---|
+| admin | `VITE_API_URL` | `https://api.fatexia.com` |
+| affiliate | `VITE_API_URL` | `https://api.fatexia.com` |
+| public | `NEXT_PUBLIC_API_URL` | `https://api.fatexia.com` |
+
+## Step 14 — Verify
+
+```bash
+curl https://api.fatexia.com/health
+curl https://track.fatexia.com/health
+pm2 status
+API_URL=https://api.fatexia.com node /var/www/fatexia/backend/scripts/dev/smoke-api.js
+```
+
+Then log into the admin panel with the superadmin from Step 9 and fetch the GeoIP databases: **Settings → GeoIP Database → Refresh now** (needs `MAXMIND_LICENSE_KEY` filled in `backend/.env` first). Unlike Render, the Droplet's disk is persistent — the `.mmdb` files survive restarts, so this is a one-time action.
+
+## Step 15 — Redeploying after a code change
+
+```bash
+cd /var/www/fatexia && git pull
+cd backend && npm ci --include=dev && npm run build && npm run migration:run:prod
+pm2 restart ecosystem.config.js
+```

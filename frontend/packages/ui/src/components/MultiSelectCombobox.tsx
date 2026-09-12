@@ -10,6 +10,26 @@ export interface MultiSelectOption {
   label: string;
   /** Shown smaller/muted next to the label — e.g. an email next to a name. */
   sublabel?: string;
+  /**
+   * Extra text to match on that is not displayed, or displayed elsewhere — a public id
+   * like "AFF-1011", say. Searching is punctuation-insensitive (see `normalize`), so
+   * typing just the number finds it.
+   */
+  keywords?: string;
+  /** Rendered before the label in both the list and the selected chip. */
+  icon?: React.ReactNode;
+}
+
+/**
+ * Strips everything but letters and digits so a query matches regardless of the
+ * punctuation and casing the value happens to use.
+ *
+ * The case this exists for: affiliate ids are displayed as "AFF-1011" but people search
+ * by the number alone. Normalised, the haystack is "aff1011" and the query "1011" is a
+ * plain substring of it — as are "aff-1011", "AFF1011" and "aff 1011".
+ */
+function normalize(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
 export interface MultiSelectComboboxProps {
@@ -37,9 +57,11 @@ export function MultiSelectCombobox({ options, value, onChange, placeholder = 'S
   const selectedOptions = useMemo(() => options.filter((o) => selected.has(o.value)), [options, value]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = normalize(query);
     if (!q) return options;
-    return options.filter((o) => o.label.toLowerCase().includes(q) || o.sublabel?.toLowerCase().includes(q) || o.value.toLowerCase().includes(q));
+    return options.filter((option) =>
+      normalize(`${option.label} ${option.sublabel ?? ''} ${option.keywords ?? ''} ${option.value}`).includes(q),
+    );
   }, [options, query]);
 
   function toggle(optionValue: string) {
@@ -91,6 +113,7 @@ export function MultiSelectCombobox({ options, value, onChange, placeholder = 'S
                     )}
                   >
                     <input type="checkbox" checked={active} onChange={() => toggle(option.value)} className="size-3.5 accent-[hsl(var(--primary))]" />
+                    {option.icon}
                     <span className="flex-1 truncate text-foreground">{option.label}</span>
                     {option.sublabel && <span className="shrink-0 truncate text-xs text-muted-foreground">{option.sublabel}</span>}
                   </label>
@@ -105,6 +128,7 @@ export function MultiSelectCombobox({ options, value, onChange, placeholder = 'S
         <div className="flex flex-wrap gap-1.5">
           {selectedOptions.map((option) => (
             <span key={option.value} className="flex items-center gap-1 rounded-full border border-border bg-secondary px-2 py-0.5 text-xs text-secondary-foreground">
+              {option.icon}
               {option.label}
               <button type="button" onClick={() => remove(option.value)} aria-label={`Remove ${option.label}`} className="text-muted-foreground hover:text-foreground">
                 <X className="size-3" />

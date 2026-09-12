@@ -53,6 +53,8 @@ export interface Offer {
   trackingPlatform: TrackingPlatform;
   isPublic: boolean;
   trafficTypes: string[];
+  /** Sources the affiliate may NOT send. A source in neither list is unspecified. */
+  disallowedTrafficTypes: string[];
   featured: boolean;
   networkOfferId?: string;
   autoApproveConversions: boolean;
@@ -106,6 +108,8 @@ export interface CreateOfferInput {
   trackingPlatform: TrackingPlatform;
   isPublic: boolean;
   trafficTypes: string[];
+  /** Sources the affiliate may NOT send. A source in neither list is unspecified. */
+  disallowedTrafficTypes: string[];
   featured: boolean;
   networkOfferId?: string;
   autoApproveConversions: boolean;
@@ -166,6 +170,8 @@ export interface AffiliateOffer {
   trackingLink: string;
   trackingPlatform: TrackingPlatform;
   trafficTypes: string[];
+  /** Sources the affiliate may NOT send. A source in neither list is unspecified. */
+  disallowedTrafficTypes: string[];
   featured: boolean;
   networkOfferId?: string;
   autoApproveConversions: boolean;

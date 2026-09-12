@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Copy } from 'lucide-react';
 import type { Advertiser, Offer, OfferStatus } from '@fatexia/types';
-import { ExternalLinkButton, StatusBadge, toast, RichText } from '@fatexia/ui';
+import { CountryFlag, ExternalLinkButton, RichText, StatusBadge, TrafficSourceList, toast } from '@fatexia/ui';
+import { COUNTRY_CODES } from '@fatexia/types';
 import { getAdvertisers } from '../../lib/advertisers-api';
 import { getOffer } from '../../lib/offers-api';
 
@@ -65,6 +66,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+const COUNTRY_NAMES = new Map(COUNTRY_CODES.map((c) => [c.code, c.name]));
+
+// An unknown code still renders — as the code itself — rather than disappearing.
+function countryName(code: string): string {
+  return COUNTRY_NAMES.get(code) ?? code;
+}
+
 export function OfferDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -116,7 +124,10 @@ export function OfferDetails() {
         <Row label="Default Payout" value={`${offer.currency} ${offer.defaultPayoutAmount.toFixed(2)}`} />
         <Row label="Start Date" value={offer.startDate ? new Date(offer.startDate).toLocaleDateString() : undefined} />
         <Row label="End Date" value={offer.endDate ? new Date(offer.endDate).toLocaleDateString() : undefined} />
-        <Row label="Traffic Allowed" value={offer.trafficTypes.length ? offer.trafficTypes.join(', ') : undefined} />
+        <div className="flex justify-between gap-4 border-b border-border/50 py-2 text-sm">
+          <span className="shrink-0 text-muted-foreground">Traffic sources</span>
+          <TrafficSourceList allowed={offer.trafficTypes} disallowed={offer.disallowedTrafficTypes} className="justify-end" />
+        </div>
         <Row label="Featured" value={offer.featured ? 'Yes' : 'No'} />
         <Row label="Network Offer ID" value={offer.networkOfferId} />
         <Row label="Created" value={new Date(offer.createdAt).toLocaleString()} />
@@ -168,6 +179,30 @@ export function OfferDetails() {
                 Manager Commission: {rule.managerCommissionPercent}% · Refer Affiliate Commission: {rule.referAffiliateCommissionPercent}% · Hold:{' '}
                 {rule.holdSchedule.enabled ? `${rule.holdSchedule.days} days` : 'Disabled'}
               </p>
+
+              {/* Targeting was configurable but never shown here, so there was no way to
+                  read back which countries a rule actually applies to without reopening
+                  the edit form. */}
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+                <span className="text-muted-foreground">Geo:</span>
+                {rule.targeting.countries.length === 0 ? (
+                  <span className="text-muted-foreground">All countries</span>
+                ) : (
+                  rule.targeting.countries.map((code) => (
+                    <span key={code} className="flex items-center gap-1 rounded-full border border-border bg-secondary px-2 py-0.5 text-secondary-foreground">
+                      <CountryFlag code={code} title={countryName(code)} />
+                      {countryName(code)}
+                    </span>
+                  ))
+                )}
+              </div>
+
+              {(rule.targeting.devices.length > 0 || rule.targeting.os.length > 0) && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {rule.targeting.devices.length > 0 && <>Devices: {rule.targeting.devices.join(', ')} </>}
+                  {rule.targeting.os.length > 0 && <>· OS: {rule.targeting.os.join(', ')}</>}
+                </p>
+              )}
             </div>
           ))}
         </div>

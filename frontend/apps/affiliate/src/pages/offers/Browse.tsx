@@ -9,6 +9,7 @@ import {
   Modal,
   PageHeader,
   RichText,
+  TrafficSourceList,
   Select,
   TableSkeleton,
   toast,
@@ -74,7 +75,11 @@ export function Browse() {
         return countries.length ? countries.join(', ') : 'All';
       },
     },
-    { key: 'traffic', header: 'Traffic', render: (offer) => offer.trafficTypes.join(', ') || 'Any' },
+    {
+      key: 'traffic',
+      header: 'Traffic',
+      render: (offer) => <TrafficSourceList allowed={offer.trafficTypes} disallowed={offer.disallowedTrafficTypes} emptyMessage="Any" />,
+    },
     { key: 'status', header: 'Status', render: (offer) => <StatusPill status={offer.status} /> },
     {
       key: 'link',
@@ -133,7 +138,7 @@ export function Browse() {
               {[
                 ['Advertiser', detail.advertiserName ?? '—'],
                 ['Category', detail.category ?? '—'],
-                ['Traffic types', detail.trafficTypes.join(', ') || 'Any'],
+
                 ['Deep linking', detail.allowDeepLinking ? 'Allowed' : 'Not allowed'],
                 [
                   'Payout',
@@ -154,6 +159,19 @@ export function Browse() {
                 </div>
               ))}
             </dl>
+
+            {/* Prominent, not a row in the grid above: sending a forbidden source is
+                how an affiliate gets a batch of conversions voided, so it should be
+                readable before they copy the link rather than after. */}
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Traffic sources</p>
+              <TrafficSourceList
+                allowed={detail.trafficTypes}
+                disallowed={detail.disallowedTrafficTypes}
+                emptyMessage="No traffic restrictions stated — check with your manager before running anything unusual."
+                className="mt-1"
+              />
+            </div>
 
             {detail.kpi && (
               <div>

@@ -89,7 +89,26 @@ export const offerRepository = {
         { affiliateId, approvedStatus: 'APPROVED' },
       )
       .andWhere('offer.status = :status', { status: OfferStatus.APPROVED })
-      .andWhere('(offer."isPublic" = true OR accessreq.id IS NOT NULL)')
+      // Three ways an affiliate reaches an offer: it is public, they were granted
+      // access, or a payout rule names them.
+      //
+      // That last one was missing. "Dedicate to affiliate(s)" on a payout rule set who
+      // the rule prices for, but not who could see the offer — so dedicating a private
+      // offer to someone hid it from them, which is the opposite of what the field
+      // reads as. EXISTS against the rules rather than a join, so an offer with several
+      // dedicated rules is still returned once.
+      .andWhere(
+        `(
+          offer."isPublic" = true
+          OR accessreq.id IS NOT NULL
+          OR EXISTS (
+            SELECT 1 FROM payout_rules dedicated
+             WHERE dedicated."offerId" = offer.id
+               AND dedicated.targeting->'affiliateIds' @> :affiliateIdJson::jsonb
+          )
+        )`,
+        { affiliateIdJson: JSON.stringify([affiliateId]) },
+      )
       .orderBy('offer."createdAt"', 'DESC')
       .getMany();
   },

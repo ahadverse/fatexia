@@ -75,8 +75,16 @@ export class Offer {
   @Column({ type: 'enum', enum: TrackingPlatform, default: TrackingPlatform.DIRECT })
   trackingPlatform!: TrackingPlatform;
 
+  // Traffic sources the affiliate MAY send. Empty means nothing is explicitly
+  // allowed, which the affiliate portal renders as 'not specified' rather than 'none'.
   @Column({ type: 'jsonb', default: () => "'[]'" })
   trafficTypes!: string[];
+
+  // Traffic sources the affiliate may NOT send. Kept as its own list rather than a
+  // flag on each entry: 'allowed' and 'forbidden' are different statements, and a
+  // source absent from both means the offer simply has not said.
+  @Column({ type: 'jsonb', default: () => "'[]'" })
+  disallowedTrafficTypes!: string[];
 
   @Column({ type: 'boolean', default: false })
   featured!: boolean;

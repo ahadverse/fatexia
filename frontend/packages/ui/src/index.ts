@@ -21,6 +21,8 @@ export * from './components/PageHeader';
 export * from './components/FilterBar';
 export * from './components/RankedList';
 export * from './components/RichText';
+export * from './components/CountryFlag';
+export * from './components/TrafficSourceList';
 export * from './components/ActivityFeed';
 export * from './components/QuickStats';
 export * from './components/Tabs';

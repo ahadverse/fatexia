@@ -246,7 +246,10 @@ export function DateRangeFilter({ value, onChange, label = 'Date range', classNa
                 ))}
               </div>
 
-              {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-to-interactive-role */}
+              {/* The grid is keyboard-driven through its cells, not the container. The
+                  jsx-a11y disable that used to sit here named a plugin this workspace
+                  does not install, so it silenced nothing and errored as an unknown
+                  rule once linting actually ran. */}
               <div
                 ref={gridRef}
                 role="grid"
