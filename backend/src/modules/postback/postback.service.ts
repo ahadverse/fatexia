@@ -13,7 +13,8 @@ import { resolvePayoutRuleForPricing, computeAmounts } from '../offers/payout-re
 import { safeSendConversionPostback } from './outbound-postback.service';
 
 export interface PostbackRequest {
-  offerId: string;
+  /** Absent on a global postback — the click names the offer instead. */
+  offerId: string | null;
   clickId: string;
   secret: string;
   transactionId: string | null;
@@ -82,30 +83,42 @@ async function logAttempt(
 
 export const postbackService = {
   async handlePostback(req: PostbackRequest): Promise<PostbackResult> {
-    const offer = await offerRepository.findByIdWithPayoutRules(req.offerId);
+    // The click is loaded first because it, not the caller, decides which offer this
+    // conversion belongs to when no offerId was sent.
+    const click = await clickRepository.findById(req.clickId);
 
-    // Same generic failure for "offer doesn't exist" and "wrong secret/IP" — a
-    // different status code between the two would let a caller probe for valid
-    // offerIds by trying secrets against each one.
-    if (!offer || !offer.postbackSecret || !offer.allowedPostbackIps) {
-      await logAttempt(req, { offerId: req.offerId, success: false, errorMessage: 'Offer not found or not configured for postbacks' });
+    // Global authorisation is checked before anything offer-specific. It used to be a
+    // fallback *after* the per-offer gate, which made it unreachable in exactly the
+    // case it exists for: an offer with no credentials of its own was rejected on the
+    // line above, so the network-level entry never got a look.
+    const globalAuthId = await matchGlobalInbound(req.secret, req.sourceIp);
+
+    const offerId = req.offerId ?? click?.offerId ?? null;
+    const offer = offerId ? await offerRepository.findByIdWithPayoutRules(offerId) : null;
+
+    if (!offer) {
+      await logAttempt(req, { offerId, success: false, errorMessage: 'Offer not found, and no click to resolve one from' });
       throw new NotFoundError('Offer not available');
     }
-    if (!secretsMatch(req.secret, offer.postbackSecret) || !ipAllowed(req.sourceIp, offer.allowedPostbackIps)) {
-      // Fall back to the network-level entries before rejecting. A global postback is
-      // how one advertiser integration covers every offer instead of needing fresh
-      // credentials per offer — see global-postback.entity.ts.
-      const authorisedBy = await matchGlobalInbound(req.secret, req.sourceIp);
-      if (!authorisedBy) {
-        await logAttempt(req, { offerId: offer.id, success: false, errorMessage: 'Secret or source IP not authorized' });
-        throw new NotFoundError('Offer not available');
-      }
-      await globalPostbackRepository.markUsed(authorisedBy);
-    }
 
-    const click = await clickRepository.findById(req.clickId);
+    // Same generic failure for every rejection — a distinguishable response would let a
+    // caller probe for valid offer ids, or for which secrets are live, by trying them.
+    const offerAuthorised =
+      !!offer.postbackSecret &&
+      !!offer.allowedPostbackIps &&
+      secretsMatch(req.secret, offer.postbackSecret) &&
+      ipAllowed(req.sourceIp, offer.allowedPostbackIps);
+
+    if (!offerAuthorised && !globalAuthId) {
+      await logAttempt(req, { offerId: offer.id, success: false, errorMessage: 'Secret or source IP not authorized' });
+      throw new NotFoundError('Offer not available');
+    }
+    if (globalAuthId) await globalPostbackRepository.markUsed(globalAuthId);
+
     // A click_id that resolves but belongs to a different offer is treated the same
     // as no click at all — never attribute a conversion to a click it didn't earn.
+    // When the offer came *from* the click this always holds; it still matters for the
+    // per-offer URLs, where the caller supplies both and they can disagree.
     const matchedClick = click && click.offerId === offer.id ? click : null;
 
     const existingConversion = matchedClick ? await conversionRepository.findByClickId(matchedClick.id) : null;

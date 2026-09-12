@@ -289,3 +289,69 @@ describe('approval status', () => {
     expect(written()).toMatchObject({ status: ConversionStatus.PENDING, approvedAt: null });
   });
 });
+
+describe('global postback', () => {
+  const GLOBAL_SECRET = 'pb_network_wide_secret';
+
+  /**
+   * The case the feature exists for, and the one the first implementation could not
+   * reach: an offer with no credentials of its own. The per-offer gate rejected it
+   * before the network-level entry was ever consulted.
+   */
+  it('authorises an offer that has no postback credentials of its own', async () => {
+    findOffer.mockResolvedValue(offer({ postbackSecret: null, allowedPostbackIps: null }));
+    findGlobalPostbacks.mockResolvedValue([{ id: 'gp-1', secret: GLOBAL_SECRET, allowedIps: null }]);
+
+    await expect(postbackService.handlePostback(request({ secret: GLOBAL_SECRET }))).resolves.toBeDefined();
+    expect(createConversion).toHaveBeenCalled();
+  });
+
+  // One URL for the whole catalogue: the caller cannot name our offer, because their
+  // own offer-id macro is their id, not ours.
+  it('resolves the offer from the click when no offerId is sent', async () => {
+    findGlobalPostbacks.mockResolvedValue([{ id: 'gp-1', secret: GLOBAL_SECRET, allowedIps: null }]);
+
+    await expect(postbackService.handlePostback(request({ offerId: null, secret: GLOBAL_SECRET }))).resolves.toBeDefined();
+    expect(written().offerId).toBe('offer-1');
+  });
+
+  it('rejects a global secret that does not match any entry', async () => {
+    findGlobalPostbacks.mockResolvedValue([{ id: 'gp-1', secret: GLOBAL_SECRET, allowedIps: null }]);
+
+    await expect(postbackService.handlePostback(request({ secret: 'pb_wrong' }))).rejects.toBeInstanceOf(NotFoundError);
+    expect(createConversion).not.toHaveBeenCalled();
+  });
+
+  it('honours the allowlist on a global entry that sets one', async () => {
+    findOffer.mockResolvedValue(offer({ postbackSecret: null, allowedPostbackIps: null }));
+    findGlobalPostbacks.mockResolvedValue([{ id: 'gp-1', secret: GLOBAL_SECRET, allowedIps: '198.51.100.7' }]);
+
+    await expect(
+      postbackService.handlePostback(request({ secret: GLOBAL_SECRET, sourceIp: '203.0.113.99' })),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  // A disabled entry is still a row in the table; it must stop authorising immediately.
+  it('ignores entries the repository does not return as enabled', async () => {
+    findOffer.mockResolvedValue(offer({ postbackSecret: null, allowedPostbackIps: null }));
+    findGlobalPostbacks.mockResolvedValue([]);
+
+    await expect(postbackService.handlePostback(request({ secret: GLOBAL_SECRET }))).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  // Without a click there is nothing to name the offer, and nothing to attribute to.
+  it('rejects when neither an offerId nor a resolvable click is present', async () => {
+    findClick.mockResolvedValue(null);
+    findGlobalPostbacks.mockResolvedValue([{ id: 'gp-1', secret: GLOBAL_SECRET, allowedIps: null }]);
+
+    await expect(postbackService.handlePostback(request({ offerId: null, secret: GLOBAL_SECRET }))).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+  });
+
+  // The per-offer URLs already handed out keep working unchanged.
+  it('still accepts a correct per-offer secret with no global entries configured', async () => {
+    findGlobalPostbacks.mockResolvedValue([]);
+    await expect(postbackService.handlePostback(request())).resolves.toBeDefined();
+  });
+});

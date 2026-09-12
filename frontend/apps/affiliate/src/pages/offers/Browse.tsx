@@ -8,6 +8,7 @@ import {
   Input,
   Modal,
   PageHeader,
+  CountryFlag,
   RichText,
   TrafficSourceList,
   Select,
@@ -49,12 +50,22 @@ export function Browse() {
       key: 'name',
       header: 'Offer',
       render: (offer) => (
-        <button type="button" onClick={() => setDetail(offer)} className="text-left">
-          <p className="font-medium text-card-foreground hover:underline">
+        <button type="button" onClick={() => setDetail(offer)} className="flex items-center gap-2.5 text-left">
+          {/* Thumbnail was uploadable on the admin side and rendered nowhere. A tinted
+              initial stands in when an offer has none, so rows keep a single shape. */}
+          {offer.iconUrl ? (
+            <img src={offer.iconUrl} alt="" className="size-9 shrink-0 rounded-md border border-border object-cover" />
+          ) : (
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-xs font-semibold text-primary">
+              {offer.name.slice(0, 2).toUpperCase()}
+            </span>
+          )}
+          {/* No advertiser name: which advertiser is behind an offer is the network's
+              commercial relationship, not something an affiliate runs traffic against. */}
+          <p className="min-w-0 font-medium text-card-foreground hover:underline">
             {offer.featured && <span className="mr-1.5 text-xs text-primary">Featured</span>}
             {offer.name}
           </p>
-          <p className="text-xs text-muted-foreground">{offer.advertiserName ?? ''}</p>
         </button>
       ),
     },
@@ -72,7 +83,17 @@ export function Browse() {
       header: 'Geo',
       render: (offer) => {
         const countries = offer.payoutRules[0]?.countries ?? [];
-        return countries.length ? countries.join(', ') : 'All';
+        if (countries.length === 0) return 'All';
+        return (
+          <div className="flex flex-wrap items-center gap-1">
+            {countries.map((code) => (
+              <span key={code} className="flex items-center gap-1 text-xs">
+                <CountryFlag code={code} title={code} />
+                {code}
+              </span>
+            ))}
+          </div>
+        );
       },
     },
     {
@@ -134,9 +155,29 @@ export function Browse() {
       <Modal open={!!detail} onOpenChange={(open) => !open && setDetail(null)} title={detail?.name ?? 'Offer'} className="max-w-2xl">
         {detail && (
           <div className="space-y-4 text-sm">
+            {detail.iconUrl && (
+              <img src={detail.iconUrl} alt="" className="h-24 w-full rounded-md border border-border object-cover" />
+            )}
+
+            {(detail.payoutRules[0]?.countries.length ?? 0) > 0 && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Countries</p>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {detail.payoutRules[0]!.countries.map((code) => (
+                    <span
+                      key={code}
+                      className="flex items-center gap-1 rounded-full border border-border bg-secondary px-2 py-0.5 text-xs text-secondary-foreground"
+                    >
+                      <CountryFlag code={code} title={code} />
+                      {code}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
               {[
-                ['Advertiser', detail.advertiserName ?? '—'],
                 ['Category', detail.category ?? '—'],
 
                 ['Deep linking', detail.allowDeepLinking ? 'Allowed' : 'Not allowed'],

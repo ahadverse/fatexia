@@ -64,9 +64,6 @@ export function ManagerCard({
   }
 
   const name = manager.fullName ?? manager.email;
-  // The badge across the avatar holds a first name; a support desk has no first name,
-  // so it gets the network's name instead of an awkward "Fatexia".
-  const badge = manager.kind === 'MANAGER' ? (manager.fullName?.split(' ')[0] ?? 'Manager') : 'Support';
   const heading = manager.managerRole ? ROLE_LABELS[manager.managerRole] : 'Account manager';
 
   // Built as a list so the arc can be divided by how many channels actually exist.
@@ -109,9 +106,9 @@ export function ManagerCard({
       <p className="text-xs text-muted-foreground">{heading}</p>
 
       <div className="mt-3 flex items-center gap-3">
-        {/* Avatar with the name on a badge across its foot, so the card reads as a
-            person rather than a row of contact details. */}
-        <div className="relative shrink-0">
+        {/* The name lives under the card rather than on a badge across the avatar —
+            one place for it, and the avatar stays a clean circle. */}
+        <div className="shrink-0">
           {manager.avatarUrl ? (
             <img src={manager.avatarUrl} alt="" className="size-16 rounded-full object-cover" />
           ) : (
@@ -119,9 +116,6 @@ export function ManagerCard({
               {initials(name)}
             </div>
           )}
-          <span className="absolute -bottom-1 left-1/2 max-w-[4.5rem] -translate-x-1/2 truncate rounded-full bg-primary px-2 py-0.5 text-center text-[10px] font-semibold text-primary-foreground">
-            {badge}
-          </span>
         </div>
 
         {/* Two per row rather than one column: at six channels a single column stands

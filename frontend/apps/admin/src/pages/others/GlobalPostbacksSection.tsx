@@ -86,8 +86,7 @@ export function GlobalPostbacksSection() {
    */
   function advertiserUrl(secret: string): string {
     const template =
-      postbacks.data?.find((row) => row.postbackUrl)?.postbackUrl ??
-      '/postback?offerId={offer_id}&click_id={click_id}&secret=<secret>';
+      postbacks.data?.find((row) => row.postbackUrl)?.postbackUrl ?? '/postback?click_id={click_id}&secret=<secret>';
     return secret ? template.replace('<secret>', secret) : template;
   }
 
@@ -253,6 +252,15 @@ export function GlobalPostbacksSection() {
                 <div className="rounded-md border border-border bg-background p-2">
                   <p className="text-xs text-muted-foreground">Give this to the advertiser</p>
                   <p className="mt-1 break-all font-mono text-xs text-card-foreground">{advertiserUrl(draft.secret)}</p>
+                  {/* The half people forget. Their macro only returns what we put into
+                      their link in the first place — without it, click_id arrives empty
+                      and every conversion is an orphan with no affiliate to pay. */}
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Replace <code className="text-card-foreground">{'{click_id}'}</code> with their click-id macro (an
+                    Affise-style tracker calls it <code className="text-card-foreground">{'{ref_id}'}</code>), and make
+                    sure each offer's Destination URL passes <code className="text-card-foreground">{'{click_id}'}</code>
+                    into their link so they have something to send back.
+                  </p>
                 </div>
               </>
             )}

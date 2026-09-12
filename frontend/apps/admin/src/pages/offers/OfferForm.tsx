@@ -149,6 +149,7 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
 
   const [advertiserId, setAdvertiserId] = useState(initial?.advertiserId ?? '');
   const [name, setName] = useState(initial?.name ?? '');
+  const [previewLink, setPreviewLink] = useState(initial?.previewLink ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
   const [kpi, setKpi] = useState(initial?.kpi ?? '');
   const [category, setCategory] = useState(initial?.category ?? '');
@@ -324,6 +325,7 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
         {
           advertiserId,
           name,
+          previewLink: previewLink || undefined,
           description: description || undefined,
           kpi: kpi || undefined,
           category: category || undefined,
@@ -392,6 +394,23 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
             <Field label="Title" required>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Example: My US Offer" />
             </Field>
+          </div>
+
+          {/* The field existed on the type and in the DTO but had no input, so no offer
+              could ever have one — while both portals already rendered a preview button
+              that was therefore permanently hidden. */}
+          <div className="space-y-1.5 sm:col-span-2">
+            <Field label="Preview link">
+              <Input
+                value={previewLink}
+                onChange={(e) => setPreviewLink(e.target.value)}
+                placeholder="https://advertiser.com/landing-page"
+              />
+            </Field>
+            <p className="text-xs text-muted-foreground">
+              The landing page as an affiliate should see it, without tracking. Shown as "Preview landing page" on the
+              offer — leave blank to hide that button.
+            </p>
           </div>
 
           <div className="space-y-1.5 sm:col-span-2">

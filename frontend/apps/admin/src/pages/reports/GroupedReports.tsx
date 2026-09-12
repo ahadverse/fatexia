@@ -6,12 +6,26 @@ import { ReportView } from '../../components/ReportView';
  * (see PLAN-admin.md: one reporting module, not thirteen one-off pages).
  */
 
+/**
+ * The network's whole picture, unfiltered by default.
+ *
+ * The grouping is switchable rather than pinned to date. Pinned, the page could only
+ * answer "how did the network do that day" — seeing which affiliate or offer was behind
+ * a number meant leaving for another report, or narrowing with a filter and losing the
+ * overview. Every dimension the tracker captures is one dropdown away, and the filters
+ * remain available for when the reader does want to narrow.
+ *
+ * It opens on 30 days rather than today for the same reason: this is the page someone
+ * lands on to see how the network is doing, and a network with no conversions yet today
+ * would otherwise greet them with an empty table.
+ */
 export function PerformanceReport() {
   return (
     <ReportView
       title="Performance"
-      description="Traffic and revenue by day across the whole network. Use the filters to narrow to one offer, affiliate or advertiser."
-      dimension="date"
+      description="Everything the network did, across every affiliate, offer and country. Switch the grouping to see who or what is behind a figure; the filters are optional."
+      selectableDimensions={['date', 'affiliate', 'offer', 'advertiser', 'country', 'city', 'device', 'os', 'browser']}
+      initialPreset="last30"
       showTrend
     />
   );
