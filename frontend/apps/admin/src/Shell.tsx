@@ -34,6 +34,7 @@ export function Shell({ children }: { children: ReactNode }) {
       menu={menu}
       currentPath={location.pathname}
       onNavigate={handleNavigate}
+      colorfulNav
       userLabel={isAdmin ? 'Admin' : (manager?.publicId ?? 'Manager')}
       userName={user?.email ?? (isAdmin ? 'Admin' : 'Manager')}
       unreadMessages={unreadMessages}

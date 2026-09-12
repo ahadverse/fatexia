@@ -61,7 +61,7 @@ function GeoipSection() {
     if (result) {
       const skipped = Object.entries(result.editions).filter(([, s]) => s === 'skipped-cooldown');
       if (skipped.length > 0) {
-        toast.error(`${skipped.map(([edition]) => edition).join(', ')} skipped — already fetched within the last 24h`);
+        toast.error(`${skipped.map(([edition]) => edition).join(', ')} skipped — daily fetch limit reached`);
       }
     }
     setFetching(false);
@@ -70,7 +70,7 @@ function GeoipSection() {
   return (
     <Section
       title="GeoIP Database"
-      hint="Used by the Tracker for country/ASN lookups. Never downloaded automatically — trigger a fetch here when it's missing or stale. Limited to one attempt per database per 24h (MaxMind's rate limit)."
+      hint="Used by the Tracker for country/ASN lookups. Never downloaded automatically — trigger a fetch here when it's missing or stale. Limited to 10 attempts per database per 24h (MaxMind's rate limit)."
     >
       <div className="sm:col-span-2 space-y-2">
         {status.loading && <Skeleton className="h-16 w-full" />}
@@ -155,6 +155,12 @@ export function Settings() {
         </Field>
         <Field label="Support email">
           <Input value={form.supportEmail ?? ''} onChange={(event) => set('supportEmail', event.target.value)} />
+        </Field>
+        <Field
+          label="Support Telegram"
+          hint="Handle only, e.g. fatexia. Shown on the contact card for affiliates with no assigned manager."
+        >
+          <Input value={form.supportTelegram ?? ''} onChange={(event) => set('supportTelegram', event.target.value)} />
         </Field>
         <Field label="Default currency" hint="Three-letter ISO code, e.g. USD.">
           <Input value={form.defaultCurrency} maxLength={3} onChange={(event) => set('defaultCurrency', event.target.value.toUpperCase())} />

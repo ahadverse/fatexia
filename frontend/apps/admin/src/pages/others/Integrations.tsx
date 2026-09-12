@@ -49,7 +49,9 @@ const UNUSED_PROVIDERS = ['PAYPAL', 'WISE', 'MAXMIND'];
 // Brevo's credential is the same `integrations` row as every other provider, but it
 // is configured under Emails → Settings alongside the sender identity, so email setup
 // is one page instead of two menus. Hidden here to keep a single place to edit it.
-const HIDDEN_PROVIDERS = ['SMTP'];
+// S3 is configured through the backend's S3_* env vars, not this page — a card that
+// accepted a bucket name nothing reads is worse than no card at all.
+const HIDDEN_PROVIDERS = ['SMTP', 'S3'];
 
 export function Integrations() {
   const integrations = useAsync<Integration[]>(() => getIntegrations(), []);

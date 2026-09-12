@@ -6,6 +6,7 @@
 // column, but a shape that has nowhere to put the number.
 
 import type { ConversionStatus, ClickQualityStatus } from './traffic';
+import type { ActivityEvent } from './report';
 
 /** Paginated list plus the totals for the stat tiles, over the same filters. */
 export interface ClickLogPage<T> {
@@ -73,6 +74,7 @@ export interface AffiliateDashboard {
   };
   trend: AffiliateReportRow[];
   topOffers: AffiliateReportRow[];
+  activity: ActivityEvent[];
 }
 
 export interface OwnConversion {

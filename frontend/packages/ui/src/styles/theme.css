@@ -50,6 +50,17 @@ body,
      that validation before changing either value; do not hand-tune them. */
   --chart-1: #3987e5;
   --chart-2: #d95926;
+  /* Slots 3-8 of the same validated eight-hue categorical set the first two come
+     from, stepped for the dark surface. Validated as a set against this card colour:
+     lightness band, chroma floor, adjacent-pair CVD separation, normal-vision
+     separation and 3:1 contrast all pass. Same rule as above — re-run the validation
+     before changing any of these; do not hand-tune. */
+  --chart-3: #199e70;
+  --chart-4: #c98500;
+  --chart-5: #d55181;
+  --chart-6: #008300;
+  --chart-7: #9085e9;
+  --chart-8: #e66767;
 
   --radius: 0.5rem;
 }
@@ -96,6 +107,62 @@ body,
      dark values. Validated separately against #ffffff. */
   --chart-1: #2a78d6;
   --chart-2: #eb6834;
+  /* The same eight hues re-stepped for the light surface. Aqua, yellow and magenta
+     sit below 3:1 against white, which is allowed only because every place these are
+     used carries a visible text label beside the mark — the colour is never the only
+     thing distinguishing a row. */
+  --chart-3: #1baf7a;
+  --chart-4: #eda100;
+  --chart-5: #e87ba4;
+  --chart-6: #008300;
+  --chart-7: #4a3aa7;
+  --chart-8: #e34948;
+}
+
+/* Re-asserts the dark palette on a subtree, so a region stays dark even when `.light`
+   is active on an ancestor. Used by the sidebar, which is always dark by design.
+
+   Values are the `:root` ones repeated rather than inherited: `.light` sets these on an
+   ancestor, and a custom property resolves from the nearest ancestor that declares it,
+   so there is nothing to "unset" back to — they have to be stated again. Keep the two
+   blocks in step when the dark palette changes. */
+.force-dark {
+  --background: 240 10% 6%;
+  --foreground: 220 14% 92%;
+
+  --card: 240 8% 10%;
+  --card-foreground: 220 14% 92%;
+
+  --popover: 240 8% 11%;
+  --popover-foreground: 220 14% 92%;
+
+  --border: 240 6% 18%;
+  --input: 240 6% 18%;
+  --ring: 243 75% 65%;
+
+  --primary: 243 75% 65%;
+  --primary-foreground: 240 10% 98%;
+
+  --secondary: 240 6% 16%;
+  --secondary-foreground: 220 14% 92%;
+
+  --muted: 240 6% 14%;
+  --muted-foreground: 220 9% 60%;
+
+  --accent: 240 6% 16%;
+  --accent-foreground: 220 14% 92%;
+
+  --destructive: 0 72% 60%;
+  --destructive-foreground: 240 10% 98%;
+
+  --success: 142 64% 45%;
+  --success-foreground: 240 10% 98%;
+
+  --warning: 38 92% 55%;
+  --warning-foreground: 240 10% 10%;
+
+  --info: 199 89% 55%;
+  --info-foreground: 240 10% 98%;
 }
 
 * {

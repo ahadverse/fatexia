@@ -28,6 +28,8 @@ export function EmailSettings() {
   const [senderEmail, setSenderEmail] = useState('');
   const [senderName, setSenderName] = useState('');
   const [savingSender, setSavingSender] = useState(false);
+  const [emailProvider, setEmailProvider] = useState('BREVO');
+  const [savingProvider, setSavingProvider] = useState(false);
 
   const [keyDraft, setKeyDraft] = useState<string | null>(null);
   const [savingKey, setSavingKey] = useState(false);
@@ -41,7 +43,25 @@ export function EmailSettings() {
     if (!settings.data) return;
     setSenderEmail(settings.data.senderEmail ?? '');
     setSenderName(settings.data.senderName ?? '');
+    setEmailProvider(settings.data.emailProvider);
   }, [settings.data]);
+
+  async function saveProvider(next: string) {
+    setEmailProvider(next);
+    setSavingProvider(true);
+    try {
+      await updateNetworkSettings({ emailProvider: next });
+      toast.success(`Sending through ${next === 'MAILGUN' ? 'Mailgun' : 'Brevo'}`);
+      settings.reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to switch provider');
+      // Put the control back where the server still has it, so the page never shows a
+      // relay that is not the one actually sending.
+      setEmailProvider(settings.data?.emailProvider ?? 'BREVO');
+    } finally {
+      setSavingProvider(false);
+    }
+  }
 
   async function saveSender() {
     setSavingSender(true);
@@ -121,6 +141,29 @@ export function EmailSettings() {
         title="Email settings"
         description="Everything needed to send transactional email. Templates live under Emails → Templates."
       />
+
+      <Section
+        title="Delivery provider"
+        hint="Which relay sends every transactional email. Only one is active at a time — a second configured relay is a standby, not a fallback."
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={emailProvider}
+            disabled={savingProvider}
+            onChange={(event) => void saveProvider(event.target.value)}
+            className="rounded-md border border-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          >
+            <option value="BREVO">Brevo</option>
+            <option value="MAILGUN">Mailgun</option>
+          </select>
+          {emailProvider === 'MAILGUN' && (
+            <p className="text-xs text-muted-foreground">
+              Mailgun's key and sending domain come from the backend environment
+              (MAILGUN_API_KEY / MAILGUN_DOMAIN), not this page.
+            </p>
+          )}
+        </div>
+      </Section>
 
       <Section
         title="Sender identity"

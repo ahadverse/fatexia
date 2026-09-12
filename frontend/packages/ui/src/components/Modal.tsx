@@ -20,17 +20,18 @@ export function Modal({ open, onOpenChange, title, children, className }: ModalP
         <Dialog.Overlay className="fixed inset-0 z-50 bg-background/80" />
         <Dialog.Content
           className={cn(
-            'fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-card p-6 text-card-foreground shadow-md',
+            'fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border border-border bg-card p-6 text-card-foreground shadow-md',
             className,
           )}
         >
-          <div className="flex items-center justify-between">
+          <div className="flex shrink-0 items-center justify-between">
             {title && <Dialog.Title className="text-lg font-semibold">{title}</Dialog.Title>}
             <Dialog.Close className="rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <X className="size-4" />
             </Dialog.Close>
           </div>
-          <div className="mt-4">{children}</div>
+          {/* -mx-2/px-2 keeps focus rings from being clipped by the scroll container. */}
+          <div className="-mx-2 mt-4 flex-1 overflow-y-auto px-2">{children}</div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

@@ -17,7 +17,7 @@ function initials(name: string): string {
     .toUpperCase();
 }
 
-/** A round icon button — the contact rail down the right of the avatar. */
+/** A round icon button — the contact grid beside the avatar. */
 function ContactButton({
   href,
   to,
@@ -75,13 +75,45 @@ export function ManagerCard({
   const badge = manager.kind === 'MANAGER' ? (manager.fullName?.split(' ')[0] ?? 'Manager') : 'Support';
   const heading = manager.managerRole ? ROLE_LABELS[manager.managerRole] : 'Account manager';
 
+  // Built as a list so the arc can be divided by how many channels actually exist.
+  // A channel with no value is left out rather than rendered dead — a mailto: to
+  // nowhere, or a t.me link to no one, is worse than an absent button.
+  const contacts: { key: string; to?: string; href?: string; label: string; icon: React.ReactNode }[] = [
+    { key: 'message', to: '/messages', label: `Message ${badge}`, icon: <MessageSquare className="size-3.5" /> },
+  ];
+  if (manager.email) {
+    contacts.push({ key: 'email', href: `mailto:${manager.email}`, label: `Email ${manager.email}`, icon: <Mail className="size-3.5" /> });
+  }
+  if (manager.telegram) {
+    contacts.push({
+      key: 'telegram',
+      href: `https://t.me/${manager.telegram.replace(/^@/, '')}`,
+      label: `Telegram ${manager.telegram}`,
+      icon: <Send className="size-3.5" />,
+    });
+  }
+  if (manager.skype) {
+    contacts.push({ key: 'skype', href: `skype:${manager.skype}?chat`, label: `Skype ${manager.skype}`, icon: <MessageCircle className="size-3.5" /> });
+  }
+  if (manager.teams) {
+    contacts.push({
+      key: 'teams',
+      href: `https://teams.microsoft.com/l/chat/0/0?users=${encodeURIComponent(manager.teams)}`,
+      label: `Teams ${manager.teams}`,
+      icon: <Users className="size-3.5" />,
+    });
+  }
+  if (manager.phone) {
+    contacts.push({ key: 'phone', href: `tel:${manager.phone}`, label: `Call ${manager.phone}`, icon: <Phone className="size-3.5" /> });
+  }
+
   return (
     <div className="rounded-lg border border-border bg-background p-3">
       <p className="text-xs text-muted-foreground">{heading}</p>
 
       <div className="mt-3 flex items-center gap-3">
         {/* Avatar with the name on a badge across its foot, so the card reads as a
-              person rather than a row of contact details. */}
+            person rather than a row of contact details. */}
         <div className="relative shrink-0">
           {manager.avatarUrl ? (
             <img src={manager.avatarUrl} alt="" className="size-16 rounded-full object-cover" />
@@ -95,40 +127,15 @@ export function ManagerCard({
           </span>
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <ContactButton to="/messages" label={`Message ${badge}`}>
-            <MessageSquare className="size-3.5" />
-          </ContactButton>
-          {/* Email is skipped rather than rendered dead when the network has no
-                support address configured — a mailto: to nowhere is worse than absent. */}
-          {manager.email && (
-            <ContactButton href={`mailto:${manager.email}`} label={`Email ${manager.email}`}>
-              <Mail className="size-3.5" />
+        {/* Two per row rather than one column: at six channels a single column stands
+            three times the avatar's height, and this card sits in a sidebar where that
+            vertical space is the scarce thing. Two rows of two matches the avatar. */}
+        <div className="grid grid-cols-2 gap-1.5">
+          {contacts.map((contact) => (
+            <ContactButton key={contact.key} to={contact.to} href={contact.href} label={contact.label}>
+              {contact.icon}
             </ContactButton>
-          )}
-          {manager.skype && (
-            <ContactButton href={`skype:${manager.skype}?chat`} label={`Skype ${manager.skype}`}>
-              <MessageCircle className="size-3.5" />
-            </ContactButton>
-          )}
-          {manager.telegram && (
-            <ContactButton href={`https://t.me/${manager.telegram.replace(/^@/, '')}`} label={`Telegram ${manager.telegram}`}>
-              <Send className="size-3.5" />
-            </ContactButton>
-          )}
-          {manager.teams && (
-            <ContactButton
-              href={`https://teams.microsoft.com/l/chat/0/0?users=${encodeURIComponent(manager.teams)}`}
-              label={`Teams ${manager.teams}`}
-            >
-              <Users className="size-3.5" />
-            </ContactButton>
-          )}
-          {manager.phone && (
-            <ContactButton href={`tel:${manager.phone}`} label={`Call ${manager.phone}`}>
-              <Phone className="size-3.5" />
-            </ContactButton>
-          )}
+          ))}
         </div>
       </div>
 

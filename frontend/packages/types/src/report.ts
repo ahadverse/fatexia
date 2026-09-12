@@ -113,6 +113,28 @@ export interface DashboardSummary {
   unreadMessages: number;
   blockedClicks: number;
   suspectClicks: number;
+  activeAdvertisers: number;
+  /** Invoices marked paid since the 1st of the current calendar month. */
+  payoutsThisMonth: number;
+}
+
+export type ActivityKind = 'click' | 'conversion' | 'payout';
+
+/**
+ * One row of the live-activity feed. Deliberately not filtered by the dashboard's
+ * date range — it answers "what is happening now", not "what happened in the window".
+ */
+export interface ActivityEvent {
+  id: string;
+  kind: ActivityKind;
+  /** Offer name for click/conversion; null for a payout, which is not offer-scoped. */
+  offer: string | null;
+  /** The affiliate's public id (AFF-xxxx). Always null on the affiliate's own feed. */
+  affiliate: string | null;
+  countryCode: string | null;
+  /** Payout amount for a payout row; null for click/conversion. */
+  amount: number | null;
+  at: string;
 }
 
 /**
@@ -137,4 +159,5 @@ export interface Dashboard {
   topOffers: ReportRow[];
   topAffiliates: ReportRow[];
   topCountries: ReportRow[];
+  activity: ActivityEvent[];
 }

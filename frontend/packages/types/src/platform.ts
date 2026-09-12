@@ -209,6 +209,10 @@ export interface EmailTemplate {
 export interface NetworkSettings {
   networkName: string;
   supportEmail: string | null;
+  /** Handle only, no t.me prefix — the affiliate portal builds the link. */
+  supportTelegram: string | null;
+  /** Which mail relay sends: BREVO or MAILGUN. Credentials live in the backend env. */
+  emailProvider: string;
   defaultCurrency: string;
   timezone: string;
   defaultHoldDays: number;

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import {
   BarChart3,
   Bell,
@@ -56,29 +57,34 @@ const ICONS: Record<string, LucideIcon> = {
  * than a solid fill, so the sidebar stays a sidebar instead of a colour chart, and so
  * every pair works on both the light and dark ground without a second definition.
  *
- * Opt-in via the `colorful` prop — the admin portal deliberately stays monochrome,
- * where the nav is twice as long and the colour would be noise.
+ * Opt-in via the `colorful` prop. Both portals now use it: the admin nav was left
+ * monochrome originally on the grounds that colour across a nav this long reads as
+ * noise, but without the icon chip the active row is a tinted pill around a plain
+ * white glyph, which looks unfinished rather than restrained.
  */
-const ICON_COLORS: Record<string, string> = {
-  dashboard: 'text-sky-500 bg-sky-500/10',
-  offers: 'text-violet-500 bg-violet-500/10',
-  affiliates: 'text-emerald-500 bg-emerald-500/10',
-  advertisers: 'text-amber-500 bg-amber-500/10',
-  managers: 'text-indigo-500 bg-indigo-500/10',
-  reports: 'text-cyan-500 bg-cyan-500/10',
-  notifications: 'text-orange-500 bg-orange-500/10',
-  settings: 'text-slate-500 bg-slate-500/10',
-  billing: 'text-teal-500 bg-teal-500/10',
-  subscription: 'text-fuchsia-500 bg-fuchsia-500/10',
-  email: 'text-blue-500 bg-blue-500/10',
-  integrations: 'text-lime-600 bg-lime-500/10',
-  messages: 'text-pink-500 bg-pink-500/10',
-  news: 'text-yellow-600 bg-yellow-500/10',
-  profile: 'text-purple-500 bg-purple-500/10',
-  logout: 'text-rose-500 bg-rose-500/10',
+// `chip` tints the icon square; `bar` is the solid left-edge marker on the current row,
+// the one place the hue appears at full strength. Written out in full because Tailwind
+// scans for literal class names — a composed `bg-${hue}-500` would never be generated.
+const ICON_COLORS: Record<string, { chip: string; bar: string }> = {
+  dashboard: { chip: 'text-sky-500 bg-sky-500/10', bar: 'bg-sky-500' },
+  offers: { chip: 'text-violet-500 bg-violet-500/10', bar: 'bg-violet-500' },
+  affiliates: { chip: 'text-emerald-500 bg-emerald-500/10', bar: 'bg-emerald-500' },
+  advertisers: { chip: 'text-amber-500 bg-amber-500/10', bar: 'bg-amber-500' },
+  managers: { chip: 'text-indigo-500 bg-indigo-500/10', bar: 'bg-indigo-500' },
+  reports: { chip: 'text-cyan-500 bg-cyan-500/10', bar: 'bg-cyan-500' },
+  notifications: { chip: 'text-orange-500 bg-orange-500/10', bar: 'bg-orange-500' },
+  settings: { chip: 'text-slate-500 bg-slate-500/10', bar: 'bg-slate-500' },
+  billing: { chip: 'text-teal-500 bg-teal-500/10', bar: 'bg-teal-500' },
+  subscription: { chip: 'text-fuchsia-500 bg-fuchsia-500/10', bar: 'bg-fuchsia-500' },
+  email: { chip: 'text-blue-500 bg-blue-500/10', bar: 'bg-blue-500' },
+  integrations: { chip: 'text-lime-600 bg-lime-500/10', bar: 'bg-lime-500' },
+  messages: { chip: 'text-pink-500 bg-pink-500/10', bar: 'bg-pink-500' },
+  news: { chip: 'text-yellow-600 bg-yellow-500/10', bar: 'bg-yellow-500' },
+  profile: { chip: 'text-purple-500 bg-purple-500/10', bar: 'bg-purple-500' },
+  logout: { chip: 'text-rose-500 bg-rose-500/10', bar: 'bg-rose-500' },
 };
 
-const DEFAULT_ICON_COLOR = 'text-muted-foreground bg-muted';
+const DEFAULT_ICON_COLOR = { chip: 'text-muted-foreground bg-muted', bar: 'bg-primary' };
 
 function resolveIcon(name?: string): LucideIcon {
   return (name && ICONS[name]) || Circle;
@@ -119,6 +125,8 @@ function SidebarItem({
   collapsed,
   depth,
   colorful,
+  inherited,
+  onExpand,
 }: {
   item: MenuItem;
   currentPath: string;
@@ -126,38 +134,106 @@ function SidebarItem({
   collapsed: boolean;
   depth: number;
   colorful: boolean;
+  /** The parent's colour pair — sub-items have no icon of their own to take one from. */
+  inherited?: { chip: string; bar: string };
+  /** Opens the rail. Absent when the caller gave the Sidebar no collapse control. */
+  onExpand?: () => void;
 }) {
   const active = isActive(item, currentPath);
+  // `active` is true for ancestors too, which is what keeps a group expanded. Only the
+  // row the user is actually on gets the filled pill — with both lit, the open group
+  // header and the selected child compete and neither reads as "you are here".
+  const current = item.path === currentPath;
   const [open, setOpen] = useState(active);
   const hasChildren = !!item.children?.length;
   const Icon = depth === 0 ? resolveIcon(item.icon) : null;
-  const iconColor = (item.icon && ICON_COLORS[item.icon]) ?? DEFAULT_ICON_COLOR;
+  // Ternary, not `&&`: an empty-string icon name would make `&&` yield `''`, which
+  // `??` passes through as a value rather than falling back to the default pair.
+  const iconColor = (item.icon ? ICON_COLORS[item.icon] : undefined) ?? inherited ?? DEFAULT_ICON_COLOR;
+
+  // Collapsed groups open as a floating panel beside the rail. It is portalled to the
+  // body because `nav` scrolls, and a scroll container clips on both axes — anchored
+  // inside it, the panel would be cut off at the rail's edge.
+  const rowRef = useRef<HTMLLIElement>(null);
+  const [flyout, setFlyout] = useState<{ top: number; left: number } | null>(null);
+  // Closing is delayed so the pointer can cross the gap between the icon and the panel
+  // without the panel vanishing mid-travel.
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const showFlyout = () => {
+    clearTimeout(closeTimer.current);
+    const rect = rowRef.current?.getBoundingClientRect();
+    if (rect) setFlyout({ top: rect.top, left: rect.right });
+  };
+  const hideFlyout = () => {
+    clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setFlyout(null), 120);
+  };
+
+  // The panel is positioned from a rect taken when it opened, so anything that moves
+  // that rect leaves it stranded. Expanding the rail removes the reason for it at the
+  // same time.
+  useEffect(() => {
+    if (!collapsed) setFlyout(null);
+  }, [collapsed]);
+
+  useEffect(() => () => clearTimeout(closeTimer.current), []);
 
   return (
-    <li className="relative">
-      {/* The active marker is a positioned bar rather than a border on the button, so
-          turning it on doesn't shift the row's contents by a pixel. */}
-      {colorful && active && depth === 0 && (
-        <span className="absolute inset-y-1 left-0 w-1 rounded-r-full bg-primary" aria-hidden="true" />
+    <li
+      ref={rowRef}
+      className="relative"
+      onMouseEnter={collapsed && hasChildren ? showFlyout : undefined}
+      onMouseLeave={collapsed && hasChildren ? hideFlyout : undefined}
+    >
+      {/* Solid hue bar at the left edge of the current row. Positioned over the block
+          rather than being a border on the button, so switching it on shifts nothing. */}
+      {current && (
+        <span className={cn('absolute inset-y-1 left-0 z-10 w-1 rounded-r-full', iconColor.bar)} aria-hidden="true" />
       )}
       <button
         type="button"
-        onClick={() => (hasChildren ? setOpen((o) => !o) : onNavigate(item.path))}
+        onClick={() => {
+          if (!hasChildren) {
+            onNavigate(item.path);
+            return;
+          }
+          // Collapsed, hovering already shows the group as a floating panel, so a click
+          // means "give me the full rail" — and it is also the only way in on a touch
+          // screen, where there is no hover to open the panel with.
+          if (collapsed) {
+            setFlyout(null);
+            onExpand?.();
+            setOpen(true);
+            return;
+          }
+          setOpen((o) => !o);
+        }}
         className={cn(
-          'flex w-full items-center rounded-md text-sm transition-colors',
+          'flex w-full items-center rounded-lg text-sm transition-colors',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           colorful ? 'gap-2.5 py-1.5 pl-2 pr-3' : 'gap-2 px-3 py-2',
           colorful ? 'hover:bg-accent' : 'hover:bg-accent hover:text-accent-foreground',
-          active
-            ? colorful
-              ? 'bg-primary/10 font-medium text-foreground'
-              : 'bg-accent text-accent-foreground'
-            : 'text-muted-foreground',
+          // Inactive items are off-white, not muted grey: the rail is always dark (see
+          // `force-dark` below), so the usual muted token reads as low-contrast here.
+          //
+          // The current row is a solid lighter block — a flat white overlay, not a tint
+          // of the item's hue. A translucent hue wash at this opacity barely separated
+          // from the rail; the colour does its work in the left bar and the icon chip,
+          // where it is at full strength, and the block just lifts the row off the
+          // background.
+          //
+          // An ancestor of the current row gets weight and full-strength text but no
+          // block, so it reads as the trail rather than the destination.
+          current
+            ? 'bg-white/10 font-medium text-foreground'
+            : active
+              ? 'font-medium text-foreground'
+              : 'text-foreground/85 hover:text-foreground',
         )}
       >
         {Icon &&
           (colorful ? (
-            <span className={cn('flex size-7 shrink-0 items-center justify-center rounded-md', iconColor)}>
+            <span className={cn('flex size-7 shrink-0 items-center justify-center rounded-md', iconColor.chip)}>
               <Icon className="size-4" />
             </span>
           ) : (
@@ -168,6 +244,47 @@ function SidebarItem({
           <ChevronDown className={cn('size-4 shrink-0 transition-transform duration-200', open && 'rotate-180')} />
         )}
       </button>
+
+      {/* `force-dark` again here: portalled to the body, the panel is outside the
+          aside that pins the dark palette, so it would otherwise render in the page's
+          theme and look like a different product in light mode. */}
+      {collapsed &&
+        hasChildren &&
+        flyout &&
+        createPortal(
+          <div
+            className="force-dark fixed z-50 w-52 rounded-lg border border-border bg-card p-1 text-foreground shadow-lg"
+            style={{ top: flyout.top, left: flyout.left }}
+            onMouseEnter={showFlyout}
+            onMouseLeave={hideFlyout}
+          >
+            <p className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {item.label}
+            </p>
+            <ul>
+              {item.children!.map((child) => (
+                <li key={child.path}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFlyout(null);
+                      onNavigate(child.path);
+                    }}
+                    className={cn(
+                      'flex w-full rounded-md px-3 py-1.5 text-left text-sm transition-colors',
+                      child.path === currentPath
+                        ? 'bg-white/10 font-medium text-foreground'
+                        : 'text-foreground/85 hover:bg-accent hover:text-foreground',
+                    )}
+                  >
+                    {child.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>,
+          document.body,
+        )}
       {hasChildren && !collapsed && (
         <div className="grid transition-[grid-template-rows] duration-200 ease-out" style={{ gridTemplateRows: open ? '1fr' : '0fr' }}>
           <div className="overflow-hidden">
@@ -181,6 +298,10 @@ function SidebarItem({
                   collapsed={collapsed}
                   depth={depth + 1}
                   colorful={colorful}
+                  // Sub-items carry no icon, so they take the group's colour. Without
+                  // this a selected child fell back to the generic default and lit up in
+                  // a hue unrelated to the group it sits inside.
+                  inherited={iconColor}
                 />
               ))}
             </ul>
@@ -205,8 +326,16 @@ export function Sidebar({
   footer,
 }: SidebarProps) {
   return (
-    <aside className={cn('flex h-full flex-col border-r border-border bg-card transition-[width]', collapsed ? 'w-16' : 'w-64')}>
-      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
+    // `force-dark` (see styles/theme.css) pins the dark palette here, so the nav stays
+    // dark in light mode. Done with the theme tokens rather than hardcoded slate
+    // classes so every child — icons, active states, the footer — moves together.
+    <aside
+      className={cn(
+        'force-dark flex h-full flex-col border-r border-border bg-card text-foreground transition-[width]',
+        collapsed ? 'w-16' : 'w-64',
+      )}
+    >
+      <div className="flex h-14 shrink-0 items-center justify-center gap-2 border-b border-border px-3">
         {/* The wordmark already contains "Fatexia", so `logoText` is only rendered
             when a caller supplies a custom mark that doesn't include it. */}
         {logoMark ?? <LogoMark variant={collapsed ? 'mark' : 'full'} />}
@@ -231,6 +360,7 @@ export function Sidebar({
                   collapsed={collapsed}
                   depth={0}
                   colorful={colorful}
+                  onExpand={onCollapsedChange ? () => onCollapsedChange(false) : undefined}
                 />
               ))}
             </ul>

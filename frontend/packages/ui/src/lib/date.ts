@@ -87,6 +87,65 @@ export function presetRange(id: FixedPresetId): DateRange {
   return PRESET_RANGES[id]();
 }
 
+/**
+ * Phrasings per time band, `until` being the exclusive end hour.
+ *
+ * Every entry has to read as a greeting with a name appended — it renders as
+ * "<greeting>, Alessia" — which rules out anything that works as a sentence but not as
+ * an address ("Hope the day is going well, Alessia"). Nothing says "Good night"
+ * either: that is a farewell, and someone opening the dashboard at 23:00 has just
+ * arrived.
+ */
+// The tuple type (one required entry, then the rest) is what lets the lookup below
+// fall back without a non-null assertion: a band always has at least one phrasing.
+interface GreetingBand {
+  until: number;
+  options: [string, ...string[]];
+}
+
+const LATE_NIGHT: GreetingBand = { until: 24, options: ['Working late', 'Still going', 'Evening'] };
+
+const GREETINGS: GreetingBand[] = [
+  { until: 5, options: ['Still up', 'Working late', 'Up early'] },
+  { until: 12, options: ['Good morning', 'Morning', 'Rise and shine'] },
+  // Bands deliberately hold different numbers of phrasings. English has three natural
+  // ways to greet someone in the morning and two in the evening, and padding the short
+  // ones out with a generic "Welcome back" put the same time-less phrase in two
+  // adjacent bands — so it showed all afternoon and all evening on the same day.
+  { until: 17, options: ['Good afternoon', 'Afternoon', 'Good day'] },
+  { until: 21, options: ['Good evening', 'Evening'] },
+  LATE_NIGHT,
+];
+
+/**
+ * Time-of-day greeting, from the *viewer's* clock rather than the server's — this
+ * greets the person reading the screen, so their local morning is the one that counts.
+ *
+ * The variant is chosen from the calendar date, not at random: the dashboard re-renders
+ * every 30s to refresh its activity feed, and a random pick would reword the heading
+ * under the reader each time. Keyed this way it is fixed for a given band on a given
+ * day, and differs from one day to the next.
+ */
+export function greeting(now: Date = new Date()): string {
+  const hour = now.getHours();
+  const band = GREETINGS.find((entry) => hour < entry.until) ?? LATE_NIGHT;
+  // 372 = 12 * 31, so month and day never collide across years.
+  const daySeed = now.getFullYear() * 372 + now.getMonth() * 31 + now.getDate();
+  const [fallback] = band.options;
+  return band.options[daySeed % band.options.length] ?? fallback;
+}
+
+/**
+ * A display name from an email, for when that is the only identity the session holds:
+ * "alessia.moretti@x.com" -> "Alessia". Separators are split on so a dotted or
+ * underscored local part doesn't render as one run-on word.
+ */
+export function nameFromEmail(email: string | null | undefined): string {
+  const local = email?.split('@')[0] ?? '';
+  const first = local.split(/[._-]/)[0] ?? '';
+  return first ? first.charAt(0).toUpperCase() + first.slice(1) : '';
+}
+
 /** Every filter in both portals opens on today. */
 export function defaultRange(): DateRange {
   return presetRange('today');
