@@ -22,6 +22,11 @@ export class NetworkSetting {
   @Column({ type: 'varchar', length: 120, nullable: true })
   supportTelegram!: string | null;
 
+  // The address a Teams chat is opened against — an email, which is how Teams
+  // identifies a user in a deep link. Same purpose as supportTelegram above.
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  supportTeams!: string | null;
+
   // Which relay `sendEmail` uses. A plain varchar rather than a Postgres enum: the set
   // of mail providers is a deployment choice that changes independently of the schema,
   // and adding one should not need a type-recreate migration.

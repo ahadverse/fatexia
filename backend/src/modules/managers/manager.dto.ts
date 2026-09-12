@@ -172,6 +172,7 @@ export function toSupportContactDto(
   networkName: string,
   supportEmail: string | null,
   supportTelegram: string | null = null,
+  supportTeams: string | null = null,
 ): AffiliateManagerContactDto {
   return {
     kind: 'SUPPORT',
@@ -181,7 +182,7 @@ export function toSupportContactDto(
     phone: null,
     skype: null,
     telegram: supportTelegram,
-    teams: null,
+    teams: supportTeams,
     avatarUrl: null,
     managerRole: null,
   };

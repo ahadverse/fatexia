@@ -89,9 +89,32 @@ export async function findMatchingRuleForClick(rules: PayoutRule[], click: Match
 // integrity rule, PLAN-backend.md). PERCENTAGE payoutType applies the rule's own
 // percentage against the rule's own revenueAmount — no externally-reported sale value
 // is ever consulted, so there is nothing here an advertiser could inflate.
-export function computeAmounts(rule: PayoutRule): { revenueAmount: number; payoutAmount: number } {
+export function computeAmounts(
+  rule: PayoutRule,
+  /**
+   * A smart-link's revenue share, when the click came through one. Overrides the
+   * rule's own payout with that percentage of the advertiser's revenue.
+   *
+   * Revenue is untouched either way: the advertiser pays the offer what the offer
+   * says, and the share only decides how that amount is split with the affiliate.
+   */
+  revSharePercent?: number | null,
+): { revenueAmount: number; payoutAmount: number } {
   const revenueAmount = Number(rule.revenueAmount);
   const ruleAmount = Number(rule.amount);
+
+  // A share of zero revenue is zero, which would silently pay nothing — so the
+  // override only applies when there is a base to take a percentage of. Falling back
+  // to the offer's own rule is the safer of the two wrong answers.
+  if (revSharePercent != null && revSharePercent > 0 && revenueAmount > 0) {
+    // Clamped at 100 even though the DTO already caps it there. This is the money
+    // path: a share above 100% pays the affiliate more than the advertiser pays us, on
+    // every conversion, and the only sign would be the margin going negative in a
+    // report someone has to notice.
+    const percent = Math.min(revSharePercent, 100);
+    return { revenueAmount, payoutAmount: Number(((percent / 100) * revenueAmount).toFixed(2)) };
+  }
+
   const payoutAmount = rule.payoutType === PayoutType.PERCENTAGE ? Number(((ruleAmount / 100) * revenueAmount).toFixed(2)) : ruleAmount;
   return { revenueAmount, payoutAmount };
 }

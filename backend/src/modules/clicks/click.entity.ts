@@ -27,6 +27,18 @@ export class Click {
   @Column({ type: 'uuid', nullable: true })
   affiliateId!: string | null;
 
+  /**
+   * The smart-link this click came through, or null for a direct offer click.
+   *
+   * Recorded because the smart-link's revenue share has to be applied when the
+   * conversion arrives, which can be days later — by then the only way back to the
+   * link is this column. The rotation already resolved to a single offer, so without
+   * it a smart-link click is indistinguishable from a direct one.
+   */
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  smartLinkId!: string | null;
+
   @Column({ type: 'varchar' })
   ip!: string;
 

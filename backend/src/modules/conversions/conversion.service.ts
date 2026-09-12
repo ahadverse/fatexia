@@ -4,6 +4,7 @@ import { affiliateNames, offerNames } from '../../common/entity-names';
 import { conversionRepository } from './conversion.repository';
 import { ConversionStatus } from './conversion.entity';
 import { affiliateService } from '../affiliates/affiliate.service';
+import { safeSendConversionPostback } from '../postback/outbound-postback.service';
 import { notificationService } from '../notifications/notification.service';
 import { NotificationCategory, NotificationLevel } from '../notifications/notification.entity';
 import {
@@ -111,6 +112,12 @@ export const conversionService = {
       approvedAt: becomingApproved ? (conversion.approvedAt ?? new Date()) : null,
       ...(dto.status === ConversionStatus.DUPLICATE && { isDuplicate: true }),
     });
+
+    // Only on the transition *into* APPROVED — re-saving an already-approved conversion
+    // would otherwise fire the affiliate's tracker a second time for one sale.
+    if (becomingApproved && conversion.status !== ConversionStatus.APPROVED) {
+      safeSendConversionPostback({ ...conversion, status: ConversionStatus.APPROVED });
+    }
 
     // Only the two decisions that change what the affiliate gets paid. PENDING and
     // DUPLICATE are internal review states and would be noise in their bell.

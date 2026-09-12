@@ -33,6 +33,13 @@ export const createSmartLinkSchema = z.object({
     .url()
     .optional()
     .or(z.literal('').transform(() => undefined)),
+  // Nullable, not just optional: clearing the share on an existing link has to be
+  // expressible, and `undefined` means "unchanged" on the partial update schema below.
+  destinationUrl: z.union([z.string().trim().url(), z.literal(''), z.null()]).optional().transform((v) => (v === undefined ? undefined : v ? v : null)),
+  revShareMode: z.enum(['CPA', 'CPS']).nullish(),
+  // Capped at 100 — a link paying out more than the advertiser pays is a loss on every
+  // conversion, and nothing downstream would catch it.
+  revSharePercent: z.coerce.number().min(0).max(100).nullish(),
 });
 
 export type CreateSmartLinkDto = z.infer<typeof createSmartLinkSchema>;
@@ -53,6 +60,9 @@ export interface SmartLinkDto {
   rotation: SmartLinkRotation;
   status: SmartLinkStatus;
   fallbackUrl: string | null;
+  destinationUrl: string | null;
+  revShareMode: string | null;
+  revSharePercent: number | null;
   smartLinkUrl: string;
   createdAt: string;
 }
@@ -81,6 +91,9 @@ export function toSmartLinkDto(link: SmartLink, affiliateId?: string): SmartLink
     rotation: link.rotation,
     status: link.status,
     fallbackUrl: link.fallbackUrl,
+    destinationUrl: link.destinationUrl,
+    revShareMode: link.revShareMode,
+    revSharePercent: link.revSharePercent != null ? Number(link.revSharePercent) : null,
     // The Tracker's /sl route resolves which offer this lands on at click time.
     smartLinkUrl: `${env.PUBLIC_TRACKING_URL}/sl/${link.slug}?affiliateId=${affiliateId ?? '{affiliate_id}'}`,
     createdAt: link.createdAt.toISOString(),

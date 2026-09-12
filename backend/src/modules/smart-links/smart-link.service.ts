@@ -55,6 +55,9 @@ export const smartLinkService = {
       rotation: dto.rotation,
       status: dto.status,
       fallbackUrl: dto.fallbackUrl ?? null,
+      destinationUrl: dto.destinationUrl ?? null,
+      revShareMode: dto.revShareMode ?? null,
+      revSharePercent: dto.revSharePercent != null ? dto.revSharePercent.toFixed(2) : null,
     });
     return toSmartLinkDto(created);
   },
@@ -80,6 +83,11 @@ export const smartLinkService = {
       ...(dto.rotation !== undefined && { rotation: dto.rotation }),
       ...(dto.status !== undefined && { status: dto.status }),
       ...(dto.fallbackUrl !== undefined && { fallbackUrl: dto.fallbackUrl ?? null }),
+      ...(dto.destinationUrl !== undefined && { destinationUrl: dto.destinationUrl ?? null }),
+      ...(dto.revShareMode !== undefined && { revShareMode: dto.revShareMode ?? null }),
+      ...(dto.revSharePercent !== undefined && {
+        revSharePercent: dto.revSharePercent != null ? dto.revSharePercent.toFixed(2) : null,
+      }),
     });
     return this.getSmartLink(id);
   },

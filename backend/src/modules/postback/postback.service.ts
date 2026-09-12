@@ -5,8 +5,10 @@ import { clickRepository } from '../clicks/click.repository';
 import { conversionRepository } from '../conversions/conversion.repository';
 import { ConversionStatus } from '../conversions/conversion.entity';
 import { postbackLogRepository } from '../postback-logs/postback-log.repository';
+import { smartLinkRepository } from '../smart-links/smart-link.repository';
 import { PostbackDirection } from '../postback-logs/postback-log.entity';
 import { resolvePayoutRuleForPricing, computeAmounts } from '../offers/payout-resolution';
+import { safeSendConversionPostback } from './outbound-postback.service';
 
 export interface PostbackRequest {
   offerId: string;
@@ -79,7 +81,14 @@ export const postbackService = {
     const isDuplicate = !!existingConversion;
 
     const rule = await resolvePayoutRuleForPricing(offer.payoutRules, matchedClick);
-    const amounts = rule ? computeAmounts(rule) : { revenueAmount: 0, payoutAmount: 0 };
+
+    // A click that came through a smart-link is priced against that link's revenue
+    // share rather than the member offer's own payout — read now, at conversion time,
+    // so a rate changed after the click applies to what is actually being paid.
+    const smartLink = matchedClick?.smartLinkId ? await smartLinkRepository.findById(matchedClick.smartLinkId) : null;
+    const revSharePercent = smartLink?.revSharePercent != null ? Number(smartLink.revSharePercent) : null;
+
+    const amounts = rule ? computeAmounts(rule, revSharePercent) : { revenueAmount: 0, payoutAmount: 0 };
     // Duplicates are recorded (visible in the Conversions report, filterable by
     // isDuplicate) but carry zero money so an accidental double-fire can never
     // inflate revenue/payout totals before someone reviews it.
@@ -125,6 +134,13 @@ export const postbackService = {
       conversionId: conversion.id,
       success: true,
     });
+
+    // Auto-approved conversions never pass through conversion.updateStatus, so the
+    // affiliate's own tracker would never hear about the ones that need no review —
+    // the majority, on an offer with autoApproveConversions on.
+    if (status === ConversionStatus.APPROVED) {
+      safeSendConversionPostback(conversion);
+    }
 
     // First real, authenticated postback ever received for this offer — an
     // observational signal for admins, not a gate (see offer.service.ts).

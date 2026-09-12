@@ -46,6 +46,10 @@ export const updateNetworkSettingsSchema = z
         const handle = (value ?? '').trim().replace(/^https?:\/\/(t\.me|telegram\.me)\//i, '').replace(/^@/, '');
         return handle ? handle : null;
       }),
+    // Free text, not an email: a Teams contact is given either way round — an address
+    // to open a chat against, or a ready-made invite/channel link pasted from Teams
+    // itself. Validating it as an email rejected the link form outright.
+    supportTeams: nullableText(255),
     emailProvider: z.enum(['BREVO', 'MAILGUN']).optional(),
     defaultCurrency: z.string().trim().length(3).optional(),
     timezone: z.string().trim().max(60).optional(),
@@ -79,6 +83,7 @@ export interface NetworkSettingsDto {
   networkName: string;
   supportEmail: string | null;
   supportTelegram: string | null;
+  supportTeams: string | null;
   emailProvider: string;
   defaultCurrency: string;
   timezone: string;
@@ -103,6 +108,7 @@ export function toNetworkSettingsDto(settings: NetworkSetting): NetworkSettingsD
     networkName: settings.networkName,
     supportEmail: settings.supportEmail,
     supportTelegram: settings.supportTelegram,
+    supportTeams: settings.supportTeams,
     emailProvider: settings.emailProvider,
     defaultCurrency: settings.defaultCurrency,
     timezone: settings.timezone,

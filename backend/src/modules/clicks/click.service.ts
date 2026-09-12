@@ -135,6 +135,13 @@ export const clickService = {
     // this click to.
     let offer: Offer;
     let preMatchedRule: PayoutRule | null = null;
+    // Kept for the click row: the conversion that arrives later needs to know this came
+    // through a smart-link, to price it against that link's revenue share.
+    let smartLinkId: string | null = null;
+    // The link's own settings, read once here so the redirect and the payout below
+    // don't each have to re-check whether this click came through a smart-link.
+    let smartLinkDestinationUrl: string | null = null;
+    let revSharePercent: number | null = null;
     if (target.offer) {
       offer = target.offer;
     } else {
@@ -152,6 +159,9 @@ export const clickService = {
       // pick a different one and price the redirect differently from the offer that
       // was chosen on the strength of that price.
       preMatchedRule = chosen.rule;
+      smartLinkId = link.id;
+      smartLinkDestinationUrl = link.destinationUrl;
+      revSharePercent = link.revSharePercent != null ? Number(link.revSharePercent) : null;
     }
 
     // One Redis round-trip, alongside the proxy check that may already have made an
@@ -166,6 +176,7 @@ export const clickService = {
         id: clickId,
         offerId: offer.id,
         affiliateId: req.affiliateId,
+        smartLinkId,
         ip: req.ip,
         userAgent: req.userAgent,
         countryCode,
@@ -220,9 +231,15 @@ export const clickService = {
       return { redirectUrl: fallback.replace('{click_id}', clickId).replace('{payout_amount}', ''), clickId };
     }
 
-    const { payoutAmount } = computeAmounts(matchedRule);
+    const { payoutAmount } = computeAmounts(matchedRule, revSharePercent);
+
+    // A smart-link may override where its traffic lands. The member offer is still
+    // chosen, logged and paid against — only the address changes — so a network that
+    // routes all rotator traffic through its own page keeps correct attribution.
+    // Unset (the normal case) falls through to the chosen offer's own destination.
+    const destination = smartLinkDestinationUrl?.trim() || offer.destinationUrl!;
     return {
-      redirectUrl: offer.destinationUrl!.replace('{click_id}', clickId).replace('{payout_amount}', payoutAmount.toFixed(2)),
+      redirectUrl: destination.replace('{click_id}', clickId).replace('{payout_amount}', payoutAmount.toFixed(2)),
       clickId,
     };
   },

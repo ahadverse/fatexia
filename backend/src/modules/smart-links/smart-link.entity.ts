@@ -52,6 +52,35 @@ export class SmartLink {
   @Column({ type: 'varchar', nullable: true })
   fallbackUrl!: string | null;
 
+  /**
+   * Overrides where a matched click lands. The member offer is still chosen, logged
+   * and paid against — only the address changes — so a network that routes rotator
+   * traffic through its own page keeps correct attribution.
+   *
+   * Null (the normal case) sends the click to the chosen offer's own destination,
+   * which is what a smart-link does by default.
+   */
+  @Column({ type: 'varchar', nullable: true })
+  destinationUrl!: string | null;
+
+  /**
+   * Revenue share. When set, a conversion that came through this link pays the
+   * affiliate `revSharePercent` of what the advertiser pays, instead of the flat
+   * payout on the member offer's own rule.
+   *
+   * Both columns are nullable and move together — a link with no share configured
+   * falls back to the offer's rule, which is what every existing link does.
+   *
+   * `revShareMode` records which conversion type the share is meant for (CPA or CPS).
+   * It is descriptive rather than a filter: the percentage applies to whatever the
+   * link sends, and one link carries one rate (see the admin form's note).
+   */
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  revShareMode!: string | null;
+
+  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
+  revSharePercent!: string | null;
+
   @CreateDateColumn({ type: 'timestamp' })
   createdAt!: Date;
 

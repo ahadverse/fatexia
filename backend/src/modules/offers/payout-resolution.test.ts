@@ -78,14 +78,60 @@ describe('computeAmounts', () => {
 
   /**
    * The money-integrity rule from PLAN-backend.md, as a test rather than a comment:
-   * both figures come from the rule the network configured. There is no parameter
-   * here an advertiser's postback could reach, so a payload claiming a huge sale
-   * cannot inflate what the network owes.
+   * both figures come from what the network configured — the offer's own rule, or a
+   * smart-link rate the network set. Nothing an advertiser's postback carries reaches
+   * this function, so a payload claiming a huge sale cannot inflate what is owed.
+   *
+   * This used to assert `computeAmounts.length === 1`, using the arity as a proxy for
+   * "no outside input". The smart-link share added a second parameter — sourced from
+   * our own `smart_links` row, not from the payload — so the arity no longer says
+   * anything, and the property itself is asserted instead.
    */
   it('derives both amounts from the rule alone', () => {
     const configured = rule({ payoutType: PayoutType.PERCENTAGE, amount: '10', revenueAmount: '200.00' });
     expect(computeAmounts(configured)).toEqual({ revenueAmount: 200, payoutAmount: 20 });
-    expect(computeAmounts.length).toBe(1);
+  });
+
+  describe('smart-link revenue share', () => {
+    it('pays the configured percentage of the advertiser revenue', () => {
+      const flat = rule({ payoutType: PayoutType.FLAT, amount: '5', revenueAmount: '10.00' });
+      expect(computeAmounts(flat, 80)).toEqual({ revenueAmount: 10, payoutAmount: 8 });
+    });
+
+    // Revenue is what the advertiser owes the network; the share only decides how that
+    // amount is split. A share that moved revenue would change the advertiser's bill.
+    it('never changes the revenue figure', () => {
+      const flat = rule({ payoutType: PayoutType.FLAT, amount: '5', revenueAmount: '10.00' });
+      expect(computeAmounts(flat, 80).revenueAmount).toBe(10);
+      expect(computeAmounts(flat, 0).revenueAmount).toBe(10);
+    });
+
+    it('falls back to the offer rule when no share is set', () => {
+      const flat = rule({ payoutType: PayoutType.FLAT, amount: '5', revenueAmount: '10.00' });
+      expect(computeAmounts(flat, null).payoutAmount).toBe(5);
+      expect(computeAmounts(flat, undefined).payoutAmount).toBe(5);
+      expect(computeAmounts(flat, 0).payoutAmount).toBe(5);
+    });
+
+    // Without a base there is nothing to take a percentage of, and 0 would quietly pay
+    // the affiliate nothing rather than what the offer promised.
+    it('falls back to the offer rule when there is no revenue to share', () => {
+      const noRevenue = rule({ payoutType: PayoutType.FLAT, amount: '5', revenueAmount: '0.00' });
+      expect(computeAmounts(noRevenue, 80).payoutAmount).toBe(5);
+    });
+
+    it('never pays out more than the advertiser pays', () => {
+      const flat = rule({ payoutType: PayoutType.FLAT, amount: '5', revenueAmount: '10.00' });
+      expect(computeAmounts(flat, 100).payoutAmount).toBe(10);
+      expect(computeAmounts(flat, 500).payoutAmount).toBe(10);
+    });
+
+    // The share replaces the rule's own payout entirely, percentage rules included —
+    // otherwise two percentages would compound into a figure neither one states.
+    it('overrides a percentage rule rather than compounding with it', () => {
+      const percentage = rule({ payoutType: PayoutType.PERCENTAGE, amount: '10', revenueAmount: '200.00' });
+      expect(computeAmounts(percentage, 50).payoutAmount).toBe(100);
+    });
   });
 });
 

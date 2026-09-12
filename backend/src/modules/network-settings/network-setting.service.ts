@@ -32,6 +32,7 @@ export const networkSettingService = {
       ...(dto.networkName !== undefined && { networkName: dto.networkName }),
       ...(dto.supportEmail !== undefined && { supportEmail: dto.supportEmail ?? null }),
       ...(dto.supportTelegram !== undefined && { supportTelegram: dto.supportTelegram ?? null }),
+      ...(dto.supportTeams !== undefined && { supportTeams: dto.supportTeams ?? null }),
       ...(dto.emailProvider !== undefined && { emailProvider: dto.emailProvider }),
       ...(dto.defaultCurrency !== undefined && { defaultCurrency: dto.defaultCurrency.toUpperCase() }),
       ...(dto.timezone !== undefined && { timezone: dto.timezone }),
