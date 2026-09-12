@@ -46,6 +46,12 @@ export const offerRepository = {
     }
     if (filters.status) {
       qb.andWhere('offer.status = :status', { status: filters.status });
+    } else {
+      // Delete is a soft delete — the row stays so historical clicks and conversions
+      // keep resolving their offer. Without this the "deleted" offer never left the
+      // list, which made the action look broken. Still reachable by filtering for
+      // DELETED explicitly, which is the only way anyone would want to see one.
+      qb.andWhere('offer.status != :deleted', { deleted: OfferStatus.DELETED });
     }
     if (filters.category) {
       qb.andWhere('offer.category = :category', { category: filters.category });

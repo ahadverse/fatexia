@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   Button,
   ColumnPicker,
@@ -14,11 +14,13 @@ import {
   TrendChart,
   defaultRange,
   downloadCsv,
+  presetRange,
   toApiRange,
   useDeferredFilters,
   type ColumnOption,
   type DataTableColumn,
   type DateRange,
+  type FixedPresetId,
   type TableSort,
 } from '@fatexia/ui';
 import type { Advertiser, Affiliate, Offer, ReportDimension, ReportRow } from '@fatexia/types';
@@ -42,6 +44,13 @@ export interface ReportViewProps {
   description: string;
   /** Fixed grouping, e.g. the per-offer report. Omit to let the reader pick. */
   dimension?: ReportDimension;
+  /**
+   * Window the page opens on. Defaults to today, which suits a report someone checks
+   * during the day; an overview page opening on a quiet morning would show an empty
+   * table and read as broken, so those pass a wider one. A preset id rather than a
+   * range so the value is stable across renders.
+   */
+  initialPreset?: FixedPresetId;
   /** Dimensions offered in the group-by picker when `dimension` is not fixed. */
   selectableDimensions?: ReportDimension[];
   /** Renders the trend chart above the table. Only meaningful for date grouping. */
@@ -92,20 +101,31 @@ const METRIC_COLUMNS: (ColumnOption & { render: (row: ReportRow) => string; csv:
 
 const DEFAULT_COLUMNS = ['clicks', 'uniqueClicks', 'conversions', 'conversionRate', 'revenue', 'payout', 'profit', 'epc'];
 
+// The range is not in here: it lives in the page header and applies on selection, so it
+// is never part of what the Apply button has pending.
 interface ReportFilterDraft {
-  range: DateRange;
   offerId: string;
   affiliateId: string;
   advertiserId: string;
   countryCode: string;
 }
 
-export function ReportView({ title, description, dimension, selectableDimensions, showTrend }: ReportViewProps) {
-  const emptyFilters = useMemo<ReportFilterDraft>(
-    () => ({ range: defaultRange(), offerId: '', affiliateId: '', advertiserId: '', countryCode: '' }),
-    [],
-  );
-  const { draft, setDraft, applied, apply, clear, dirty } = useDeferredFilters(emptyFilters);
+const EMPTY_FILTERS: ReportFilterDraft = { offerId: '', affiliateId: '', advertiserId: '', countryCode: '' };
+
+export function ReportView({ title, description, dimension, initialPreset, selectableDimensions, showTrend }: ReportViewProps) {
+  // Resolved on each call rather than memoised: "last 30 days" fixed at mount would hand
+  // back a stale window to someone who left the tab open overnight.
+  const baseRange = useCallback(() => (initialPreset ? presetRange(initialPreset) : defaultRange()), [initialPreset]);
+
+  /*
+   * The date range is the one filter that sits beside the title and takes effect as soon
+   * as it is picked — the same place and behaviour as the dashboard, conversions and
+   * postback logs. Buried among the selects behind an Apply button it read as a
+   * different control from the one on every other screen, which is the complaint that
+   * moved it.
+   */
+  const [range, setRange] = useState<DateRange>(baseRange);
+  const { draft, setDraft, applied, apply, clear, dirty } = useDeferredFilters(EMPTY_FILTERS);
 
   const [groupBy, setGroupBy] = useState<ReportDimension>(dimension ?? selectableDimensions?.[0] ?? 'date');
   const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_COLUMNS);
@@ -113,7 +133,7 @@ export function ReportView({ title, description, dimension, selectableDimensions
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 
-  const apiRange = toApiRange(applied.range);
+  const apiRange = toApiRange(range);
   const activeDimension = dimension ?? groupBy;
 
   const filters = useMemo(
@@ -191,9 +211,22 @@ export function ReportView({ title, description, dimension, selectableDimensions
         title={title}
         description={description}
         actions={
-          <Button variant="outline" disabled={allRows.length === 0} onClick={exportCsv}>
-            Export CSV
-          </Button>
+          <>
+            {/* No label above the trigger — in the header it stands beside a button, and
+                the label would offset it by half a line. The trigger reads the range out
+                itself, and carries it in aria-label. */}
+            <DateRangeFilter
+              value={range}
+              label=""
+              onChange={(next) => {
+                setPage(1);
+                setRange(next);
+              }}
+            />
+            <Button variant="outline" disabled={allRows.length === 0} onClick={exportCsv}>
+              Export CSV
+            </Button>
+          </>
         }
       />
 
@@ -214,14 +247,14 @@ export function ReportView({ title, description, dimension, selectableDimensions
             <Button size="sm" onClick={runFilter}>
               {dirty ? 'Apply filters' : 'Filter'}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => { setPage(1); clear(); }}>
+            {/* Clear puts the date back to the page's own window too, so it returns the
+                screen to the state it opened in rather than only half of it. */}
+            <Button size="sm" variant="outline" onClick={() => { setPage(1); setRange(baseRange()); clear(); }}>
               Clear
             </Button>
           </>
         }
       >
-        <DateRangeFilter value={draft.range} onChange={(range) => setDraft({ ...draft, range })} />
-
         {!dimension && selectableDimensions && (
           <FilterField label="Group by">
             <Select

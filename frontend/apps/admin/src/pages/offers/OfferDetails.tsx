@@ -99,14 +99,31 @@ export function OfferDetails() {
   return (
     <div className="max-w-4xl space-y-6">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="flex items-center gap-3">
+          {offer.iconUrl && (
+            <img src={offer.iconUrl} alt="" className="size-12 shrink-0 rounded-md border border-border object-cover" />
+          )}
+          <div>
           <h1 className="text-2xl font-semibold">{offer.name}</h1>
           <div className="mt-1 flex items-center gap-2">
             <StatusBadge variant={STATUS_VARIANT[offer.status]}>{offer.status}</StatusBadge>
             <span className="text-sm text-muted-foreground">{advertiserName}</span>
           </div>
+          </div>
         </div>
         <div className="flex gap-2">
+          {/* Only when the offer has one — a button that opens nothing is worse than an
+              absent button, and most offers will not have a preview page. */}
+          {offer.previewLink && (
+            <a
+              href={offer.previewLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center rounded-md border border-border px-3 py-2 text-sm hover:bg-accent"
+            >
+              Preview landing page
+            </a>
+          )}
           <button type="button" onClick={() => navigate('/offers/all')} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-accent">
             Back
           </button>

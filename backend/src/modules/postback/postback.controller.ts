@@ -8,7 +8,7 @@ export const postbackController = {
     try {
       const query = req.query as unknown as PostbackQueryDto;
       await postbackService.handlePostback({
-        offerId: query.offerId,
+        offerId: query.offerId ?? null,
         clickId: query.click_id,
         secret: query.secret,
         transactionId: query.transaction_id ?? null,

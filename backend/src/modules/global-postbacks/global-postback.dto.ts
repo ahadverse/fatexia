@@ -83,9 +83,12 @@ export function toGlobalPostbackDto(row: GlobalPostback): GlobalPostbackDto {
     enabled: row.enabled,
     lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
+    // No offerId: a global URL is one address for the whole catalogue, and the caller
+    // cannot fill that in — an upstream tracker's offer-id macro is their id, not ours.
+    // The click names the offer instead.
     postbackUrl:
       row.direction === PostbackDirectionKind.INBOUND
-        ? `${env.PUBLIC_TRACKING_URL}/postback?offerId={offer_id}&click_id={click_id}&secret=<secret>`
+        ? `${env.PUBLIC_TRACKING_URL}/postback?click_id={click_id}&secret=<secret>`
         : null,
   };
 }
