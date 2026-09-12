@@ -1,8 +1,7 @@
 import { extname } from 'node:path';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { ValidationError } from '../../common/errors';
-import { integrationRepository } from '../integrations/integration.repository';
-import { IntegrationProvider, IntegrationStatus } from '../integrations/integration.entity';
+import { env } from '../../common/env';
 
 interface S3Config {
   accessKeyId: string;
@@ -12,22 +11,22 @@ interface S3Config {
   cdnBaseUrl: string;
 }
 
-// Not cached like getIntegrationApiKey — uploads are a rare admin action, not a
-// per-click hot path, so there's no reason to trade a 60s-stale credential for one
-// avoided query.
-async function resolveS3Config(): Promise<S3Config> {
-  const integration = await integrationRepository.findByProvider(IntegrationProvider.S3);
-  if (!integration || integration.status === IntegrationStatus.DISABLED) {
-    throw new ValidationError('S3 is not configured — add credentials on the Integrations page first');
+// Env, not the `integrations` table — see the S3_* block in env.ts for why this one
+// credential is exempt from the Integrations-page rule.
+function resolveS3Config(): S3Config {
+  const { S3_ACCESS_KEY, S3_SECRET_KEY, S3_BUCKET, S3_REGION, S3_CDN_URL } = env;
+  if (!S3_ACCESS_KEY || !S3_SECRET_KEY || !S3_BUCKET || !S3_REGION || !S3_CDN_URL) {
+    throw new ValidationError(
+      'S3 is not configured — set S3_ACCESS_KEY, S3_SECRET_KEY, S3_BUCKET, S3_REGION and S3_CDN_URL in the backend environment',
+    );
   }
-  const config = integration.config ?? {};
-  const bucket = String(config.bucket ?? '').trim();
-  const region = String(config.region ?? '').trim();
-  const cdnBaseUrl = String(config.cdnBaseUrl ?? '').trim();
-  if (!integration.apiKey || !integration.apiSecret || !bucket || !region || !cdnBaseUrl) {
-    throw new ValidationError('S3 is missing required configuration (access key, secret, bucket, region or CDN base URL)');
-  }
-  return { accessKeyId: integration.apiKey, secretAccessKey: integration.apiSecret, bucket, region, cdnBaseUrl };
+  return {
+    accessKeyId: S3_ACCESS_KEY,
+    secretAccessKey: S3_SECRET_KEY,
+    bucket: S3_BUCKET,
+    region: S3_REGION,
+    cdnBaseUrl: S3_CDN_URL,
+  };
 }
 
 // Where each kind of upload lands in the bucket. A closed map rather than a caller-
@@ -60,7 +59,7 @@ export const uploadService = {
     folder: UploadFolder,
     file: { originalname: string; buffer: Buffer; mimetype: string },
   ): Promise<string> {
-    const config = await resolveS3Config();
+    const config = resolveS3Config();
     const s3 = new S3Client({
       credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
       region: config.region,

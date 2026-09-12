@@ -152,6 +152,6 @@ export const managerService = {
       }
     }
     const settings = await networkSettingService.getSettings();
-    return toSupportContactDto(settings.networkName, settings.supportEmail);
+    return toSupportContactDto(settings.networkName, settings.supportEmail, settings.supportTelegram);
   },
 };

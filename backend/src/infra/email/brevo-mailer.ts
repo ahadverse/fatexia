@@ -6,6 +6,7 @@ import { emailTemplateRepository } from '../../modules/email-templates/email-tem
 import type { EmailTemplateKey } from '../../modules/email-templates/email-template.entity';
 import { substituteMacros } from '../../modules/email-templates/template-render';
 import { renderEmailHtml, renderEmailText } from './email-layout';
+import { sendViaMailgun } from './mailgun-mailer';
 
 // Brevo is the network's mail relay, but the credential lives under the pre-existing
 // generic `SMTP` provider row rather than a new enum value — one mail provider, one
@@ -38,11 +39,6 @@ export interface SendEmailInput {
  * mail send did.
  */
 export async function sendEmail(input: SendEmailInput): Promise<void> {
-  const apiKey = await getIntegrationApiKey(IntegrationProvider.SMTP);
-  if (!apiKey) {
-    throw new Error('No Brevo API key configured, or the integration is disabled (Emails → Settings)');
-  }
-
   const settings = await networkSettingService.getSettings();
   if (!settings.senderEmail) {
     throw new Error('No sender address configured (Emails → Settings)');
@@ -50,20 +46,43 @@ export async function sendEmail(input: SendEmailInput): Promise<void> {
 
   // Templates are authored as plain text; the branded HTML shell is applied here at
   // send time (see email-layout.ts) so the admin editor never has to hold markup.
+  // Rendered once, before the provider split, so both relays send identical mail.
+  const senderName = settings.senderName || settings.networkName;
+  const html = renderEmailHtml({
+    subject: input.subject,
+    body: input.body,
+    networkName: settings.networkName,
+    supportEmail: settings.supportEmail,
+  });
+  const text = renderEmailText(input.body, settings.networkName, settings.supportEmail);
+
+  // Which relay sends is an explicit setting, not "whichever is enabled" — with both
+  // configured, the enabled flag cannot answer it.
+  if (settings.emailProvider === 'MAILGUN') {
+    await sendViaMailgun({
+      from: `${senderName} <${settings.senderEmail}>`,
+      to: input.to,
+      subject: input.subject,
+      html,
+      text,
+    });
+    return;
+  }
+
+  const apiKey = await getIntegrationApiKey(IntegrationProvider.SMTP);
+  if (!apiKey) {
+    throw new Error('No Brevo API key configured, or the integration is disabled (Emails → Settings)');
+  }
+
   const res = await fetch(BREVO_SEND_URL, {
     method: 'POST',
     headers: { 'api-key': apiKey, 'content-type': 'application/json', accept: 'application/json' },
     body: JSON.stringify({
-      sender: { email: settings.senderEmail, name: settings.senderName || settings.networkName },
+      sender: { email: settings.senderEmail, name: senderName },
       to: [{ email: input.to.email, name: input.to.name || undefined }],
       subject: input.subject,
-      htmlContent: renderEmailHtml({
-        subject: input.subject,
-        body: input.body,
-        networkName: settings.networkName,
-        supportEmail: settings.supportEmail,
-      }),
-      textContent: renderEmailText(input.body, settings.networkName, settings.supportEmail),
+      htmlContent: html,
+      textContent: text,
     }),
   });
 

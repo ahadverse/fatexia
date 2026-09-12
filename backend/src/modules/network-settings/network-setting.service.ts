@@ -31,6 +31,8 @@ export const networkSettingService = {
     await networkSettingRepository.update({
       ...(dto.networkName !== undefined && { networkName: dto.networkName }),
       ...(dto.supportEmail !== undefined && { supportEmail: dto.supportEmail ?? null }),
+      ...(dto.supportTelegram !== undefined && { supportTelegram: dto.supportTelegram ?? null }),
+      ...(dto.emailProvider !== undefined && { emailProvider: dto.emailProvider }),
       ...(dto.defaultCurrency !== undefined && { defaultCurrency: dto.defaultCurrency.toUpperCase() }),
       ...(dto.timezone !== undefined && { timezone: dto.timezone }),
       ...(dto.defaultHoldDays !== undefined && { defaultHoldDays: dto.defaultHoldDays }),

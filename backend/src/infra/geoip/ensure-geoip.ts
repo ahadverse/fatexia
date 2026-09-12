@@ -23,6 +23,11 @@ type Edition = (typeof EDITIONS)[number];
 
 const COOLDOWN_SECONDS = 24 * 60 * 60;
 const COOLDOWN_KEY_PREFIX = 'geoip:cooldown:';
+// A daily budget rather than a single lock. One attempt per day was too tight in
+// practice: a restart on an ephemeral filesystem wipes the .mmdb files while the lock
+// is still held, leaving geo lookups degraded for the rest of the day with no way to
+// recover. Ten still sits far under MaxMind's own limit.
+const MAX_ATTEMPTS_PER_DAY = 10;
 
 // A 429 here is MaxMind's download-rate limit, not a bad key — worth a couple of
 // spaced-out retries before giving up for this attempt.
@@ -46,18 +51,25 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Claims the cooldown BEFORE attempting the download (not after success) — so a crash
-// mid-download, or an admin double-clicking the refresh button, still can't produce
-// more than one real attempt per edition per day, which is what protects against
-// MaxMind's actual rate limit.
-async function startCooldownIfAvailable(edition: string): Promise<boolean> {
+// Counts the attempt BEFORE downloading (not after success) — so a crash mid-download,
+// or an admin double-clicking the refresh button, still spends budget. That is what
+// protects against MaxMind's actual rate limit.
+//
+// The TTL is set only on the first attempt of a window, so the window is a fixed 24h
+// from that attempt rather than a rolling one that a burst of clicks could extend
+// indefinitely.
+async function claimAttempt(edition: string): Promise<boolean> {
   try {
-    const claimed = await redis.set(`${COOLDOWN_KEY_PREFIX}${edition}`, '1', 'EX', COOLDOWN_SECONDS, 'NX');
-    return claimed === 'OK';
+    const key = `${COOLDOWN_KEY_PREFIX}${edition}`;
+    const used = await redis.incr(key);
+    if (used === 1) {
+      await redis.expire(key, COOLDOWN_SECONDS);
+    }
+    return used <= MAX_ATTEMPTS_PER_DAY;
   } catch (err) {
     // Redis unreachable: fail open on attempting the fetch rather than silently never
     // refreshing geo data — MaxMind's own 429 is still a hard backstop.
-    logger.warn({ err, edition }, '[geoip] Redis cooldown check failed, attempting fetch anyway');
+    logger.warn({ err, edition }, '[geoip] Redis attempt check failed, attempting fetch anyway');
     return true;
   }
 }
@@ -65,8 +77,10 @@ async function startCooldownIfAvailable(edition: string): Promise<boolean> {
 async function fetchEdition(edition: Edition, targetDir: string, licenseKey: string): Promise<EditionFetchStatus> {
   const targetPath = join(targetDir, `${edition}.mmdb`);
 
-  if (!(await startCooldownIfAvailable(edition))) {
-    logger.info(`[geoip] ${edition} was already fetched within the last 24h — skipping to respect MaxMind's rate limit`);
+  if (!(await claimAttempt(edition))) {
+    logger.info(
+      `[geoip] ${edition} has used all ${MAX_ATTEMPTS_PER_DAY} fetch attempts for today — skipping to respect MaxMind's rate limit`,
+    );
     return 'skipped-cooldown';
   }
 
@@ -118,7 +132,7 @@ async function fetchEdition(edition: Edition, targetDir: string, licenseKey: str
 /**
  * Downloads both GeoLite2 editions right now. Called only from the admin-secret-guarded
  * `/internal/geoip/fetch` route — never automatically. Still gated by the per-edition
- * 24h Redis cooldown (not a "force" bypass) because that cooldown exists to respect
+ * daily Redis budget (not a "force" bypass) because that budget exists to respect
  * MaxMind's own rate limit, not to throttle how often an admin is allowed to ask.
  */
 export async function ensureGeoipDatabases(): Promise<GeoipFetchResult> {

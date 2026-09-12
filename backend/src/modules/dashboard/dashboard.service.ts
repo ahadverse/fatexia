@@ -55,6 +55,10 @@ function buildDeltas(current: Totals, currentProfit: number, previous: Totals | 
 // doesn't render an empty dashboard, short enough to stay a "current state" view.
 const DEFAULT_WINDOW_DAYS = 30;
 const TOP_LIST_SIZE = 5;
+// Deliberately not filtered by the selected date range: this panel answers "what is
+// happening right now", which is a different question from the windowed figures above
+// it. A 30-day window would otherwise render a feed of month-old events as "live".
+const ACTIVITY_SIZE = 20;
 
 function defaultFilters(filters: ReportFiltersDto): ReportFiltersDto {
   if (filters.dateFrom || filters.dateTo) return filters;
@@ -81,6 +85,9 @@ export const dashboardService = {
       pendingInvoices,
       unreadMessages,
       clickQuality,
+      activeAdvertisers,
+      payoutsThisMonth,
+      activity,
     ] = await Promise.all([
       reportService.getTrend(windowed),
       reportService.getTopRows('offer', windowed, TOP_LIST_SIZE, 'clicks'),
@@ -96,6 +103,9 @@ export const dashboardService = {
       dashboardRepository.countPendingInvoices(),
       dashboardRepository.countUnreadMessages(),
       dashboardRepository.countClicksByQuality(windowed.dateFrom ? new Date(windowed.dateFrom) : null),
+      dashboardRepository.countActiveAdvertisers(),
+      dashboardRepository.sumPaidInvoicesThisMonth(windowed.managerScopeId),
+      dashboardRepository.getRecentActivity(ACTIVITY_SIZE, windowed.managerScopeId),
     ]);
 
     // One extra trend query for the preceding window of equal length. Fetched after
@@ -139,12 +149,15 @@ export const dashboardService = {
         unreadMessages,
         blockedClicks: clickQuality.blocked,
         suspectClicks: clickQuality.suspect,
+        activeAdvertisers,
+        payoutsThisMonth: Number(payoutsThisMonth.toFixed(2)),
       },
       deltas: buildDeltas(totals, profit, previousTotals),
       trend,
       topOffers,
       topAffiliates,
       topCountries,
+      activity,
     };
   },
 };

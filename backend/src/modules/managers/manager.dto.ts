@@ -168,7 +168,11 @@ export function toManagerContactDto(manager: Manager): AffiliateManagerContactDt
   };
 }
 
-export function toSupportContactDto(networkName: string, supportEmail: string | null): AffiliateManagerContactDto {
+export function toSupportContactDto(
+  networkName: string,
+  supportEmail: string | null,
+  supportTelegram: string | null = null,
+): AffiliateManagerContactDto {
   return {
     kind: 'SUPPORT',
     publicId: null,
@@ -176,7 +180,7 @@ export function toSupportContactDto(networkName: string, supportEmail: string | 
     email: supportEmail ?? '',
     phone: null,
     skype: null,
-    telegram: null,
+    telegram: supportTelegram,
     teams: null,
     avatarUrl: null,
     managerRole: null,

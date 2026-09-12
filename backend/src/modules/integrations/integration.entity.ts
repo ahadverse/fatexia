@@ -14,6 +14,8 @@ export enum IntegrationProvider {
   // id/secret; bucket/region/cdnBaseUrl live in config — same non-secret-config split
   // every other provider uses.
   S3 = 'S3',
+  // No MAILGUN entry on purpose: its credentials are env (MAILGUN_*), the same
+  // exemption S3 has. Which relay sends is `network_settings.emailProvider`.
 }
 
 export enum IntegrationStatus {

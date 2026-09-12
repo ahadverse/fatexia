@@ -239,6 +239,23 @@ export interface AffiliateDashboardDto {
   };
   trend: AffiliateReportRowDto[];
   topOffers: AffiliateReportRowDto[];
+  activity: ActivityEvent[];
+}
+
+export type ActivityKind = 'click' | 'conversion' | 'payout';
+
+/** One row of the dashboard's live-activity feed — see dashboard.repository.ts. */
+export interface ActivityEvent {
+  id: string;
+  kind: ActivityKind;
+  /** Offer name for click/conversion; null for a payout, which is not offer-scoped. */
+  offer: string | null;
+  /** The affiliate's public identifier (AFF-xxxx), never the internal uuid. */
+  affiliate: string | null;
+  countryCode: string | null;
+  /** Payout amount for a payout row; null for click/conversion. */
+  amount: number | null;
+  at: string;
 }
 
 export interface DashboardSummaryDto {
@@ -260,6 +277,9 @@ export interface DashboardSummaryDto {
   unreadMessages: number;
   blockedClicks: number;
   suspectClicks: number;
+  activeAdvertisers: number;
+  /** Invoices marked paid since the 1st of the current calendar month. */
+  payoutsThisMonth: number;
 }
 
 /**
@@ -287,4 +307,5 @@ export interface DashboardDto {
   topOffers: ReportRowDto[];
   topAffiliates: ReportRowDto[];
   topCountries: ReportRowDto[];
+  activity: ActivityEvent[];
 }

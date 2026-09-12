@@ -16,6 +16,18 @@ export class NetworkSetting {
   @Column({ type: 'varchar', nullable: true })
   supportEmail!: string | null;
 
+  // Shown on the affiliate portal's contact card for affiliates with no assigned
+  // manager — the majority of them. Stored as the handle ("@fatexia" or "fatexia"),
+  // never a full t.me URL; the portal builds the link.
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  supportTelegram!: string | null;
+
+  // Which relay `sendEmail` uses. A plain varchar rather than a Postgres enum: the set
+  // of mail providers is a deployment choice that changes independently of the schema,
+  // and adding one should not need a type-recreate migration.
+  @Column({ type: 'varchar', length: 20, default: 'BREVO' })
+  emailProvider!: string;
+
   @Column({ type: 'varchar', default: 'USD' })
   defaultCurrency!: string;
 

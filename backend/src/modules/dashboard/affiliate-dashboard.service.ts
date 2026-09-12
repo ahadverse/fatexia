@@ -9,6 +9,7 @@ import { invoiceService } from '../invoices/invoice.service';
 import { offerService } from '../offers/offer.service';
 import { reportService } from '../reports/report.service';
 import type { AffiliateDashboardDto, ReportFiltersDto } from '../reports/report.dto';
+import { dashboardRepository } from './dashboard.repository';
 import { percentChange, previousWindow } from './period-delta';
 
 type Totals = { clicks: number; uniqueClicks: number; conversions: number; payout: number };
@@ -61,6 +62,8 @@ function buildDeltas(current: Totals, previous: Totals | null): AffiliateDashboa
 
 const DEFAULT_WINDOW_DAYS = 30;
 const TOP_LIST_SIZE = 5;
+// Not filtered by the selected date range — see the same constant in dashboard.service.ts.
+const ACTIVITY_SIZE = 20;
 
 function defaultFilters(filters: ReportFiltersDto): ReportFiltersDto {
   if (filters.dateFrom || filters.dateTo) return filters;
@@ -74,7 +77,7 @@ export const affiliateDashboardService = {
     const affiliateId = await affiliateService.resolveAffiliateId(userId);
     const windowed = defaultFilters(filters);
 
-    const [trend, topOffers, availableOffers, balance, pointBalances, pendingConversions, unreadMessages] =
+    const [trend, topOffers, availableOffers, balance, pointBalances, pendingConversions, unreadMessages, activity] =
       await Promise.all([
         reportService.getAffiliateTrend(affiliateId, windowed),
         reportService.getAffiliateTopRows('offer', affiliateId, windowed, TOP_LIST_SIZE),
@@ -88,6 +91,7 @@ export const affiliateDashboardService = {
         AppDataSource.getRepository(Message).count({
           where: { affiliateId, direction: MessageDirection.OUTBOUND, readAt: IsNull() },
         }),
+        dashboardRepository.getAffiliateRecentActivity(affiliateId, ACTIVITY_SIZE),
       ]);
 
     // Totals come from the same trend rows the chart draws, so the tiles and the chart
@@ -127,6 +131,7 @@ export const affiliateDashboardService = {
         unreadMessages,
       },
       deltas: buildDeltas(totals, previousTotals),
+      activity,
       trend,
       topOffers,
     };

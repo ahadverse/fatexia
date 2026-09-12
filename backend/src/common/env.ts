@@ -62,6 +62,32 @@ interface Env {
   // instead. Same value must be set on both services. Optional in dev; required in
   // production (enforced below) since it gates a network-wide config change.
   GEOIP_ADMIN_SECRET: string | undefined;
+  // S3 + CloudFront, for admin image uploads (offer thumbnails, news images, manager
+  // avatars). Env rather than the `integrations` table — same exemption as
+  // MAXMIND_LICENSE_KEY: one bucket for the life of the deployment, so the rotation
+  // convenience the Integrations page buys is worth less than having one home for the
+  // value. The S3 card is hidden from that page for exactly that reason — an operator
+  // who can type a bucket name into a form that nothing reads is the failure this
+  // avoids.
+  //
+  // All optional: absent means image uploads fail with a clear message, while every
+  // other route (and the whole Tracker, which imports this module too) still boots.
+  S3_BUCKET: string | undefined;
+  S3_REGION: string | undefined;
+  S3_ACCESS_KEY: string | undefined;
+  S3_SECRET_KEY: string | undefined;
+  S3_CDN_URL: string | undefined;
+  // Mailgun, the alternative mail relay. Env for the same reason as the S3 block above:
+  // one sending domain for the life of the deployment, so the rotation convenience of
+  // the Integrations page is worth less than having one home for the value. Which relay
+  // actually sends is `network_settings.emailProvider`, not these.
+  //
+  // Optional: absent means a send through Mailgun fails with a clear message, while
+  // Brevo and every other route keep working.
+  MAILGUN_API_KEY: string | undefined;
+  MAILGUN_DOMAIN: string | undefined;
+  /** EU accounts use https://api.eu.mailgun.net. Defaults to the US host. */
+  MAILGUN_BASE_URL: string | undefined;
   // Deliberately absent: the residential-proxy provider keys (IPHub, ipapi.is, IPQS).
   // Those are runtime credentials and live only in the `integrations` table, entered
   // through the Admin Integrations page — see integration-credentials.ts. Declaring
@@ -92,6 +118,10 @@ function readInt(name: string, fallback: number): number {
 
 function readRequired(name: string, fallback: string): string {
   return process.env[name] ?? fallback;
+}
+
+function readOptional(name: string): string | undefined {
+  return process.env[name]?.trim() || undefined;
 }
 
 function readBool(name: string, fallback: boolean): boolean {
@@ -169,6 +199,17 @@ export const env: Env = {
   GEOIP_DB_DIR: readRequired('GEOIP_DB_DIR', 'data/geoip'),
   MAXMIND_LICENSE_KEY: process.env.MAXMIND_LICENSE_KEY || undefined,
   GEOIP_ADMIN_SECRET: process.env.GEOIP_ADMIN_SECRET || undefined,
+  // Trimmed because an AWS secret pasted from the console often carries a trailing
+  // space or newline, and the signature it produces then fails with
+  // SignatureDoesNotMatch — an error that says nothing about whitespace.
+  S3_BUCKET: readOptional('S3_BUCKET'),
+  S3_REGION: readOptional('S3_REGION'),
+  S3_ACCESS_KEY: readOptional('S3_ACCESS_KEY'),
+  S3_SECRET_KEY: readOptional('S3_SECRET_KEY'),
+  S3_CDN_URL: readOptional('S3_CDN_URL'),
+  MAILGUN_API_KEY: readOptional('MAILGUN_API_KEY'),
+  MAILGUN_DOMAIN: readOptional('MAILGUN_DOMAIN'),
+  MAILGUN_BASE_URL: readOptional('MAILGUN_BASE_URL'),
 };
 
 // In production the JWT secrets must be real, unique values — never the shipped dev
