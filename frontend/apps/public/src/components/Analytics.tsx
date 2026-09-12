@@ -7,9 +7,15 @@ const GA_MEASUREMENT_ID = 'G-RFPDHC1LFQ';
 /**
  * Google Analytics 4.
  *
- * `afterInteractive` rather than `beforeInteractive`: analytics is not needed to render
- * the page, and loading it first delays the content the visitor came for. Next injects
- * it right after hydration, which is early enough to record the landing page view.
+ * `beforeInteractive`, not `afterInteractive`, for one specific reason: Search Console's
+ * "Google Analytics" ownership check reads the *initial* HTML and requires the snippet
+ * inside `<head>`. `afterInteractive` injects into `<body>` after hydration, which
+ * measures traffic perfectly well but fails that check with "the tracking code on your
+ * site is in the wrong location on the page". Next puts `beforeInteractive` scripts in
+ * the head of the served document, where the verifier looks.
+ *
+ * This costs a little: the tag is fetched before the page becomes interactive rather
+ * than after. Only the root layout may declare it, which is where it sits.
  *
  * Only the public marketing site mounts this. The admin and affiliate portals sit
  * behind a login, where the page views are operators working rather than an audience.
@@ -17,8 +23,8 @@ const GA_MEASUREMENT_ID = 'G-RFPDHC1LFQ';
 export function Analytics() {
   return (
     <>
-      <Script src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`} strategy="afterInteractive" />
-      <Script id="ga-init" strategy="afterInteractive">
+      <Script src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`} strategy="beforeInteractive" />
+      <Script id="ga-init" strategy="beforeInteractive">
         {`
           window.dataLayer = window.dataLayer || [];
           function gtag(){dataLayer.push(arguments);}
