@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import type { Advertiser, Affiliate, CreateOfferInput, Offer, OfferCapInput, OfferCategory, OfferStatus, PayoutMode, PayoutRuleInput, PayoutType, RevenueModel } from '@fatexia/types';
 import { COUNTRY_CODES } from '@fatexia/types';
-import { Input, MultiSelectCombobox, Toggle, toast } from '@fatexia/ui';
+import { Input, MultiSelectCombobox, Toggle, cn, toast } from '@fatexia/ui';
 import { getAdvertisers, createAdvertiser } from '../../lib/advertisers-api';
 import { getOfferCategories, createOfferCategory } from '../../lib/offer-categories-api';
 import { getAffiliates } from '../../lib/affiliates-api';
 import { uploadOfferThumbnail } from '../../lib/offers-api';
+import { RichTextEditor } from '../../components/RichTextEditor';
 
 const PAYOUT_MODES: PayoutMode[] = ['CPA', 'CPC', 'CPL', 'CPI', 'CPS'];
 const PAYOUT_TYPES: PayoutType[] = ['FLAT', 'PERCENTAGE'];
@@ -156,6 +157,7 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
   const [isPublic, setIsPublic] = useState(initial?.isPublic ?? true);
   const [iconUrl, setIconUrl] = useState(initial?.iconUrl ?? '');
   const [uploadingIcon, setUploadingIcon] = useState(false);
+  const [draggingIcon, setDraggingIcon] = useState(false);
 
   const [destinationUrl, setDestinationUrl] = useState(initial?.destinationUrl ?? '');
   const [postbackSecret, setPostbackSecret] = useState(initial?.postbackSecret ?? '');
@@ -198,6 +200,12 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
 
   async function handleIconUpload(file: File | undefined) {
     if (!file) return;
+    // A drop accepts anything the OS allows — a PDF, a folder, a .txt. Checked here so
+    // the wrong file fails with a sentence rather than a 400 from the upload route.
+    if (!file.type.startsWith('image/')) {
+      toast.error('That file is not an image');
+      return;
+    }
     setUploadingIcon(true);
     try {
       const { url } = await uploadOfferThumbnail(file);
@@ -207,6 +215,12 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
     } finally {
       setUploadingIcon(false);
     }
+  }
+
+  function handleDrop(event: React.DragEvent) {
+    event.preventDefault();
+    setDraggingIcon(false);
+    void handleIconUpload(event.dataTransfer.files?.[0]);
   }
 
   async function handleAddCategory() {
@@ -219,8 +233,16 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
   }
 
   function addPayoutRule() {
+    // Message names the field as it is labelled on screen. It used to say "Payout
+    // Amount", which stopped matching anything visible when the fields were renamed.
     if (draftRule.amount <= 0) {
-      toast.error('Payout Amount is required to add a payout rule');
+      toast.error('Fill in "Affiliate gets" before adding the rule');
+      return;
+    }
+    // A percentage rule with no base silently computes a zero payout on every
+    // conversion, and nothing downstream would flag it.
+    if (draftRule.payoutType === 'PERCENTAGE' && draftRule.revenueAmount <= 0) {
+      toast.error('A percentage rule needs "Advertiser pays you" to take the percentage from');
       return;
     }
     setPayoutRules((rules) => [...rules, draftRule]);
@@ -325,11 +347,7 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
 
           <div className="space-y-1.5 sm:col-span-2">
             <Field label="Description">
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
+              <RichTextEditor value={description} onChange={setDescription} />
             </Field>
           </div>
 
@@ -370,7 +388,21 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
 
           <div className="space-y-1.5 sm:col-span-2">
             <label className="text-sm font-medium text-foreground">Thumbnail image</label>
-            <div className="flex items-center gap-3">
+            {/* dragOver must preventDefault or the browser treats the drop as a
+                navigation and opens the image in place of the form — losing everything
+                typed so far. */}
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDraggingIcon(true);
+              }}
+              onDragLeave={() => setDraggingIcon(false)}
+              onDrop={handleDrop}
+              className={cn(
+                'flex items-center gap-3 rounded-md border border-dashed p-3 transition-colors',
+                draggingIcon ? 'border-primary bg-primary/5' : 'border-border',
+              )}
+            >
               {iconUrl && <img src={iconUrl} alt="" className="size-14 shrink-0 rounded-md border border-border object-cover" />}
               <div className="space-y-1">
                 <input
@@ -380,7 +412,9 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
                   onChange={(e) => void handleIconUpload(e.target.files?.[0])}
                   className="text-xs text-muted-foreground file:mr-3 file:rounded-md file:border file:border-border file:bg-secondary file:px-3 file:py-1.5 file:text-xs file:text-secondary-foreground hover:file:bg-accent"
                 />
-                {uploadingIcon && <p className="text-xs text-muted-foreground">Uploading…</p>}
+                <p className="text-xs text-muted-foreground">
+                  {uploadingIcon ? 'Uploading…' : 'or drop an image anywhere in this box'}
+                </p>
                 {iconUrl && !uploadingIcon && (
                   <button type="button" onClick={() => setIconUrl('')} className="text-xs text-destructive hover:underline">
                     Remove
@@ -613,10 +647,6 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
               <p className="text-xs text-muted-foreground">Percentage payout is only available for CPS (Cost Per Sale).</p>
             )}
           </Field>
-          <Field label="Payout Amount" required>
-            <Input type="number" step="0.01" value={draftRule.amount || ''} onChange={(e) => setDraftRule((r) => ({ ...r, amount: Number(e.target.value) }))} />
-            {draftRule.payoutType === 'PERCENTAGE' && <p className="text-xs text-muted-foreground">Percent of Revenue Amount, e.g. 20 = 20%.</p>}
-          </Field>
           <Field label="Revenue Model">
             <select value={draftRule.revenueModel} onChange={(e) => setDraftRule((r) => ({ ...r, revenueModel: e.target.value as RevenueModel }))} className={selectClass}>
               {REVENUE_MODELS.map((m) => (
@@ -626,9 +656,54 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
               ))}
             </select>
           </Field>
-          <Field label={draftRule.payoutType === 'PERCENTAGE' ? 'Revenue Amount (base the % is calculated against)' : 'Revenue Amount'}>
-            <Input type="number" step="0.01" value={draftRule.revenueAmount || ''} onChange={(e) => setDraftRule((r) => ({ ...r, revenueAmount: Number(e.target.value) }))} />
+
+          {/* The two money fields sit next to each other, named by whose money it is.
+              They were a row apart with "Revenue Amount" and "Payout Amount" on either
+              side of a dropdown, which said nothing about which side of the margin each
+              one was. Everything above this line describes *how* the rule pays; this row
+              is *how much*, both directions. */}
+          <Field label="Advertiser pays you" required={draftRule.payoutType === 'PERCENTAGE'}>
+            <Input
+              type="number"
+              step="0.01"
+              value={draftRule.revenueAmount || ''}
+              onChange={(e) => setDraftRule((r) => ({ ...r, revenueAmount: Number(e.target.value) }))}
+            />
+            <p className="text-xs text-muted-foreground">
+              {draftRule.payoutType === 'PERCENTAGE'
+                ? 'The sale value the affiliate percentage is taken from.'
+                : 'Revenue per conversion. Never shown to affiliates.'}
+            </p>
           </Field>
+          <Field label={draftRule.payoutType === 'PERCENTAGE' ? 'Affiliate gets (%)' : 'Affiliate gets'} required>
+            <Input type="number" step="0.01" value={draftRule.amount || ''} onChange={(e) => setDraftRule((r) => ({ ...r, amount: Number(e.target.value) }))} />
+            <p className="text-xs text-muted-foreground">
+              {draftRule.payoutType === 'PERCENTAGE'
+                ? 'Percent of the advertiser amount, e.g. 20 = 20%.'
+                : 'Payout per conversion. This is what the affiliate sees.'}
+            </p>
+          </Field>
+
+          {/* Read-only, and only once both sides have a number — the whole point of
+              putting them together is seeing what is left, and a negative figure means
+              the rule pays out more than it earns. */}
+          {draftRule.revenueAmount > 0 && draftRule.amount > 0 && (
+            <div className="sm:col-span-3">
+              {(() => {
+                const payout =
+                  draftRule.payoutType === 'PERCENTAGE'
+                    ? (draftRule.revenueAmount * draftRule.amount) / 100
+                    : draftRule.amount;
+                const margin = draftRule.revenueAmount - payout;
+                return (
+                  <p className={cn('text-xs', margin < 0 ? 'text-destructive' : 'text-muted-foreground')}>
+                    Your margin: {margin.toFixed(2)} {currency} per conversion
+                    {margin < 0 && ' — this rule pays out more than it earns.'}
+                  </p>
+                );
+              })()}
+            </div>
+          )}
           <div className="space-y-1.5 sm:col-span-3">
             <label className="text-sm font-medium text-foreground">Dedicate to affiliate(s) (optional)</label>
             <p className="text-xs text-muted-foreground">Leave empty to make this rule available to every affiliate. Search by name, email or id.</p>

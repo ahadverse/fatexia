@@ -1,5 +1,4 @@
-import { Mail, MessageCircle, MessageSquare, Phone, Send, Users } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Mail, MessageCircle, MessagesSquare, Phone, Send } from 'lucide-react';
 import type { AffiliateManagerContact } from '@fatexia/types';
 
 const ROLE_LABELS: Record<'GENERAL' | 'ACCOUNT' | 'AFFILIATE', string> = {
@@ -17,29 +16,24 @@ function initials(name: string): string {
     .toUpperCase();
 }
 
-/** A round icon button — the contact grid beside the avatar. */
-function ContactButton({
-  href,
-  to,
-  label,
-  children,
-}: {
-  href?: string;
-  to?: string;
-  label: string;
-  children: React.ReactNode;
-}) {
-  const className =
-    'flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
-  if (to) {
-    return (
-      <Link to={to} aria-label={label} title={label} className={className}>
-        {children}
-      </Link>
-    );
-  }
+/**
+ * A round icon button — the contact grid beside the avatar.
+ *
+ * Always a new tab: every destination here is someone else's app (Telegram, Teams, a
+ * mail client). Navigating the portal away from itself would lose whatever the
+ * affiliate was in the middle of, and `rel` is set because `target="_blank"` otherwise
+ * hands the opened page a reference back to this one.
+ */
+function ContactButton({ href, label, children }: { href: string; label: string; children: React.ReactNode }) {
   return (
-    <a href={href} aria-label={label} title={label} className={className}>
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={label}
+      title={label}
+      className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
       {children}
     </a>
   );
@@ -78,9 +72,7 @@ export function ManagerCard({
   // Built as a list so the arc can be divided by how many channels actually exist.
   // A channel with no value is left out rather than rendered dead — a mailto: to
   // nowhere, or a t.me link to no one, is worse than an absent button.
-  const contacts: { key: string; to?: string; href?: string; label: string; icon: React.ReactNode }[] = [
-    { key: 'message', to: '/messages', label: `Message ${badge}`, icon: <MessageSquare className="size-3.5" /> },
-  ];
+  const contacts: { key: string; href: string; label: string; icon: React.ReactNode }[] = [];
   if (manager.email) {
     contacts.push({ key: 'email', href: `mailto:${manager.email}`, label: `Email ${manager.email}`, icon: <Mail className="size-3.5" /> });
   }
@@ -98,9 +90,14 @@ export function ManagerCard({
   if (manager.teams) {
     contacts.push({
       key: 'teams',
-      href: `https://teams.microsoft.com/l/chat/0/0?users=${encodeURIComponent(manager.teams)}`,
-      label: `Teams ${manager.teams}`,
-      icon: <Users className="size-3.5" />,
+      // Accepts either form. A value pasted straight from Teams is already a full link
+      // and is used as-is; anything else is treated as the address to open a chat
+      // against. Wrapping an existing URL in the deep link produced a dead one.
+      href: /^https?:\/\//i.test(manager.teams)
+        ? manager.teams
+        : `https://teams.microsoft.com/l/chat/0/0?users=${encodeURIComponent(manager.teams)}`,
+      label: `Microsoft Teams — ${manager.teams}`,
+      icon: <MessagesSquare className="size-3.5" />,
     });
   }
   if (manager.phone) {
@@ -132,7 +129,7 @@ export function ManagerCard({
             vertical space is the scarce thing. Two rows of two matches the avatar. */}
         <div className="grid grid-cols-2 gap-1.5">
           {contacts.map((contact) => (
-            <ContactButton key={contact.key} to={contact.to} href={contact.href} label={contact.label}>
+            <ContactButton key={contact.key} href={contact.href} label={contact.label}>
               {contact.icon}
             </ContactButton>
           ))}

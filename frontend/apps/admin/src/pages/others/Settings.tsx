@@ -162,6 +162,12 @@ export function Settings() {
         >
           <Input value={form.supportTelegram ?? ''} onChange={(event) => set('supportTelegram', event.target.value)} />
         </Field>
+        <Field
+          label="Support Microsoft Teams"
+          hint="A Teams link, or the address to open a chat against. Shown on the contact card for affiliates with no assigned manager."
+        >
+          <Input value={form.supportTeams ?? ''} onChange={(event) => set('supportTeams', event.target.value)} />
+        </Field>
         <Field label="Default currency" hint="Three-letter ISO code, e.g. USD.">
           <Input value={form.defaultCurrency} maxLength={3} onChange={(event) => set('defaultCurrency', event.target.value.toUpperCase())} />
         </Field>

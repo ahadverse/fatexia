@@ -65,7 +65,6 @@ export function CreateManager() {
   const [fullName, setFullName] = useState('');
   const [managerRole, setManagerRole] = useState<ManagerRole>('AFFILIATE');
   const [phone, setPhone] = useState('');
-  const [skype, setSkype] = useState('');
   const [telegram, setTelegram] = useState('');
   const [teams, setTeams] = useState('');
   const [contactEmail, setContactEmail] = useState('');
@@ -110,7 +109,6 @@ export function CreateManager() {
         fullName,
         managerRole,
         phone: phone || undefined,
-        skype: skype || undefined,
         telegram: telegram || undefined,
         teams: teams || undefined,
         contactEmail: contactEmail || undefined,
@@ -195,15 +193,11 @@ export function CreateManager() {
             <Input value={phone} onChange={(event) => setPhone(event.target.value)} className="mt-1" />
           </label>
           <label className="block">
-            <span className="text-xs font-medium text-muted-foreground">Skype</span>
-            <Input value={skype} onChange={(event) => setSkype(event.target.value)} className="mt-1" />
-          </label>
-          <label className="block">
             <span className="text-xs font-medium text-muted-foreground">Telegram</span>
             <Input value={telegram} onChange={(event) => setTelegram(event.target.value)} className="mt-1" />
           </label>
           <label className="block">
-            <span className="text-xs font-medium text-muted-foreground">Teams</span>
+            <span className="text-xs font-medium text-muted-foreground">Microsoft Teams</span>
             <Input value={teams} onChange={(event) => setTeams(event.target.value)} className="mt-1" />
           </label>
           <label className="block">

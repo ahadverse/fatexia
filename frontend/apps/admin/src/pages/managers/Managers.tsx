@@ -33,7 +33,6 @@ interface EditState {
   id: string;
   fullName: string;
   phone: string;
-  skype: string;
   telegram: string;
   teams: string;
   contactEmail: string;
@@ -93,7 +92,6 @@ export function Managers({
         updateManager(edit.id, {
           fullName: edit.fullName,
           phone: edit.phone || undefined,
-          skype: edit.skype || undefined,
           telegram: edit.telegram || undefined,
           teams: edit.teams || undefined,
           contactEmail: edit.contactEmail || undefined,
@@ -173,7 +171,6 @@ export function Managers({
                 id: row.id,
                 fullName: row.fullName ?? '',
                 phone: row.phone ?? '',
-                skype: row.skype ?? '',
                 telegram: row.telegram ?? '',
                 teams: row.teams ?? '',
                 contactEmail: row.contactEmail ?? '',
@@ -281,15 +278,11 @@ export function Managers({
               <Input value={edit.phone} onChange={(event) => setEdit({ ...edit, phone: event.target.value })} className="mt-1" />
             </label>
             <label className="block">
-              <span className="text-xs font-medium text-muted-foreground">Skype</span>
-              <Input value={edit.skype} onChange={(event) => setEdit({ ...edit, skype: event.target.value })} className="mt-1" />
-            </label>
-            <label className="block">
               <span className="text-xs font-medium text-muted-foreground">Telegram</span>
               <Input value={edit.telegram} onChange={(event) => setEdit({ ...edit, telegram: event.target.value })} className="mt-1" />
             </label>
             <label className="block">
-              <span className="text-xs font-medium text-muted-foreground">Teams</span>
+              <span className="text-xs font-medium text-muted-foreground">Microsoft Teams</span>
               <Input value={edit.teams} onChange={(event) => setEdit({ ...edit, teams: event.target.value })} className="mt-1" />
             </label>
             <label className="block">

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Copy } from 'lucide-react';
 import type { Advertiser, Offer, OfferStatus } from '@fatexia/types';
-import { ExternalLinkButton, StatusBadge, toast } from '@fatexia/ui';
+import { ExternalLinkButton, StatusBadge, toast, RichText } from '@fatexia/ui';
 import { getAdvertisers } from '../../lib/advertisers-api';
 import { getOffer } from '../../lib/offers-api';
 
@@ -127,7 +127,7 @@ export function OfferDetails() {
           {offer.description && (
             <div className="space-y-1 py-2 text-sm">
               <p className="text-muted-foreground">Description</p>
-              <p className="whitespace-pre-wrap text-foreground">{offer.description}</p>
+              <RichText html={offer.description} className="text-foreground" />
             </div>
           )}
           {offer.kpi && (

@@ -8,6 +8,7 @@ import {
   Input,
   Modal,
   PageHeader,
+  RichText,
   Select,
   TableSkeleton,
   toast,
@@ -163,7 +164,7 @@ export function Browse() {
             {detail.description && (
               <div>
                 <p className="text-xs font-medium text-muted-foreground">Description</p>
-                <p className="mt-0.5 whitespace-pre-wrap text-muted-foreground">{detail.description}</p>
+                <RichText html={detail.description} className="mt-0.5 text-muted-foreground" />
               </div>
             )}
             {detail.remarksForAffiliateManager && (

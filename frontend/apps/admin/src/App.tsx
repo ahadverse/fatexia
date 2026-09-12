@@ -16,6 +16,7 @@ import { EditOffer } from './pages/offers/EditOffer';
 import { OfferDetails } from './pages/offers/OfferDetails';
 import { Categories } from './pages/offers/Categories';
 import { SmartLinks } from './pages/offers/SmartLinks';
+import { SmartLinkForm } from './pages/offers/SmartLinkForm';
 import { AccessRequests, OfferApprovals } from './pages/offers/AccessRequests';
 import { AffiliateOfferCr } from './pages/offers/AffiliateOfferCr';
 
@@ -110,6 +111,10 @@ function App() {
           <Route path="/offers/cr-optimizer" element={<Guarded permission="reports.view" element={<OfferCrOptimizer />} />} />
           <Route path="/offers/affiliate-offer-cr" element={<Guarded permission="reports.view" element={<AffiliateOfferCr />} />} />
           <Route path="/offers/smart-links" element={<Guarded permission="offers.view" element={<SmartLinks />} />} />
+          {/* Creating and editing need offers.create/edit, not offers.view — a manager
+              who may only read the list must not reach the form by typing the URL. */}
+          <Route path="/offers/smart-links/create" element={<Guarded permission="offers.create" element={<SmartLinkForm />} />} />
+          <Route path="/offers/smart-links/:id" element={<Guarded permission="offers.edit" element={<SmartLinkForm />} />} />
           <Route path="/offers/approvals" element={<Guarded permission="offers.edit" element={<OfferApprovals />} />} />
           <Route path="/offers/access-requests" element={<Guarded permission="offers.edit" element={<AccessRequests />} />} />
           <Route path="/offers/:id" element={<Guarded permission="offers.view" element={<OfferDetails />} />} />

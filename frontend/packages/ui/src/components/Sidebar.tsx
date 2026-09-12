@@ -150,6 +150,7 @@ function SidebarItem({
   // Ternary, not `&&`: an empty-string icon name would make `&&` yield `''`, which
   // `??` passes through as a value rather than falling back to the default pair.
   const iconColor = (item.icon ? ICON_COLORS[item.icon] : undefined) ?? inherited ?? DEFAULT_ICON_COLOR;
+  const RowTag = (hasChildren ? 'button' : 'a') as 'button';
 
   // Collapsed groups open as a floating panel beside the rail. It is portalled to the
   // body because `nav` scrolls, and a scroll container clips on both axes — anchored
@@ -190,10 +191,20 @@ function SidebarItem({
       {current && (
         <span className={cn('absolute inset-y-1 left-0 z-10 w-1 rounded-r-full', iconColor.bar)} aria-hidden="true" />
       )}
-      <button
-        type="button"
-        onClick={() => {
+      {/* A leaf row is an anchor with a real href, not a button. A button is not a link
+          as far as the browser is concerned: ctrl/cmd-click, middle-click and "Open link
+          in new tab" all do nothing on one, and the address never appears on hover.
+          Modified clicks are left alone below so the browser handles them itself; only a
+          plain left click is taken over for client-side routing.
+
+          A group header stays a button — it opens a submenu rather than going anywhere,
+          so there is no address for it to carry. */}
+      <RowTag
+        {...(hasChildren ? { type: 'button' as const } : { href: item.path })}
+        onClick={(event: React.MouseEvent) => {
           if (!hasChildren) {
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+            event.preventDefault();
             onNavigate(item.path);
             return;
           }
@@ -243,7 +254,7 @@ function SidebarItem({
         {hasChildren && !collapsed && (
           <ChevronDown className={cn('size-4 shrink-0 transition-transform duration-200', open && 'rotate-180')} />
         )}
-      </button>
+      </RowTag>
 
       {/* `force-dark` again here: portalled to the body, the panel is outside the
           aside that pins the dark palette, so it would otherwise render in the page's
@@ -264,9 +275,12 @@ function SidebarItem({
             <ul>
               {item.children!.map((child) => (
                 <li key={child.path}>
-                  <button
-                    type="button"
-                    onClick={() => {
+                  {/* Anchors here too — see the note on the row above. */}
+                  <a
+                    href={child.path}
+                    onClick={(event) => {
+                      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+                      event.preventDefault();
                       setFlyout(null);
                       onNavigate(child.path);
                     }}
@@ -278,7 +292,7 @@ function SidebarItem({
                     )}
                   >
                     {child.label}
-                  </button>
+                  </a>
                 </li>
               ))}
             </ul>
