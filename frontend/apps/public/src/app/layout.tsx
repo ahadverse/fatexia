@@ -8,6 +8,7 @@ import { Footer } from '@/components/Footer';
 import { DotRain } from '@/components/DotRain';
 import { BackToTop } from '@/components/BackToTop';
 import { JsonLd } from '@/components/JsonLd';
+import { Analytics } from '@/components/Analytics';
 import { SITE_NAME, SITE_URL, organizationSchema, websiteSchema } from '@/lib/seo';
 
 const inter = Inter({
@@ -78,6 +79,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`dark ${inter.variable}`}>
       <body className="bg-background font-sans text-foreground antialiased">
+        <Analytics />
         {/* Site-wide graph nodes. Page-level schemas reference these by @id rather than
             redeclaring the organisation on every route. */}
         <JsonLd data={[organizationSchema(), websiteSchema()]} />
