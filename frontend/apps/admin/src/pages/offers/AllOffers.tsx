@@ -87,6 +87,9 @@ export function AllOffers() {
       header: 'Name',
       render: (o) => (
         <button type="button" onClick={() => navigate(`/offers/${o.id}`)} className="text-left font-medium text-foreground hover:underline">
+          {/* The offer number, where every network puts it — it is what the tracking
+              link carries and what a message about this offer will quote. */}
+          <span className="mr-1 text-muted-foreground">({o.refId})</span>
           {o.name}
         </button>
       ),

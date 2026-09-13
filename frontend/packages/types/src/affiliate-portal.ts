@@ -79,7 +79,11 @@ export interface AffiliateDashboard {
 
 export interface OwnConversion {
   id: string;
+  /** The conversion's own short number — what a payout query quotes. */
+  refId: number;
   clickId: string | null;
+  /** The click's short number: what the advertiser was given and posted back. */
+  clickRefId: number | null;
   offerId: string;
   offerName: string | null;
   payoutAmount: number;
@@ -106,6 +110,8 @@ export interface OwnConversion {
  */
 export interface OwnClickLog {
   id: string;
+  /** The number the advertiser saw as `click_id`. */
+  refId: number;
   offerId: string;
   offerName: string | null;
   ip: string;

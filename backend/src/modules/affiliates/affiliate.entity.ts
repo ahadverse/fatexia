@@ -27,6 +27,7 @@ export class Affiliate {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
+
   @OneToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })
   user!: User;

@@ -18,7 +18,9 @@ export const affiliateMenu: MenuConfig = {
           icon: 'offers',
           children: [
             { label: 'Browse', path: '/offers/browse' },
-            { label: 'Request Access', path: '/offers/request-access' },
+            // Named for what the page does now: asking happens on Browse, beside the
+            // offer being asked about; this one tracks the decisions.
+            { label: 'Access Requests', path: '/offers/request-access' },
             { label: 'Tracking Link', path: '/offers/tracking-link' },
             { label: 'Smart-Links', path: '/offers/smart-links' },
           ],

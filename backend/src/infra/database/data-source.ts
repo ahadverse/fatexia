@@ -12,6 +12,7 @@ import { OfferCategory } from '../../modules/offer-categories/offer-category.ent
 import { Offer } from '../../modules/offers/offer.entity';
 import { PayoutRule } from '../../modules/offers/payout-rule.entity';
 import { OfferCap } from '../../modules/offers/offer-cap.entity';
+import { OfferFavourite } from '../../modules/offers/offer-favourite.entity';
 import { OfferAccessRequest } from '../../modules/offer-access-requests/offer-access-request.entity';
 import { SmartLink } from '../../modules/smart-links/smart-link.entity';
 import { Click } from '../../modules/clicks/click.entity';
@@ -27,6 +28,7 @@ import { EmailTemplate } from '../../modules/email-templates/email-template.enti
 import { NetworkSetting } from '../../modules/network-settings/network-setting.entity';
 import { GlobalPostback } from '../../modules/global-postbacks/global-postback.entity';
 import { Integration } from '../../modules/integrations/integration.entity';
+import { GeoipDatabase } from '../../modules/geo-source/geoip-database.entity';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -59,6 +61,7 @@ export const AppDataSource = new DataSource({
     Offer,
     PayoutRule,
     OfferCap,
+    OfferFavourite,
     OfferAccessRequest,
     SmartLink,
     Click,
@@ -73,6 +76,7 @@ export const AppDataSource = new DataSource({
     EmailTemplate,
     NetworkSetting,
     Integration,
+    GeoipDatabase,
   ],
   migrations: [`${__dirname}/migrations/*.{ts,js}`],
 });

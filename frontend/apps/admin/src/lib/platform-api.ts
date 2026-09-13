@@ -233,8 +233,15 @@ export function updateNetworkSettings(input: Partial<NetworkSettings>): Promise<
 export type GeoipEditionKey = 'GeoLite2-City' | 'GeoLite2-ASN';
 
 export interface GeoipEditionStatus {
+  /** On the Tracker's disk right now — what its lookups actually use. */
   present: boolean;
   updatedAt: string | null;
+  /**
+   * When it was last downloaded from MaxMind, per the copy kept in Postgres. Differs
+   * from `updatedAt` after a restart, when the file's timestamp is the moment it was
+   * restored from that copy rather than when the data was fetched.
+   */
+  storedAt: string | null;
 }
 
 export type GeoipStatus = Record<GeoipEditionKey, GeoipEditionStatus>;

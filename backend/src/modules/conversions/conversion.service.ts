@@ -1,6 +1,7 @@
 import { NotFoundError } from '../../common/errors';
 import { paginate, type Paginated } from '../../common/pagination';
 import { affiliateNames, offerNames } from '../../common/entity-names';
+import { clickRepository } from '../clicks/click.repository';
 import { conversionRepository } from './conversion.repository';
 import { ConversionStatus } from './conversion.entity';
 import { affiliateService } from '../affiliates/affiliate.service';
@@ -33,15 +34,19 @@ export const conversionService = {
       conversionRepository.totals(filters),
     ]);
 
-    const [offers, affiliates] = await Promise.all([
+    const [offers, affiliates, clickRefIds] = await Promise.all([
       offerNames(rows.map((r) => r.offerId)),
       affiliateNames(rows.flatMap((r) => (r.affiliateId ? [r.affiliateId] : []))),
+      // The number the advertiser posted back, which is what a dispute about this
+      // conversion will quote — the stored clickId is the internal uuid.
+      clickRepository.refIdsByIds(rows.flatMap((r) => (r.clickId ? [r.clickId] : []))),
     ]);
 
     const dtos = rows.map((row) =>
       toConversionDto(row, {
         offerName: offers.get(row.offerId) ?? null,
         affiliateName: row.affiliateId ? (affiliates.get(row.affiliateId) ?? null) : null,
+        clickRefId: row.clickId ? (clickRefIds.get(row.clickId) ?? null) : null,
       }),
     );
 
@@ -70,11 +75,16 @@ export const conversionService = {
       conversionRepository.totals(scoped),
     ]);
 
-    const offers = await offerNames(rows.map((row) => row.offerId));
+    const [offers, clickRefIds] = await Promise.all([
+      offerNames(rows.map((row) => row.offerId)),
+      clickRepository.refIdsByIds(rows.flatMap((row) => (row.clickId ? [row.clickId] : []))),
+    ]);
 
     return {
       ...paginate(
-        rows.map((row) => toOwnConversionDto(row, offers.get(row.offerId) ?? null)),
+        rows.map((row) =>
+          toOwnConversionDto(row, offers.get(row.offerId) ?? null, row.clickId ? (clickRefIds.get(row.clickId) ?? null) : null),
+        ),
         total,
         filters,
       ),
@@ -87,13 +97,15 @@ export const conversionService = {
     if (!conversion) {
       throw new NotFoundError('Conversion not found');
     }
-    const [offers, affiliates] = await Promise.all([
+    const [offers, affiliates, clickRefIds] = await Promise.all([
       offerNames([conversion.offerId]),
       affiliateNames(conversion.affiliateId ? [conversion.affiliateId] : []),
+      clickRepository.refIdsByIds(conversion.clickId ? [conversion.clickId] : []),
     ]);
     return toConversionDto(conversion, {
       offerName: offers.get(conversion.offerId) ?? null,
       affiliateName: conversion.affiliateId ? (affiliates.get(conversion.affiliateId) ?? null) : null,
+      clickRefId: conversion.clickId ? (clickRefIds.get(conversion.clickId) ?? null) : null,
     });
   },
 

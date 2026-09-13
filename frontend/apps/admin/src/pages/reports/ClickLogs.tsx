@@ -78,7 +78,9 @@ function ClickDetailDrawer({ click, onClose }: { click: ClickLog | null; onClose
   async function copyClickId() {
     if (!click) return;
     try {
-      await navigator.clipboard.writeText(click.id);
+      // The refId, not the uuid: this is the value the advertiser was handed as
+      // `click_id` and the one they will quote back when a conversion is queried.
+      await navigator.clipboard.writeText(String(click.refId));
       toast.success('Click ID copied');
     } catch {
       toast.error('Could not copy — select the ID and copy manually');
@@ -107,6 +109,11 @@ function ClickDetailDrawer({ click, onClose }: { click: ClickLog | null; onClose
       {click && (
         <DrawerRows>
           <DrawerRow label="Click ID" mono>
+            {click.refId}
+          </DrawerRow>
+          {/* The internal key, kept because it is what the database and the logs are
+              keyed on — the row above is the one anyone outside this screen uses. */}
+          <DrawerRow label="Internal ID" mono>
             {click.id}
           </DrawerRow>
           <DrawerRow label="Date">{dateTime(click.createdAt)}</DrawerRow>
@@ -222,6 +229,9 @@ export function ClickLogs() {
   }
 
   const columns: DataTableColumn<ClickLog>[] = [
+    // First column, because scanning for a click someone quoted is the single most
+    // common reason to open this page.
+    { key: 'refId', header: 'Click ID', render: (row) => <span className="font-mono text-xs">{row.refId}</span> },
     {
       key: 'createdAt',
       header: 'Date',

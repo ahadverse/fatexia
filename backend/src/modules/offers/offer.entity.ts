@@ -1,4 +1,15 @@
-import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  Generated,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import { refIdTransformer } from '../../common/ref-id';
 import { Advertiser } from '../advertisers/advertiser.entity';
 import { PayoutRule } from './payout-rule.entity';
 import { OfferCap } from './offer-cap.entity';
@@ -23,6 +34,13 @@ export enum TrackingPlatform {
 export class Offer {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
+
+  // The number people quote — "offer 100042". Filled by the database's own sequence,
+  // never written from here. See common/ref-id.ts.
+  @Index('UQ_offers_refId', { unique: true })
+  @Generated('increment')
+  @Column({ type: 'bigint', transformer: refIdTransformer })
+  refId!: number;
 
   @ManyToOne(() => Advertiser, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'advertiserId' })
@@ -65,10 +83,11 @@ export class Offer {
   @Column({ type: 'enum', enum: OfferStatus, default: OfferStatus.PENDING })
   status!: OfferStatus;
 
-  // True (default): any affiliate can see and run this offer once it's APPROVED.
-  // False: it's gated — an affiliate must have an APPROVED row in
-  // offer_access_requests for this offer before it appears in their Browse/available
-  // list (see offerRepository.findAvailableForAffiliate).
+  // True (default): any affiliate can run this offer once it's APPROVED.
+  // False: it's gated. Every affiliate still sees it on Browse — they have to, to know
+  // it is worth asking about — but the link and the brief are withheld until they have
+  // an APPROVED row in offer_access_requests, or a payout rule is dedicated to them
+  // (see offerService.accessFor and toAffiliateOfferDto).
   @Column({ type: 'boolean', default: true })
   isPublic!: boolean;
 

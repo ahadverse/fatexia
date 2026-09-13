@@ -36,7 +36,11 @@ export type UpdateConversionStatusDto = z.infer<typeof updateConversionStatusSch
 
 export interface ConversionDto {
   id: string;
+  /** The conversion's own short number — what a dispute quotes. */
+  refId: number;
   clickId: string | null;
+  /** The click's short number: what the advertiser was given and posted back. */
+  clickRefId: number | null;
   offerId: string;
   offerName: string | null;
   affiliateId: string | null;
@@ -86,7 +90,11 @@ export type OwnConversionFiltersDto = z.infer<typeof ownConversionFiltersSchema>
  */
 export interface OwnConversionDto {
   id: string;
+  /** The conversion's own short number — what a payout query quotes. */
+  refId: number;
   clickId: string | null;
+  /** The click's short number: what the advertiser was given and posted back. */
+  clickRefId: number | null;
   offerId: string;
   offerName: string | null;
   payoutAmount: number;
@@ -106,10 +114,16 @@ export interface OwnConversionDto {
   createdAt: string;
 }
 
-export function toOwnConversionDto(conversion: Conversion, offerName: string | null): OwnConversionDto {
+export function toOwnConversionDto(
+  conversion: Conversion,
+  offerName: string | null,
+  clickRefId: number | null,
+): OwnConversionDto {
   return {
     id: conversion.id,
+    refId: conversion.refId,
     clickId: conversion.clickId,
+    clickRefId,
     offerId: conversion.offerId,
     offerName,
     payoutAmount: Number(conversion.payoutAmount),
@@ -134,13 +148,15 @@ export function toOwnConversionDto(conversion: Conversion, offerName: string | n
 // revenue/payout after any correction (money integrity rule, PLAN-backend.md).
 export function toConversionDto(
   conversion: Conversion,
-  context: { offerName?: string | null; affiliateName?: string | null } = {},
+  context: { offerName?: string | null; affiliateName?: string | null; clickRefId?: number | null } = {},
 ): ConversionDto {
   const revenueAmount = Number(conversion.revenueAmount);
   const payoutAmount = Number(conversion.payoutAmount);
   return {
     id: conversion.id,
+    refId: conversion.refId,
     clickId: conversion.clickId,
+    clickRefId: context.clickRefId ?? null,
     offerId: conversion.offerId,
     offerName: context.offerName ?? null,
     affiliateId: conversion.affiliateId,

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button, ExternalLinkButton, Input, PageHeader, Select, Skeleton, toast } from '@fatexia/ui';
 import type { AffiliateOffer } from '@fatexia/types';
-import { getAvailableOffers } from '../../lib/offers-api';
+import { getRunnableOffers } from '../../lib/offers-api';
 import { useAsync } from '../../hooks/useAsync';
 
 /**
@@ -12,17 +12,19 @@ import { useAsync } from '../../hooks/useAsync';
  * tracker stores on the click and every report can then break down by.
  */
 export function TrackingLink() {
-  const offers = useAsync<AffiliateOffer[]>(() => getAvailableOffers(), []);
+  const offers = useAsync<AffiliateOffer[]>(() => getRunnableOffers(), []);
   const [offerId, setOfferId] = useState('');
   const [sub1, setSub1] = useState('');
   const [sub2, setSub2] = useState('');
   const [sub3, setSub3] = useState('');
 
+  // getRunnableOffers has already dropped the gated ones — Browse lists those so they can
+  // be asked about, but there is no link to build for one until access is approved.
   const rows = offers.data ?? [];
   const selected = rows.find((offer) => offer.id === offerId) ?? rows[0] ?? null;
 
   const link = (() => {
-    if (!selected) return '';
+    if (!selected?.trackingLink) return '';
     const url = new URL(selected.trackingLink);
     // Only set the params the affiliate actually filled in — an empty `sub1=` would
     // be stored as a real (blank) value and show up as its own row in the report.

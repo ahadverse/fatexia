@@ -35,6 +35,7 @@ export function geoLabel(click: Pick<Click, 'countryCode' | 'city' | 'regionCode
 function toClickLogRow(click: Click, offerName: string | null, affiliateName: string | null): ClickLogRow {
   return {
     id: click.id,
+    refId: click.refId,
     offerId: click.offerId,
     offerName,
     affiliateId: click.affiliateId,
@@ -83,6 +84,7 @@ function toClickLogRow(click: Click, offerName: string | null, affiliateName: st
  */
 export interface OwnClickLogRow {
   id: string;
+  refId: number;
   offerId: string;
   offerName: string | null;
   ip: string;
@@ -126,6 +128,7 @@ export const clickLogService = {
       ...paginate(
         rows.map((row) => ({
           id: row.id,
+          refId: row.refId,
           offerId: row.offerId,
           offerName: offers.get(row.offerId) ?? null,
           ip: row.ip,

@@ -1,11 +1,12 @@
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { env } from '../../common/env';
 import { logger } from '../../common/logger';
 import { redis } from '../redis/redis-client';
 import { reloadGeoipReaders } from '../../modules/geo-source/geo-source';
+import { diskStatus, restoreGeoipDatabases, saveGeoipDatabase, storedGeoipDates } from './geoip-store';
 
 /**
  * Fetches the MaxMind GeoLite2 databases. Admin-triggered only (see
@@ -41,8 +42,18 @@ export interface GeoipFetchResult {
 }
 
 export interface GeoipEditionStatus {
+  /** On the Tracker's own disk right now — what the readers actually use. */
   present: boolean;
   updatedAt: string | null;
+  /**
+   * When this edition was last downloaded from MaxMind, per the copy kept in Postgres.
+   *
+   * Worth showing separately from `updatedAt`: the file's mtime is the moment it was
+   * last written to this container's disk, which after a restart is when it was
+   * restored from the database, not when the data was fetched. An admin deciding
+   * whether to spend a download wants the second date, not the first.
+   */
+  storedAt: string | null;
 }
 
 export type GeoipStatus = Record<Edition, GeoipEditionStatus>;
@@ -109,6 +120,11 @@ async function fetchEdition(edition: Edition, targetDir: string, licenseKey: str
       // different filesystem than the target dir, so a rename risks EXDEV.
       copyFileSync(source, targetPath);
       logger.info(`[geoip] installed ${edition}.mmdb`);
+      // Kept in Postgres too, so the next restart restores it from there instead of
+      // spending another download — see geoip-store.ts. Awaited rather than fired off,
+      // so a failure is logged against this fetch rather than surfacing later with no
+      // obvious cause; it never throws.
+      await saveGeoipDatabase(edition);
       return 'downloaded';
     } catch (err) {
       const isLastAttempt = attempt === RETRY_DELAYS_MS.length;
@@ -158,18 +174,25 @@ export async function ensureGeoipDatabases(): Promise<GeoipFetchResult> {
   return { attempted: true, editions };
 }
 
-/** Read-only view of what's on disk right now, for the admin panel's status display. */
-export function getGeoipStatus(): GeoipStatus {
+/** What the admin panel shows: what is on disk, and when it was last fetched. */
+export async function getGeoipStatus(): Promise<GeoipStatus> {
+  const stored = await storedGeoipDates(EDITIONS);
   const status = {} as GeoipStatus;
   for (const edition of EDITIONS) {
-    const path = join(env.GEOIP_DB_DIR, `${edition}.mmdb`);
-    if (existsSync(path)) {
-      status[edition] = { present: true, updatedAt: statSync(path).mtime.toISOString() };
-    } else {
-      status[edition] = { present: false, updatedAt: null };
-    }
+    status[edition] = { ...diskStatus(edition), storedAt: stored.get(edition) ?? null };
   }
   return status;
+}
+
+/**
+ * Puts the stored databases back on disk. Called once at Tracker boot.
+ *
+ * This is the whole point of the Postgres copy: the container's filesystem is wiped
+ * every time the free plan recycles it, and without this an admin would have to notice
+ * and press "fetch" again — which is what was burning through MaxMind's rate limit.
+ */
+export function restoreGeoipFromStore(): Promise<void> {
+  return restoreGeoipDatabases(EDITIONS);
 }
 
 // Still runnable directly for local/manual use: `npm run geoip:fetch`.

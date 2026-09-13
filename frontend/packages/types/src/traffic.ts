@@ -5,6 +5,8 @@ export type ClickQualityStatus = 'GOOD' | 'SUSPECT' | 'BLOCKED' | 'UNSCORED';
 
 export interface ClickLog {
   id: string;
+  /** The number the advertiser saw as `click_id` — what a postback dispute quotes. */
+  refId: number;
   offerId: string;
   offerName: string | null;
   affiliateId: string | null;
@@ -49,7 +51,11 @@ export type ConversionStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'DUPLICATE'
 
 export interface Conversion {
   id: string;
+  /** The conversion's own short number — what a dispute quotes. */
+  refId: number;
   clickId: string | null;
+  /** The click's short number: what the advertiser was given and posted back. */
+  clickRefId: number | null;
   offerId: string;
   offerName: string | null;
   affiliateId: string | null;

@@ -81,6 +81,14 @@ export function Conversions() {
   }
 
   const columns: DataTableColumn<Conversion>[] = [
+    // The two numbers a query about a conversion arrives with — its own, and the click
+    // the advertiser was given. An orphan conversion has no click, hence the dash.
+    { key: 'refId', header: 'ID', render: (row) => <span className="font-mono text-xs">{row.refId}</span> },
+    {
+      key: 'clickRefId',
+      header: 'Click ID',
+      render: (row) => <span className="font-mono text-xs text-muted-foreground">{row.clickRefId ?? '—'}</span>,
+    },
     { key: 'createdAt', header: 'Time', render: (row) => dateTime(row.createdAt) },
     { key: 'offer', header: 'Offer', render: (row) => row.offerName ?? '—' },
     { key: 'affiliate', header: 'Affiliate', render: (row) => row.affiliateName ?? '—' },

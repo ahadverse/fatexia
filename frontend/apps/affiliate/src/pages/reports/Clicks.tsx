@@ -24,7 +24,7 @@ import {
 } from '@fatexia/ui';
 import type { AffiliateOffer, OwnClickLog } from '@fatexia/types';
 import { getOwnClickCountries, getOwnClicks } from '../../lib/portal-api';
-import { getAvailableOffers } from '../../lib/offers-api';
+import { getRunnableOffers } from '../../lib/offers-api';
 import { useAsync } from '../../hooks/useAsync';
 import { dateTime, number } from '../../lib/format';
 import { StatusPill } from '../../components/StatusPill';
@@ -75,7 +75,9 @@ function ClickDetailDrawer({ click, onClose }: { click: OwnClickLog | null; onCl
   async function copyClickId() {
     if (!click) return;
     try {
-      await navigator.clipboard.writeText(click.id);
+      // The refId, not the internal uuid: this is the number the advertiser was given
+      // and the one a manager will ask for when a conversion is queried.
+      await navigator.clipboard.writeText(String(click.refId));
       toast.success('Click ID copied');
     } catch {
       toast.error('Could not copy — select the ID and copy manually');
@@ -104,7 +106,7 @@ function ClickDetailDrawer({ click, onClose }: { click: OwnClickLog | null; onCl
       {click && (
         <DrawerRows>
           <DrawerRow label="Click ID" mono>
-            {click.id}
+            {click.refId}
           </DrawerRow>
           <DrawerRow label="Date">{dateTime(click.createdAt)}</DrawerRow>
           <DrawerRow label="Offer">{click.offerName ?? '—'}</DrawerRow>
@@ -166,7 +168,7 @@ export function Clicks() {
   );
 
   const clicks = useAsync(() => getOwnClicks(filters), [filters]);
-  const offers = useAsync<AffiliateOffer[]>(() => getAvailableOffers(), []);
+  const offers = useAsync<AffiliateOffer[]>(() => getRunnableOffers(), []);
   const countries = useAsync<string[]>(() => getOwnClickCountries(), []);
 
   function runFilter() {

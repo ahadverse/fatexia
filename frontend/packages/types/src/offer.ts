@@ -38,6 +38,8 @@ export interface OfferCap {
 
 export interface Offer {
   id: string;
+  /** The short number the offer is known by — what links and messages quote. */
+  refId: number;
   advertiserId: string;
   name: string;
   previewLink?: string;
@@ -153,11 +155,20 @@ export interface AffiliatePayoutRule {
 // defaultPayoutAmount, remarksForAdmin) are dropped entirely — never add them back
 // here without adding them back server-side first. `trackingLink` arrives with the
 // caller's own affiliate id already substituted, so it is usable as-is.
+/**
+ * Whether the affiliate may run an offer, and if not, how far along asking is.
+ * GRANTED = public, dedicated to them, or their request was approved.
+ */
+export type OfferAccess = 'GRANTED' | 'PENDING' | 'REJECTED' | 'LOCKED';
+
 export interface AffiliateOffer {
   id: string;
+  /** The short number the offer is known by — what links and messages quote. */
+  refId: number;
   advertiserId: string;
   advertiserName: string | null;
   name: string;
+  access: OfferAccess;
   previewLink?: string;
   description?: string;
   kpi?: string;
@@ -167,7 +178,18 @@ export interface AffiliateOffer {
   endDate?: string;
   currency: string;
   status: OfferStatus;
-  trackingLink: string;
+  /** Null unless access is GRANTED — the link is the permission to send traffic. */
+  trackingLink: string | null;
+  /**
+   * Network-wide conversion rate and payout-per-click over the last 30 days — everyone's
+   * traffic, not the caller's, which is what makes them useful for an offer they have
+   * never run. Null when the offer took no clicks in the window, so the UI shows "no
+   * data" rather than a 0% that reads as "does not convert".
+   */
+  conversionRate: number | null;
+  epc: number | null;
+  /** This affiliate's own bookmark. A shortlist marker; it grants nothing. */
+  favourite: boolean;
   trackingPlatform: TrackingPlatform;
   trafficTypes: string[];
   /** Sources the affiliate may NOT send. A source in neither list is unspecified. */

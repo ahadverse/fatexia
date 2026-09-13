@@ -1,7 +1,13 @@
 import type { NextFunction, Response } from 'express';
 import type { AuthenticatedRequest } from '../../common/guards/auth.guard';
 import { offerService } from './offer.service';
-import type { CreateOfferDto, OfferFiltersDto, UpdateOfferDto, UpdateOfferStatusDto } from './offer.dto';
+import type {
+  CreateOfferDto,
+  OfferFiltersDto,
+  SetOfferFavouriteDto,
+  UpdateOfferDto,
+  UpdateOfferStatusDto,
+} from './offer.dto';
 
 export const offerController = {
   async getOffers(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
@@ -16,6 +22,23 @@ export const offerController = {
   async getAvailableOffers(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       res.json(await offerService.getAvailableOffers(req.user!));
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async getAvailableOffer(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      res.json(await offerService.getAvailableOffer(req.user!, req.params.id!));
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async setOfferFavourite(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { favourite } = req.body as SetOfferFavouriteDto;
+      res.json(await offerService.setOfferFavourite(req.user!, req.params.id!, favourite));
     } catch (err) {
       next(err);
     }

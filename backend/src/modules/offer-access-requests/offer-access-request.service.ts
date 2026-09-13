@@ -2,7 +2,7 @@ import { In } from 'typeorm';
 import { AppDataSource } from '../../infra/database/data-source';
 import { NotFoundError, ValidationError } from '../../common/errors';
 import { Offer } from '../offers/offer.entity';
-import { affiliateTrackingLinkFor } from '../offers/offer.dto';
+import { affiliateLinkId, affiliateTrackingLinkFor } from '../offers/offer.dto';
 import { affiliateRepository } from '../affiliates/affiliate.repository';
 import { notificationService } from '../notifications/notification.service';
 import { NotificationCategory, NotificationLevel } from '../notifications/notification.entity';
@@ -149,7 +149,7 @@ export const offerAccessRequestService = {
           macros: {
             affiliate_name: affiliate.fullName ?? 'there',
             offer_name: offer?.name ?? 'the offer',
-            offer_link: offer ? affiliateTrackingLinkFor(offer.id, affiliate.id) : '',
+            offer_link: offer ? affiliateTrackingLinkFor(offer.refId, affiliateLinkId(affiliate)) : '',
             decision_note: dto.decisionNote ?? '',
           },
         }),

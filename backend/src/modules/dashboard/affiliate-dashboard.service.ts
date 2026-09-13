@@ -81,7 +81,7 @@ export const affiliateDashboardService = {
       await Promise.all([
         reportService.getAffiliateTrend(affiliateId, windowed),
         reportService.getAffiliateTopRows('offer', affiliateId, windowed, TOP_LIST_SIZE),
-        offerService.getAvailableOffers({ id: userId }),
+        offerService.countAvailableOffers({ id: userId }),
         invoiceService.getOwnBalance(userId),
         affiliatePointRepository.balances(),
         AppDataSource.getRepository(Conversion).count({
@@ -125,7 +125,10 @@ export const affiliateDashboardService = {
         conversionRate: totals.clicks === 0 ? 0 : Number(((totals.conversions / totals.clicks) * 100).toFixed(2)),
         payout: Number(totals.payout.toFixed(2)),
         epc: totals.clicks === 0 ? 0 : Number((totals.payout / totals.clicks).toFixed(4)),
-        availableOffers: availableOffers.length,
+        // Granted only — the browse list now carries the gated offers too so an
+        // affiliate can see what is worth asking about, but the tile counts what they
+        // can run today (see offerService.countAvailableOffers).
+        availableOffers,
         pendingPayout: balance.eligibleAmount,
         totalPoints: Number(points?.totalPoints ?? 0),
         unreadMessages,

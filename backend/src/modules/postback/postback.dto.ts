@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isRefId, isUuid } from '../../common/ref-id';
 
 // GET-only, query-based — mirrors /click. transaction_id is an opaque advertiser
 // reference (their own order/sale id), never an amount: money is never accepted from
@@ -11,9 +12,15 @@ export const postbackQuerySchema = z.object({
    * *their* id, not ours, so substituting it would name an offer we have never heard
    * of. When absent the offer is taken from the click, which already knows it.
    *
-   * Still accepted for the per-offer URLs already handed out.
+   * Still accepted for the per-offer URLs already handed out — which is why it takes
+   * the offer's short `refId` (what the URL carries now) or the uuid (what every URL
+   * handed to an advertiser before this carried). A postback URL lives in someone
+   * else's system; the network does not get to reissue it.
    */
-  offerId: z.string().uuid().optional(),
+  offerId: z
+    .string()
+    .refine((value) => isRefId(value) || isUuid(value), { message: 'Invalid offer' })
+    .optional(),
   click_id: z.string().min(1).max(255),
   secret: z.string().min(1),
   transaction_id: z.string().max(255).optional(),

@@ -1,4 +1,5 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, Generated, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { refIdTransformer } from '../../common/ref-id';
 
 // PENDING → APPROVED → PAID is the happy path. REJECTED/DUPLICATE are terminal
 // negatives; CHARGEBACK is a post-PAID reversal. See PLAN-backend.md.
@@ -15,6 +16,13 @@ export enum ConversionStatus {
 export class Conversion {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
+
+  // The conversion number quoted in a dispute — "check conversion 300412". Filled by
+  // the database's own sequence; see common/ref-id.ts.
+  @Index('UQ_conversions_refId', { unique: true })
+  @Generated('increment')
+  @Column({ type: 'bigint', transformer: refIdTransformer })
+  refId!: number;
 
   // Nullable because an orphan conversion (postback with no matching click) still
   // gets recorded — flagged via isOrphan rather than dropped.

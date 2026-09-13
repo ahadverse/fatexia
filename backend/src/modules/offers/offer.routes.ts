@@ -5,13 +5,30 @@ import { requireRole } from '../../common/guards/role.guard';
 import { attachManagerScope, requirePermission } from '../../common/guards/manager-scope.guard';
 import { UserRole } from '../users/user.entity';
 import { offerController } from './offer.controller';
-import { createOfferSchema, offerFiltersSchema, updateOfferSchema, updateOfferStatusSchema } from './offer.dto';
+import {
+  createOfferSchema,
+  offerFiltersSchema,
+  setOfferFavouriteSchema,
+  updateOfferSchema,
+  updateOfferStatusSchema,
+} from './offer.dto';
 
 export const offerRoutes = Router();
 
 // Affiliate offer browse — registered BEFORE the staff guard below (and ahead of
 // `/:id`, which `/available` would otherwise match) with its own AFFILIATE guard.
 offerRoutes.get('/available', requireAuth, requireRole(UserRole.AFFILIATE), offerController.getAvailableOffers);
+// The affiliate detail page. Nested under `/available` rather than sitting at
+// `/:id/affiliate` so it stays on the affiliate side of the staff guard below, and so
+// the URL says plainly that this is the browsable projection, not the admin one.
+offerRoutes.get('/available/:id', requireAuth, requireRole(UserRole.AFFILIATE), offerController.getAvailableOffer);
+offerRoutes.put(
+  '/available/:id/favourite',
+  requireAuth,
+  requireRole(UserRole.AFFILIATE),
+  validate(setOfferFavouriteSchema),
+  offerController.setOfferFavourite,
+);
 
 // Managers reach offers through the permission grid rather than not at all (issue
 // #20): an admin who wants a manager building offers ticks offers.create, and one who

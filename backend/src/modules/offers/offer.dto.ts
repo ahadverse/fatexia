@@ -110,6 +110,15 @@ export const updateOfferStatusSchema = z.object({
 
 export type UpdateOfferStatusDto = z.infer<typeof updateOfferStatusSchema>;
 
+// The bookmark carries its target state rather than being a bare "toggle" POST, so two
+// tabs (or a retried request) converge on what the affiliate last clicked instead of
+// flipping each other.
+export const setOfferFavouriteSchema = z.object({
+  favourite: z.boolean(),
+});
+
+export type SetOfferFavouriteDto = z.infer<typeof setOfferFavouriteSchema>;
+
 export interface PayoutRuleDto {
   id: string;
   offerId: string;
@@ -155,6 +164,8 @@ export function toOfferCapDto(cap: OfferCap): OfferCapDto {
 
 export interface OfferDto {
   id: string;
+  /** The short number the offer is known by — see common/ref-id.ts. */
+  refId: number;
   advertiserId: string;
   name: string;
   previewLink?: string;
@@ -240,9 +251,13 @@ function toAffiliatePayoutRuleDto(rule: PayoutRule): AffiliatePayoutRuleDto {
 // needs an admin-only /advertisers call.
 export interface AffiliateOfferDto {
   id: string;
+  /** The short number the offer is known by — what a link and a message quote. */
+  refId: number;
   advertiserId: string;
   advertiserName: string | null;
   name: string;
+  /** Whether this affiliate may run it — see OfferAccess and toAffiliateOfferDto. */
+  access: OfferAccess;
   previewLink?: string;
   description?: string;
   kpi?: string;
@@ -252,7 +267,19 @@ export interface AffiliateOfferDto {
   endDate?: string;
   currency: string;
   status: OfferStatus;
-  trackingLink: string;
+  /** Null unless access is GRANTED: the link is the permission. */
+  trackingLink: string | null;
+  /**
+   * Network-wide conversion rate and payout-per-click over the last 30 days — not the
+   * caller's own numbers, which is the point: this is how an affiliate judges an offer
+   * they have never run. Null when the offer has taken no clicks in the window, so the
+   * list can say "no data" instead of showing a 0% that reads as "does not convert".
+   * Shown on locked offers too — the figures are what decides whether to ask.
+   */
+  conversionRate: number | null;
+  epc: number | null;
+  /** This affiliate's own bookmark. A shortlist marker; it grants nothing. */
+  favourite: boolean;
   trackingPlatform: TrackingPlatform;
   trafficTypes: string[];
   disallowedTrafficTypes: string[];
@@ -266,45 +293,106 @@ export interface AffiliateOfferDto {
   createdAt: string;
 }
 
+/**
+ * Tracking links name their offer and affiliate by the short public id, not the uuid.
+ *
+ * A link is the most-copied string in the product — it goes into ad platforms, chat
+ * messages, spreadsheets and other people's systems — and two 36-character uuids made
+ * it unreadable and impossible to check by eye. The offer carries its `refId`; the
+ * affiliate carries the `publicId` (`AFF-1001`) it already had, rather than being given
+ * a second number that means the same thing.
+ *
+ * The tracker still accepts uuids in both positions, so every link already issued keeps
+ * working — a link, once pasted into someone else's system, is not something the network
+ * gets to reissue (see offerRepository.findForClick, affiliateRepository.resolveIdForClick).
+ */
+
 // The admin view has no single affiliate to attribute to, so it keeps the
 // {affiliate_id} macro — an admin copying this link would be copying a template.
-function trackingLinkFor(offerId: string): string {
-  return `${env.PUBLIC_TRACKING_URL}/click?offerId=${offerId}&affiliateId={affiliate_id}`;
+function trackingLinkFor(offerRefId: number): string {
+  return `${env.PUBLIC_TRACKING_URL}/click?offerId=${offerRefId}&affiliateId={affiliate_id}`;
 }
 
 // The affiliate view substitutes the caller's own id, resolved from their JWT — so
 // the link they copy actually works. The id is never taken from the request.
 // Exported for the email triggers (access-request approved, offer-live) that need
 // the same working link outside this DTO's own render path.
-export function affiliateTrackingLinkFor(offerId: string, affiliateId: string): string {
-  return `${env.PUBLIC_TRACKING_URL}/click?offerId=${offerId}&affiliateId=${affiliateId}`;
+export function affiliateTrackingLinkFor(offerRefId: number, affiliatePublicId: string): string {
+  return `${env.PUBLIC_TRACKING_URL}/click?offerId=${offerRefId}&affiliateId=${affiliatePublicId}`;
+}
+
+/**
+ * What a link should call this affiliate.
+ *
+ * `publicId` for every affiliate that has one, which is all of them — the column is
+ * nullable only because it was added to a table that already had rows, and that
+ * migration backfilled them. The uuid is the fallback for a row that somehow escaped
+ * both, so a missing display id degrades to a longer link rather than a broken one.
+ */
+export function affiliateLinkId(affiliate: { publicId: string | null; id: string }): string {
+  return affiliate.publicId ?? affiliate.id;
 }
 
 // What the admin copies and hands to the advertiser to paste into their own tracking
 // platform's conversion-postback setting. {click_id} stays a macro — the advertiser's
 // platform substitutes it per conversion, the same way ours substitutes it into
 // destinationUrl per click.
-function postbackUrlFor(offerId: string, postbackSecret: string | null): string | null {
+function postbackUrlFor(offerRefId: number, postbackSecret: string | null): string | null {
   if (!postbackSecret) return null;
-  return `${env.PUBLIC_TRACKING_URL}/postback?offerId=${offerId}&click_id={click_id}&secret=${postbackSecret}`;
+  return `${env.PUBLIC_TRACKING_URL}/postback?offerId=${offerRefId}&click_id={click_id}&secret=${postbackSecret}`;
 }
 
-export function toAffiliateOfferDto(offer: Offer, affiliateId?: string): AffiliateOfferDto {
+/**
+ * Whether this affiliate may actually run the offer, and if not, how far along asking is.
+ *
+ * GRANTED covers all three routes in: the offer is public, a payout rule dedicates it to
+ * them, or their access request was approved. The rest describe a gated offer they are
+ * still outside of.
+ */
+export type OfferAccess = 'GRANTED' | 'PENDING' | 'REJECTED' | 'LOCKED';
+
+/**
+ * `access` decides what this projection is allowed to carry.
+ *
+ * A locked offer is browsable — it shows on the list with its payout, geo and devices so
+ * the affiliate can decide whether to ask — but it must not carry the things that let
+ * them act on it. `trackingLink` is null, because a link is permission: the tracker
+ * takes a click at face value, so handing one out would make the approval step
+ * decorative. The brief (description, KPI, manager's notes, preview link) is withheld
+ * for the same reason the network gated the offer in the first place.
+ */
+export interface AffiliateOfferContext {
+  /** The caller's own public id, substituted into the tracking link. */
+  affiliateLinkId?: string;
+  access: OfferAccess;
+  /** From reportService.getOfferStats — absent when the offer has no traffic yet. */
+  stats?: { conversionRate: number; epc: number };
+  favourite: boolean;
+}
+
+export function toAffiliateOfferDto(offer: Offer, context: AffiliateOfferContext): AffiliateOfferDto {
+  const { affiliateLinkId: linkId, access, stats, favourite } = context;
+  const granted = access === 'GRANTED';
   return {
     id: offer.id,
+    refId: offer.refId,
     advertiserId: offer.advertiserId,
     advertiserName: offer.advertiser?.name ?? null,
     name: offer.name,
-    previewLink: offer.previewLink ?? undefined,
-    description: offer.description ?? undefined,
-    kpi: offer.kpi ?? undefined,
+    access,
+    previewLink: granted ? offer.previewLink ?? undefined : undefined,
+    description: granted ? offer.description ?? undefined : undefined,
+    kpi: granted ? offer.kpi ?? undefined : undefined,
     category: offer.category ?? undefined,
     iconUrl: offer.iconUrl ?? undefined,
     startDate: offer.startDate?.toISOString(),
     endDate: offer.endDate?.toISOString(),
     currency: offer.currency,
     status: offer.status,
-    trackingLink: affiliateId ? affiliateTrackingLinkFor(offer.id, affiliateId) : trackingLinkFor(offer.id),
+    trackingLink: granted ? (linkId ? affiliateTrackingLinkFor(offer.refId, linkId) : trackingLinkFor(offer.refId)) : null,
+    conversionRate: stats?.conversionRate ?? null,
+    epc: stats?.epc ?? null,
+    favourite,
     trackingPlatform: offer.trackingPlatform,
     trafficTypes: offer.trafficTypes,
     disallowedTrafficTypes: offer.disallowedTrafficTypes ?? [],
@@ -312,7 +400,7 @@ export function toAffiliateOfferDto(offer: Offer, affiliateId?: string): Affilia
     networkOfferId: offer.networkOfferId ?? undefined,
     autoApproveConversions: offer.autoApproveConversions,
     allowDeepLinking: offer.allowDeepLinking,
-    remarksForAffiliateManager: offer.remarksForAffiliateManager ?? undefined,
+    remarksForAffiliateManager: granted ? offer.remarksForAffiliateManager ?? undefined : undefined,
     payoutRules: offer.payoutRules.map(toAffiliatePayoutRuleDto),
     caps: offer.caps.map(toOfferCapDto),
     createdAt: offer.createdAt.toISOString(),
@@ -324,6 +412,7 @@ export function toOfferDto(offer: Offer): OfferDto {
   const displayPayoutAmount = representativeRule ? computeAmounts(representativeRule).payoutAmount : 0;
   return {
     id: offer.id,
+    refId: offer.refId,
     advertiserId: offer.advertiserId,
     name: offer.name,
     previewLink: offer.previewLink ?? undefined,
@@ -335,7 +424,7 @@ export function toOfferDto(offer: Offer): OfferDto {
     endDate: offer.endDate?.toISOString(),
     currency: offer.currency,
     status: offer.status,
-    trackingLink: trackingLinkFor(offer.id),
+    trackingLink: trackingLinkFor(offer.refId),
     trackingPlatform: offer.trackingPlatform,
     isPublic: offer.isPublic,
     trafficTypes: offer.trafficTypes,
@@ -355,7 +444,7 @@ export function toOfferDto(offer: Offer): OfferDto {
     fallbackUrl: offer.fallbackUrl,
     postbackSecret: offer.postbackSecret,
     allowedPostbackIps: offer.allowedPostbackIps,
-    postbackUrl: postbackUrlFor(offer.id, offer.postbackSecret),
+    postbackUrl: postbackUrlFor(offer.refId, offer.postbackSecret),
     postbackVerifiedAt: offer.postbackVerifiedAt?.toISOString() ?? null,
     blockedRedirectUrl: offer.blockedRedirectUrl,
   };

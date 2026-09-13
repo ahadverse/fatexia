@@ -27,9 +27,11 @@ const { findOffer, markPostbackVerified, findClick, findConversionByClickId, cre
 );
 
 vi.mock('../offers/offer.repository', () => ({
-  offerRepository: { findByIdWithPayoutRules: findOffer, markPostbackVerified },
+  // findForClick, not findByIdWithPayoutRules: the postback resolves the offer by
+  // whichever identifier the URL carried (refId or uuid).
+  offerRepository: { findForClick: findOffer, markPostbackVerified },
 }));
-vi.mock('../clicks/click.repository', () => ({ clickRepository: { findById: findClick } }));
+vi.mock('../clicks/click.repository', () => ({ clickRepository: { findByPostbackId: findClick } }));
 vi.mock('../conversions/conversion.repository', () => ({
   conversionRepository: { findByClickId: findConversionByClickId, create: createConversion },
 }));

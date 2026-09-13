@@ -25,10 +25,31 @@ async function callTracker<T>(path: string, method: 'GET' | 'POST'): Promise<T> 
   }
 
   if (!res.ok) {
-    throw new AppError(`Tracker responded with HTTP ${res.status} for ${path}`, 502);
+    throw new AppError(explainTrackerFailure(res.status, path), 502);
   }
 
   return (await res.json()) as T;
+}
+
+/**
+ * Says which system actually refused, because the raw status is misleading here.
+ *
+ * A 429 on this route reads like MaxMind's download limit — the one thing this screen
+ * is about — but it is far more often the platform in front of a Tracker that is asleep
+ * or being woken too often. Reporting the number alone sent people off re-triggering
+ * fetches, which is precisely what does eventually earn a real MaxMind 429.
+ */
+function explainTrackerFailure(status: number, path: string): string {
+  if (status === 429) {
+    return 'The Tracker service is refusing requests right now (HTTP 429). On a free plan this is usually the host throttling a service that is waking from idle, not MaxMind — wait a minute and try again.';
+  }
+  if (status === 502 || status === 503 || status === 504) {
+    return `The Tracker service is not responding (HTTP ${status}). It may be starting up after being idle — wait a minute and try again.`;
+  }
+  if (status === 403) {
+    return 'The Tracker rejected the admin secret. GEOIP_ADMIN_SECRET must be the identical value on both services.';
+  }
+  return `Tracker responded with HTTP ${status} for ${path}`;
 }
 
 export const geoipService = {

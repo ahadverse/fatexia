@@ -106,6 +106,9 @@ export function OfferDetails() {
           <div>
           <h1 className="text-2xl font-semibold">{offer.name}</h1>
           <div className="mt-1 flex items-center gap-2">
+            {/* The offer number — what the tracking and postback URLs below carry, and
+                what an advertiser or affiliate will quote in a message about it. */}
+            <span className="font-mono text-sm text-muted-foreground">#{offer.refId}</span>
             <StatusBadge variant={STATUS_VARIANT[offer.status]}>{offer.status}</StatusBadge>
             <span className="text-sm text-muted-foreground">{advertiserName}</span>
           </div>

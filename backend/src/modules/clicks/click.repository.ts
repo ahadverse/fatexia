@@ -1,7 +1,8 @@
-import type { SelectQueryBuilder } from 'typeorm';
+import { In, type SelectQueryBuilder } from 'typeorm';
 import { AppDataSource } from '../../infra/database/data-source';
 import { offsetOf } from '../../common/pagination';
 import { applyManagerScope } from '../../common/manager-scope-sql';
+import { isRefId, isUuid } from '../../common/ref-id';
 import { Click } from './click.entity';
 import type { ClickLogFiltersDto, ClickSortField, ClickSummaryDto } from './click.dto';
 
@@ -55,6 +56,40 @@ export const clickRepository = {
 
   findById(id: string): Promise<Click | null> {
     return repository.findOne({ where: { id } });
+  },
+
+  /**
+   * The click a postback names, by whichever id the advertiser sends back.
+   *
+   * `{click_id}` on the destination URL is now the short `refId`, but an advertiser's
+   * platform stores whatever it was handed at click time and posts that back later —
+   * possibly weeks later. Clicks that went out before this change carry the uuid, and
+   * their conversions still have to match, so both are accepted for as long as those
+   * clicks can still convert.
+   */
+  findByPostbackId(clickId: string): Promise<Click | null> {
+    if (isRefId(clickId)) return repository.findOne({ where: { refId: Number(clickId) } });
+    // Guarded: the column is `uuid`, and Postgres errors on a malformed one rather than
+    // returning no rows — which would turn a junk postback into a 500 instead of the
+    // orphan conversion it should be recorded as.
+    if (!isUuid(clickId)) return Promise.resolve(null);
+    return repository.findOne({ where: { id: clickId } });
+  },
+
+  /**
+   * uuid → the short number for a page of clicks, in one query.
+   *
+   * A conversion stores the click's uuid, but every screen that shows a conversion
+   * wants the number the advertiser actually saw and posted back — that is the value
+   * someone quotes when a conversion is disputed. Resolved per page rather than
+   * denormalized onto the conversion row, which would be a second copy of a value that
+   * already exists.
+   */
+  async refIdsByIds(ids: string[]): Promise<Map<string, number>> {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return new Map();
+    const rows = await repository.find({ where: { id: In(unique) }, select: ['id', 'refId'] });
+    return new Map(rows.map((row) => [row.id, row.refId]));
   },
 
   findLogs(filters: ClickLogFiltersDto): Promise<[Click[], number]> {

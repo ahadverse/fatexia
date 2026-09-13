@@ -8,6 +8,7 @@ import { useSession } from './session/SessionContext';
 import { Dashboard } from './pages/Dashboard';
 
 import { Browse } from './pages/offers/Browse';
+import { OfferDetail } from './pages/offers/OfferDetail';
 import { RequestAccess } from './pages/offers/RequestAccess';
 import { TrackingLink } from './pages/offers/TrackingLink';
 import { SmartLinks } from './pages/offers/SmartLinks';
@@ -61,6 +62,9 @@ function App() {
           <Route path="/offers/request-access" element={<RequestAccess />} />
           <Route path="/offers/tracking-link" element={<TrackingLink />} />
           <Route path="/offers/smart-links" element={<SmartLinks />} />
+          {/* Last of the /offers routes: `:id` would otherwise swallow `browse`,
+              `tracking-link` and the rest. */}
+          <Route path="/offers/:id" element={<OfferDetail />} />
 
           <Route path="/reports" element={<Navigate to="/reports/performance" replace />} />
           <Route path="/reports/performance" element={<Performance />} />

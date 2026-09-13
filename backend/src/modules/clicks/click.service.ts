@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { UAParser } from 'ua-parser-js';
 import { NotFoundError } from '../../common/errors';
 import { logger } from '../../common/logger';
+import { affiliateRepository } from '../affiliates/affiliate.repository';
 import { offerRepository } from '../offers/offer.repository';
 import { OfferStatus, type Offer } from '../offers/offer.entity';
 import type { PayoutRule } from '../offers/payout-rule.entity';
@@ -14,6 +15,7 @@ import { checkResidentialProxy } from '../fraud/proxy-detection';
 import { getTrackerSettings } from '../network-settings/tracker-settings';
 import { findMatchingRuleForClick, computeAmounts } from '../offers/payout-resolution';
 import { clickRepository } from './click.repository';
+import { nextClickRefId } from './click-ref-id';
 import { ClickQualityStatus } from './click.entity';
 import { isFirstClick } from './unique-click';
 
@@ -46,7 +48,10 @@ export interface ClickRequest {
 
 export interface ClickResult {
   redirectUrl: string;
+  /** The internal uuid — logged, and what the click row is keyed on. */
   clickId: string;
+  /** The short number put on the redirect as `click_id` and posted back to us. */
+  clickRefId: number;
 }
 
 // Bands come from Network Settings, not from constants here — that page has offered
@@ -89,7 +94,9 @@ async function loadTarget(
     // One query with a join, not a bare PK read — payoutRules are needed for the
     // geo/device/OS routing decision below (issue #15). Still a single round-trip,
     // which is what the hot-path requirement (PLAN-tracker.md) actually asks for.
-    const offer = await offerRepository.findByIdWithPayoutRules(target.offerId);
+    // findForClick, not findByIdWithPayoutRules: the link may name the offer by its
+    // short refId or by the uuid older links carry.
+    const offer = await offerRepository.findForClick(target.offerId);
     if (!offer || offer.status !== OfferStatus.APPROVED || !offer.destinationUrl) {
       throw new NotFoundError('Offer not available');
     }
@@ -105,9 +112,17 @@ async function loadTarget(
 
 export const clickService = {
   async handleClick(req: ClickRequest): Promise<ClickResult> {
-    const target = await loadTarget(req.target);
+    // Resolved together: a link naming the affiliate by number costs a lookup, and
+    // there is no reason for it to sit behind the offer's.
+    const [target, affiliateId] = await Promise.all([
+      loadTarget(req.target),
+      req.affiliateId === null ? Promise.resolve(null) : affiliateRepository.resolveIdForClick(req.affiliateId),
+    ]);
 
     const clickId = randomUUID();
+    // The number the advertiser will see and post back. Drawn from a block this process
+    // reserved earlier, so it costs nothing here (see click-ref-id.ts).
+    const clickRefId = await nextClickRefId();
 
     // Fraud signals: datacenter/geo are always-on local lookups (no external call);
     // the residential-proxy check is best-effort and may resolve to null (see
@@ -127,7 +142,7 @@ export const clickService = {
     const deviceType = ua?.device.type ?? (req.userAgent ? 'desktop' : null);
     const os = ua?.os.name ?? null;
 
-    const matchable = { countryCode, deviceType, os, affiliateId: req.affiliateId };
+    const matchable = { countryCode, deviceType, os, affiliateId };
 
     // Smart-link: choose the member offer now that the visitor is known. A link that
     // resolves to nothing redirects to its own fallback and is deliberately NOT
@@ -151,7 +166,7 @@ export const clickService = {
         if (!link.fallbackUrl) {
           throw new NotFoundError('No offer available for this smart-link');
         }
-        return { redirectUrl: link.fallbackUrl, clickId };
+        return { redirectUrl: link.fallbackUrl, clickId, clickRefId };
       }
       const chosen = await pickCandidate(link, candidates);
       offer = chosen.offer;
@@ -174,8 +189,9 @@ export const clickService = {
     clickRepository
       .create({
         id: clickId,
+        refId: clickRefId,
         offerId: offer.id,
-        affiliateId: req.affiliateId,
+        affiliateId,
         smartLinkId,
         ip: req.ip,
         userAgent: req.userAgent,
@@ -213,7 +229,7 @@ export const clickService = {
       // Per-offer override first — some advertisers require rejected traffic to land
       // on their own "offer unavailable" page — then the network-wide setting, then
       // the built-in default.
-      return { redirectUrl: offer.blockedRedirectUrl?.trim() || settings.blockedRedirectUrl, clickId };
+      return { redirectUrl: offer.blockedRedirectUrl?.trim() || settings.blockedRedirectUrl, clickId, clickRefId };
     }
 
     // Issue #15: route by the offer's own geo/device/OS targeting. A rule with empty
@@ -228,7 +244,11 @@ export const clickService = {
 
     if (!matchedRule) {
       const fallback = offer.fallbackUrl?.trim() || offer.destinationUrl!;
-      return { redirectUrl: fallback.replace('{click_id}', clickId).replace('{payout_amount}', ''), clickId };
+      return {
+        redirectUrl: fallback.replace('{click_id}', String(clickRefId)).replace('{payout_amount}', ''),
+        clickId,
+        clickRefId,
+      };
     }
 
     const { payoutAmount } = computeAmounts(matchedRule, revSharePercent);
@@ -239,8 +259,11 @@ export const clickService = {
     // Unset (the normal case) falls through to the chosen offer's own destination.
     const destination = smartLinkDestinationUrl?.trim() || offer.destinationUrl!;
     return {
-      redirectUrl: destination.replace('{click_id}', clickId).replace('{payout_amount}', payoutAmount.toFixed(2)),
+      redirectUrl: destination
+        .replace('{click_id}', String(clickRefId))
+        .replace('{payout_amount}', payoutAmount.toFixed(2)),
       clickId,
+      clickRefId,
     };
   },
 };

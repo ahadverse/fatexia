@@ -40,3 +40,31 @@ export function advertiserNames(ids: string[]): Promise<NameMap> {
 export function affiliateNames(ids: string[]): Promise<NameMap> {
   return lookup(Affiliate, ids, (affiliate) => affiliate.fullName ?? affiliate.companyName ?? affiliate.id);
 }
+
+/**
+ * Affiliate labels carrying the account's email — `Jordan Blake (jordan@…)`.
+ *
+ * For reports, where the row is the only identification there is. Two affiliates on a
+ * network genuinely can share a display name, and the person reading a report is
+ * usually about to act on that row — message them, adjust a payout, investigate a CR
+ * drop — which needs the account, not just a name that might be either of two people.
+ *
+ * Its own function rather than widening affiliateNames: the short name is the right
+ * label in a filter dropdown or a chat header, where the email is noise.
+ */
+export async function affiliateLabels(ids: string[]): Promise<NameMap> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return new Map();
+  // The email lives on the linked user, so unlike the other lookups this one needs the
+  // relation joined.
+  const rows = await AppDataSource.getRepository(Affiliate).find({
+    where: { id: In(unique) },
+    relations: ['user'],
+  });
+  return new Map(
+    rows.map((affiliate) => {
+      const name = affiliate.fullName ?? affiliate.companyName ?? affiliate.id;
+      return [affiliate.id, affiliate.user?.email ? `${name} (${affiliate.user.email})` : name];
+    }),
+  );
+}

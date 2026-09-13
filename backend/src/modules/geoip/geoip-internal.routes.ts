@@ -23,8 +23,12 @@ export const geoipInternalRoutes = Router();
 
 geoipInternalRoutes.use(requireGeoipAdminSecret);
 
-geoipInternalRoutes.get('/status', (_req, res) => {
-  res.json(getGeoipStatus());
+geoipInternalRoutes.get('/status', async (_req, res, next) => {
+  try {
+    res.json(await getGeoipStatus());
+  } catch (err) {
+    next(err);
+  }
 });
 
 geoipInternalRoutes.post('/fetch', async (_req, res, next) => {

@@ -1,9 +1,10 @@
 import type { EntityManager } from 'typeorm';
 import { AppDataSource } from '../../infra/database/data-source';
-import { NotFoundError, ValidationError } from '../../common/errors';
+import { ForbiddenError, NotFoundError, ValidationError } from '../../common/errors';
 import { logger } from '../../common/logger';
 import { Advertiser } from '../advertisers/advertiser.entity';
 import { affiliateRepository } from '../affiliates/affiliate.repository';
+import { reportService } from '../reports/report.service';
 import { offerAccessRequestRepository } from '../offer-access-requests/offer-access-request.repository';
 import { AccessRequestStatus } from '../offer-access-requests/offer-access-request.entity';
 import { sendTemplateEmail, safeSendEmail } from '../../infra/email/brevo-mailer';
@@ -17,7 +18,9 @@ import {
   toAffiliateOfferDto,
   toOfferDto,
   affiliateTrackingLinkFor,
+  affiliateLinkId,
   type AffiliateOfferDto,
+  type OfferAccess,
   type CreateOfferDto,
   type OfferDto,
   type OfferFiltersDto,
@@ -117,13 +120,54 @@ function notifyOfferLive(offer: Offer): void {
                 affiliate_name: affiliate.fullName ?? 'there',
                 offer_name: offer.name,
                 payout: `${offer.currency} ${offer.defaultPayoutAmount}`,
-                offer_link: affiliateTrackingLinkFor(offer.id, affiliate.id),
+                offer_link: affiliateTrackingLinkFor(offer.refId, affiliateLinkId(affiliate)),
               },
             }).catch((err) => logger.error({ err, affiliateId: affiliate.id }, 'Failed to send OFFER_LIVE email')),
           ),
       );
     })(),
   );
+}
+
+/**
+ * The three ways an affiliate reaches a gated offer, checked before the request status.
+ *
+ * Order matters: a public offer is open to everyone regardless of what any old request
+ * row says, and an affiliate a payout rule dedicates the offer to was granted it by the
+ * admin who wrote that rule — neither should read as "pending" because a request from
+ * before that decision is still sitting there.
+ */
+function accessFor(offer: Offer, affiliateId: string, requestStatuses: Map<string, string>): OfferAccess {
+  if (offer.isPublic) return 'GRANTED';
+  const dedicated = offer.payoutRules.some((rule) => rule.targeting?.affiliateIds?.includes(affiliateId));
+  if (dedicated) return 'GRANTED';
+
+  switch (requestStatuses.get(offer.id)) {
+    case 'APPROVED':
+      return 'GRANTED';
+    case 'PENDING':
+      return 'PENDING';
+    case 'REJECTED':
+      return 'REJECTED';
+    default:
+      return 'LOCKED';
+  }
+}
+
+/**
+ * Every live offer paired with this affiliate's access to it.
+ *
+ * The part the browse list and the dashboard's count agree on, so the two can never
+ * disagree about what "available" means. Neither the projection nor the CR/EPC and
+ * bookmark lookups happen here — a caller that only needs a number should not pay for
+ * them.
+ */
+async function browsableWithAccess(affiliateId: string): Promise<{ offer: Offer; access: OfferAccess }[]> {
+  const [offers, requestStatuses] = await Promise.all([
+    offerRepository.findBrowsableForAffiliate(),
+    offerRepository.findAccessRequestStatuses(affiliateId),
+  ]);
+  return offers.map((offer) => ({ offer, access: accessFor(offer, affiliateId, requestStatuses) }));
 }
 
 export const offerService = {
@@ -139,10 +183,102 @@ export const offerService = {
     if (!affiliate) {
       throw new NotFoundError('Affiliate profile not found');
     }
-    const offers = await offerRepository.findAvailableForAffiliate(affiliate.id);
+    const [rows, stats, favouriteIds] = await Promise.all([
+      browsableWithAccess(affiliate.id),
+      // Network-wide CR/EPC, everyone's traffic — an affiliate judging an offer they
+      // have never run needs to know whether it converts for anyone. Payout-only, so
+      // it stays inside the money-visibility rule (see reportService.getOfferStats).
+      reportService.getOfferStats(),
+      offerRepository.findFavouriteOfferIds(affiliate.id),
+    ]);
+
     // The caller's own affiliate id is substituted into each tracking link, so what
-    // they copy is usable as-is rather than carrying an unresolved macro.
-    return offers.map((offer) => toAffiliateOfferDto(offer, affiliate.id));
+    // they copy is usable as-is rather than carrying an unresolved macro — and only
+    // for the offers they may actually run.
+    return rows.map(({ offer, access }) =>
+      toAffiliateOfferDto(offer, {
+        affiliateLinkId: affiliateLinkId(affiliate),
+        access,
+        stats: stats.get(offer.id),
+        favourite: favouriteIds.has(offer.id),
+      }),
+    );
+  },
+
+  /**
+   * How many offers this affiliate can run right now — the dashboard's tile.
+   *
+   * Its own method because the tile wants a number: going through getAvailableOffers
+   * would project the whole catalogue and run the CR/EPC and bookmark lookups to then
+   * read `.length` off the result.
+   */
+  async countAvailableOffers(user: { id: string }): Promise<number> {
+    const affiliate = await affiliateRepository.findByUserId(user.id);
+    if (!affiliate) {
+      throw new NotFoundError('Affiliate profile not found');
+    }
+    const rows = await browsableWithAccess(affiliate.id);
+    return rows.filter((row) => row.access === 'GRANTED').length;
+  },
+
+  /**
+   * One offer for the affiliate detail page — the same projection as the browse list.
+   *
+   * A page of its own rather than the list row expanded in place: the brief, the
+   * traffic rules and the tracking link are what an affiliate reads before running an
+   * offer, and they need a URL that survives a refresh and can be sent to someone.
+   *
+   * Granted offers only. The browse row is as far as a gated offer goes — it shows the
+   * payout, geo and CR that decide whether to ask, and nothing past that, so opening
+   * the page would either leak the brief or render a shell of withheld fields. Enforced
+   * here and not only in the UI, because the URL is guessable from the list.
+   */
+  async getAvailableOffer(user: { id: string }, offerId: string): Promise<AffiliateOfferDto> {
+    const affiliate = await affiliateRepository.findByUserId(user.id);
+    if (!affiliate) {
+      throw new NotFoundError('Affiliate profile not found');
+    }
+    const offer = await offerRepository.findBrowsableById(offerId);
+    if (!offer) {
+      throw new NotFoundError('Offer not found');
+    }
+
+    const [requestStatuses, stats, favouriteIds] = await Promise.all([
+      offerRepository.findAccessRequestStatuses(affiliate.id),
+      reportService.getOfferStats(),
+      offerRepository.findFavouriteOfferIds(affiliate.id),
+    ]);
+
+    const access = accessFor(offer, affiliate.id, requestStatuses);
+    if (access !== 'GRANTED') {
+      throw new ForbiddenError('You need access to this offer before you can open it. Request it from Browse offers.');
+    }
+
+    return toAffiliateOfferDto(offer, {
+      affiliateLinkId: affiliateLinkId(affiliate),
+      access,
+      stats: stats.get(offer.id),
+      favourite: favouriteIds.has(offer.id),
+    });
+  },
+
+  /**
+   * Toggles this affiliate's bookmark on one offer.
+   *
+   * Deliberately not gated on access: the point of bookmarking a locked offer is to
+   * keep it in view while the request is decided. The offer still has to exist, so a
+   * stale id from an old tab cannot write a row pointing at nothing.
+   */
+  async setOfferFavourite(user: { id: string }, offerId: string, favourite: boolean): Promise<{ favourite: boolean }> {
+    const affiliate = await affiliateRepository.findByUserId(user.id);
+    if (!affiliate) {
+      throw new NotFoundError('Affiliate profile not found');
+    }
+    const offer = await offerRepository.findById(offerId);
+    if (!offer) {
+      throw new NotFoundError('Offer not found');
+    }
+    return { favourite: await offerRepository.setFavourite(offerId, affiliate.id, favourite) };
   },
 
   async getOffer(id: string): Promise<OfferDto> {

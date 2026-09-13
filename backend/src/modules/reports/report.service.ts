@@ -1,4 +1,4 @@
-import { advertiserNames, affiliateNames, offerNames, type NameMap } from '../../common/entity-names';
+import { advertiserNames, affiliateLabels, affiliateNames, offerNames, type NameMap } from '../../common/entity-names';
 import { reportRepository } from './report.repository';
 import type {
   AffiliateGroupedReportDto,
@@ -41,10 +41,19 @@ function normalizeKey(key: string | null): string {
   return key ?? UNKNOWN_KEY;
 }
 
+/**
+ * Row labels for the grouped dimension.
+ *
+ * A dimension with no map falls back to the key itself, which is right for a date, a
+ * city or a sub-id — those are already the label. Affiliates carry their email too: the
+ * report row is the only identification the reader gets, and it is usually the row they
+ * are about to act on (see affiliateLabels). Countries stay as the ISO code here and
+ * are resolved to a name and a flag in the UI, which already ships the country list.
+ */
 async function labelsFor(dimension: ReportDimension, keys: string[]): Promise<NameMap> {
   const real = keys.filter((key) => key !== UNKNOWN_KEY);
   if (dimension === 'offer') return offerNames(real);
-  if (dimension === 'affiliate') return affiliateNames(real);
+  if (dimension === 'affiliate') return affiliateLabels(real);
   if (dimension === 'advertiser') return advertiserNames(real);
   return new Map();
 }
@@ -230,7 +239,44 @@ function sortRows(dimension: ReportDimension, rows: ReportRowDto[]): ReportRowDt
   return rows.sort((a, b) => b.clicks - a.clicks || b.conversions - a.conversions);
 }
 
+/**
+ * How far back the offer-list CR/EPC figures look.
+ *
+ * Long enough that a low-volume offer has a sample worth quoting, short enough that a
+ * landing page that stopped converting last week is not still advertised on the
+ * strength of the month before it.
+ */
+const OFFER_STATS_WINDOW_DAYS = 30;
+
 export const reportService = {
+  /**
+   * Network-wide CR and EPC per offer, for the affiliate browse list.
+   *
+   * Everyone's traffic, not the caller's: an affiliate looking at an offer they have
+   * never run needs to know whether it converts for anyone, which is the whole reason
+   * the figures are worth showing next to a locked offer. Their own numbers are what
+   * the reports are for.
+   *
+   * Payout-only, like every other affiliate-facing figure — `epc` is payout per click,
+   * what the affiliate earns, and revenue never enters the projection (see
+   * PLAN-affiliate-portal.md). One pair of aggregate queries for the whole list.
+   */
+  async getOfferStats(): Promise<Map<string, { conversionRate: number; epc: number }>> {
+    const from = new Date();
+    from.setDate(from.getDate() - OFFER_STATS_WINDOW_DAYS);
+    const merged = await mergeAggregates('offer', { dateFrom: from.toISOString() });
+
+    const stats = new Map<string, { conversionRate: number; epc: number }>();
+    for (const [offerId, row] of merged) {
+      if (offerId === UNKNOWN_KEY) continue;
+      stats.set(offerId, {
+        conversionRate: rate(row.conversions, row.clicks),
+        epc: perUnit(row.payout, row.clicks),
+      });
+    }
+    return stats;
+  },
+
   async getGroupedReport(dto: GroupedReportDto): Promise<GroupedReportResultDto> {
     const { groupBy, limit, ...filters } = dto;
     const merged = await mergeAggregates(groupBy, filters);

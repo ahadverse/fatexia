@@ -23,7 +23,7 @@ import {
 } from '@fatexia/ui';
 import type { AffiliateOffer, AffiliateReportRow } from '@fatexia/types';
 import { getOwnClickCountries, getOwnReport } from '../../lib/portal-api';
-import { getAvailableOffers } from '../../lib/offers-api';
+import { getRunnableOffers } from '../../lib/offers-api';
 import { useAsync } from '../../hooks/useAsync';
 import { compactMoney, money, number, percent } from '../../lib/format';
 
@@ -99,7 +99,7 @@ export function Performance() {
   );
 
   const report = useAsync(() => getOwnReport(groupBy, filters, ROW_LIMIT), [groupBy, filters]);
-  const offers = useAsync<AffiliateOffer[]>(() => getAvailableOffers(), []);
+  const offers = useAsync<AffiliateOffer[]>(() => getRunnableOffers(), []);
   const countries = useAsync<string[]>(() => getOwnClickCountries(), []);
 
   const allRows = report.data?.rows ?? [];

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { managerScopeField } from '../../common/manager-scope-sql';
+import { isRefId } from '../../common/ref-id';
 import { ClickQualityStatus } from './click.entity';
 
 // Sub-ids are affiliate-controlled free text on a public endpoint — length-capped so
@@ -14,14 +15,27 @@ const subId = z.string().max(255).optional();
  * itself a fraud signal" — but a strict `.uuid()` here turned that into a 400, so the
  * visitor never reached the advertiser and the click was never recorded at all.
  * Rejecting the whole redirect punishes the visitor for the affiliate's broken link.
+ *
+ * Either form is accepted: a short `refId` (what new links carry) or the uuid that
+ * every link already in the wild carries. Resolved to the uuid in click.service.
  */
 const looseAffiliateId = z
   .string()
   .optional()
-  .transform((value) => (value && z.string().uuid().safeParse(value).success ? value : undefined));
+  .transform((value) => (value && (isRefId(value) || z.string().uuid().safeParse(value).success) ? value : undefined));
+
+/**
+ * The offer a link names — its short `refId`, or the uuid older links carry.
+ *
+ * Unlike the affiliate id this one is required and strict about shape: a click with no
+ * resolvable offer has nowhere to redirect to, so there is nothing to salvage.
+ */
+const offerIdentifier = z.string().refine((value) => isRefId(value) || z.string().uuid().safeParse(value).success, {
+  message: 'Invalid offer',
+});
 
 export const clickQuerySchema = z.object({
-  offerId: z.string().uuid(),
+  offerId: offerIdentifier,
   affiliateId: looseAffiliateId,
   sub1: subId,
   sub2: subId,
@@ -73,6 +87,8 @@ export type ClickLogFiltersDto = z.infer<typeof clickLogFiltersSchema>;
 
 export interface ClickLogDto {
   id: string;
+  /** The number the advertiser saw as `click_id` — what a postback dispute quotes. */
+  refId: number;
   offerId: string;
   affiliateId: string | null;
   ip: string;

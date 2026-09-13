@@ -7,6 +7,7 @@ import {
   getNetworkSettings,
   updateNetworkSettings,
   type GeoipEditionKey,
+  type GeoipEditionStatus,
 } from '../../lib/platform-api';
 import { useAsync, runAction } from '../../hooks/useAsync';
 import { dateTime } from '../../lib/format';
@@ -49,9 +50,13 @@ const GEOIP_EDITION_LABELS: Record<GeoipEditionKey, string> = {
 };
 
 // Never downloaded automatically — build and Tracker-startup auto-fetch were both
-// removed because Render's ephemeral filesystem meant every deploy/restart either
+// removed because the Tracker's filesystem is ephemeral, so every deploy/restart either
 // re-downloaded (build) or wasted a startup attempt (boot), and either way risked
 // MaxMind's rate limit. This is the only place a fetch is ever triggered from.
+//
+// A restart no longer costs a download: each fetch is also stored in Postgres and the
+// Tracker restores the files from there at boot (see backend infra/geoip/geoip-store.ts).
+// So "Present" can be true long after the last download, which is why both dates show.
 function GeoipSection() {
   const status = useAsync(() => getGeoipStatus(), []);
   const [fetching, setFetching] = useState(false);
@@ -71,25 +76,34 @@ function GeoipSection() {
   return (
     <Section
       title="GeoIP Database"
-      hint="Used by the Tracker for country/ASN lookups. Never downloaded automatically — trigger a fetch here when it's missing or stale. Limited to 10 attempts per database per 24h (MaxMind's rate limit)."
+      hint="Used by the Tracker for country/ASN lookups. Kept in the database and restored automatically when the Tracker restarts, so a fetch is only needed when the data is stale or has never been downloaded. Limited to 10 attempts per database per 24h (MaxMind's rate limit)."
     >
       <div className="sm:col-span-2 space-y-2">
         {status.loading && <Skeleton className="h-16 w-full" />}
         {status.error && <p className="text-sm text-destructive">{status.error}</p>}
         {status.data &&
-          (Object.entries(status.data) as [GeoipEditionKey, { present: boolean; updatedAt: string | null }][]).map(
-            ([edition, info]) => (
-              <div key={edition} className="flex items-center justify-between rounded-md border border-border p-3">
-                <div>
-                  <p className="text-sm text-card-foreground">{GEOIP_EDITION_LABELS[edition]}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {info.present ? `Last downloaded ${dateTime(info.updatedAt)}` : 'Not downloaded yet'}
-                  </p>
-                </div>
-                <StatusBadge variant={info.present ? 'success' : 'warning'}>{info.present ? 'Present' : 'Missing'}</StatusBadge>
+          (Object.entries(status.data) as [GeoipEditionKey, GeoipEditionStatus][]).map(([edition, info]) => (
+            <div key={edition} className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
+              <div>
+                <p className="text-sm text-card-foreground">{GEOIP_EDITION_LABELS[edition]}</p>
+                {/* The download date, not the file's timestamp — after a restart the
+                    file was written when it was restored, which says nothing about how
+                    fresh the data is. That is the number that decides whether to spend
+                    one of the day's fetches. */}
+                <p className="text-xs text-muted-foreground">
+                  {info.storedAt
+                    ? `Downloaded ${dateTime(info.storedAt)}`
+                    : info.present
+                      ? `On disk since ${dateTime(info.updatedAt)}`
+                      : 'Never downloaded'}
+                </p>
+                {!info.present && info.storedAt && (
+                  <p className="text-xs text-warning">Stored, but not yet on the Tracker — it restores on the next restart.</p>
+                )}
               </div>
-            ),
-          )}
+              <StatusBadge variant={info.present ? 'success' : 'warning'}>{info.present ? 'Active' : 'Missing'}</StatusBadge>
+            </div>
+          ))}
         <Button variant="secondary" disabled={fetching} onClick={refresh}>
           {fetching ? 'Fetching…' : 'Refresh now'}
         </Button>

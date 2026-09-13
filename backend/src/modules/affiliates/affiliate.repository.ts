@@ -1,6 +1,7 @@
 import { In } from 'typeorm';
 import type { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { AppDataSource } from '../../infra/database/data-source';
+import { isUuid } from '../../common/ref-id';
 import { Affiliate } from './affiliate.entity';
 import type { AffiliateFiltersDto } from './affiliate.dto';
 
@@ -22,6 +23,26 @@ export const affiliateRepository = {
 
   findByReferralCode(referralCode: string): Promise<Affiliate | null> {
     return repository.findOne({ where: { referralCode } });
+  },
+
+  /**
+   * Resolves whichever identifier a tracking link carried to the affiliate's uuid.
+   *
+   * New links name the affiliate by their `publicId` (`AFF-1001`); the ones already
+   * pasted into ad platforms and other people's systems name the uuid, and those must
+   * keep attributing.
+   *
+   * A uuid is passed straight back without a lookup — deliberately, on two counts. It
+   * keeps the uuid path exactly as fast as it was, and an id that matches no affiliate
+   * is meant to be recorded as-is rather than erased: click.entity.ts treats a click
+   * that cannot be attributed as a fraud signal worth keeping, not a row to discard.
+   * Only the publicId form needs a query, and an unknown one resolves to null for the
+   * same reason a bad uuid stays unattributed.
+   */
+  async resolveIdForClick(identifier: string): Promise<string | null> {
+    if (isUuid(identifier)) return identifier;
+    const row = await repository.findOne({ where: { publicId: identifier }, select: ['id'] });
+    return row?.id ?? null;
   },
 
   // The user relation is joined (not lazily loaded per row) because status and email

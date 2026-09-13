@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import {
   Button,
   ColumnPicker,
+  CountryFlag,
   DataTable,
   DateRangeFilter,
   FilterBar,
@@ -23,6 +24,7 @@ import {
   type FixedPresetId,
   type TableSort,
 } from '@fatexia/ui';
+import { COUNTRY_CODES } from '@fatexia/types';
 import type { Advertiser, Affiliate, Offer, ReportDimension, ReportRow } from '@fatexia/types';
 import { getClickCountries, getGroupedReport } from '../lib/reports-api';
 import { getOffers } from '../lib/offers-api';
@@ -30,6 +32,23 @@ import { getAffiliates } from '../lib/affiliates-api';
 import { getAdvertisers } from '../lib/advertisers-api';
 import { useAsync } from '../hooks/useAsync';
 import { compactMoney, money, number, percent } from '../lib/format';
+
+const COUNTRY_NAMES = new Map(COUNTRY_CODES.map((country) => [country.code, country.name]));
+
+// A country row, as a flag plus the country's name with the code kept alongside — the
+// code is what every filter and export is keyed on, so dropping it would make the row
+// harder to act on, not simpler.
+function CountryLabel({ code }: { code: string }) {
+  const name = COUNTRY_NAMES.get(code);
+  if (!name) return <span>{code}</span>;
+  return (
+    <span className="flex items-center gap-2">
+      <CountryFlag code={code} title={name} />
+      <span>{name}</span>
+      <span className="text-xs text-muted-foreground">{code}</span>
+    </span>
+  );
+}
 
 /**
  * The shared body of every grouped report page.
@@ -196,7 +215,16 @@ export function ReportView({ title, description, dimension, initialPreset, selec
   }
 
   const columns: DataTableColumn<ReportRow>[] = [
-    { key: 'label', header: DIMENSION_LABELS[activeDimension], sortable: true, render: (row) => row.label },
+    {
+      key: 'label',
+      header: DIMENSION_LABELS[activeDimension],
+      sortable: true,
+      // Countries arrive as the bare ISO code — the server has no country list, while
+      // the portal already ships one for the targeting pickers. Resolved here rather
+      // than duplicating the table server-side. An unknown code falls through as itself,
+      // which is also what the "(none)" bucket does.
+      render: (row) => (activeDimension === 'country' ? <CountryLabel code={row.label} /> : row.label),
+    },
     ...activeMetrics.map((column) => ({
       key: column.key,
       header: column.label,

@@ -1,9 +1,12 @@
 import { In } from 'typeorm';
 import { AppDataSource } from '../../infra/database/data-source';
+import { isRefId } from '../../common/ref-id';
 import { Offer, OfferStatus } from './offer.entity';
+import { OfferFavourite } from './offer-favourite.entity';
 import type { OfferFiltersDto } from './offer.dto';
 
 const repository = AppDataSource.getRepository(Offer);
+const favourites = AppDataSource.getRepository(OfferFavourite);
 
 export const offerRepository = {
   findById(id: string): Promise<Offer | null> {
@@ -14,6 +17,19 @@ export const offerRepository = {
   // rules loaded to match one at conversion time.
   findByIdWithPayoutRules(id: string): Promise<Offer | null> {
     return repository.findOne({ where: { id }, relations: ['payoutRules'] });
+  },
+
+  /**
+   * The same read, by whichever identifier the link carried.
+   *
+   * Tracking links now name an offer by its short `refId`, but every link already handed
+   * out names it by uuid, and those have to keep redirecting — a tracking link is
+   * pasted into ad platforms, chat messages and other people's systems, so it is not
+   * something the network gets to reissue.
+   */
+  findForClick(identifier: string): Promise<Offer | null> {
+    const where = isRefId(identifier) ? { refId: Number(identifier) } : { id: identifier };
+    return repository.findOne({ where, relations: ['payoutRules'] });
   },
 
   findByIdWithChildren(id: string): Promise<Offer | null> {
@@ -70,53 +86,84 @@ export const offerRepository = {
     return qb.orderBy('offer."createdAt"', 'DESC').getMany();
   },
 
-  // Affiliate offer browse: APPROVED offers only, with the advertiser joined so the
-  // DTO can denormalize advertiserName (affiliates can't call the admin-only
-  // /advertisers API). One query, no N+1.
-  //
-  // Gating (issue #19): a public offer (isPublic=true) is visible to every affiliate.
-  // A gated offer only shows up once this specific affiliate has an APPROVED row in
-  // offer_access_requests — joined in raw (not via the entity relation, which would
-  // create a circular module dependency between offers and offer-access-requests).
-  findAvailableForAffiliate(affiliateId: string): Promise<Offer[]> {
+  /**
+   * Every live offer, gated or not — the affiliate browse list.
+   *
+   * Browse used to return only what the affiliate could already run, which meant a
+   * gated offer was invisible to the person who would have to ask for it. They are
+   * listed instead, and the DTO withholds the link and the brief until access is
+   * granted (see toAffiliateOfferDto). Whether each one is granted is decided in the
+   * service, from these rows plus findAccessRequestStatuses.
+   *
+   * The advertiser is joined so the DTO can denormalize advertiserName — affiliates
+   * cannot call the admin-only /advertisers API. One query, no N+1.
+   */
+  findBrowsableForAffiliate(): Promise<Offer[]> {
     return repository
       .createQueryBuilder('offer')
       .leftJoinAndSelect('offer.payoutRules', 'payoutRules')
       .leftJoinAndSelect('offer.caps', 'caps')
       .leftJoinAndSelect('offer.advertiser', 'advertiser')
-      .leftJoin(
-        // Lowercase alias, deliberately: TypeORM quotes whatever alias string it's
-        // given (e.g. `"accessreq"`), and Postgres case-folds an *unquoted* identifier
-        // in a later raw andWhere to lowercase — a camelCase alias would mismatch its
-        // own join and fail with "missing FROM-clause entry".
-        'offer_access_requests',
-        'accessreq',
-        'accessreq."offerId" = offer.id AND accessreq."affiliateId" = :affiliateId AND accessreq.status = :approvedStatus',
-        { affiliateId, approvedStatus: 'APPROVED' },
-      )
       .andWhere('offer.status = :status', { status: OfferStatus.APPROVED })
-      // Three ways an affiliate reaches an offer: it is public, they were granted
-      // access, or a payout rule names them.
-      //
-      // That last one was missing. "Dedicate to affiliate(s)" on a payout rule set who
-      // the rule prices for, but not who could see the offer — so dedicating a private
-      // offer to someone hid it from them, which is the opposite of what the field
-      // reads as. EXISTS against the rules rather than a join, so an offer with several
-      // dedicated rules is still returned once.
-      .andWhere(
-        `(
-          offer."isPublic" = true
-          OR accessreq.id IS NOT NULL
-          OR EXISTS (
-            SELECT 1 FROM payout_rules dedicated
-             WHERE dedicated."offerId" = offer.id
-               AND dedicated.targeting->'affiliateIds' @> :affiliateIdJson::jsonb
-          )
-        )`,
-        { affiliateIdJson: JSON.stringify([affiliateId]) },
-      )
       .orderBy('offer."createdAt"', 'DESC')
       .getMany();
+  },
+
+  /**
+   * This affiliate's access request per offer, as offerId -> status.
+   *
+   * Raw SQL rather than the offer-access-requests repository: importing that module here
+   * would close a cycle between it and offers.
+   *
+   * (offerId, affiliateId) is unique on that table — a re-request after a rejection
+   * resets the existing row rather than adding one — so there is a single status per
+   * offer to find. DISTINCT ON only keeps that true if the constraint is ever relaxed.
+   */
+  async findAccessRequestStatuses(affiliateId: string): Promise<Map<string, string>> {
+    const rows: { offerId: string; status: string }[] = await repository.manager.query(
+      `SELECT DISTINCT ON ("offerId") "offerId", status
+         FROM offer_access_requests
+        WHERE "affiliateId" = $1
+        ORDER BY "offerId", "createdAt" DESC`,
+      [affiliateId],
+    );
+    return new Map(rows.map((row) => [row.offerId, row.status]));
+  },
+
+  /**
+   * One browsable offer, for the affiliate detail page.
+   *
+   * Same shape and same APPROVED filter as findBrowsableForAffiliate, so an id that is
+   * not in the browse list does not resolve here either — a direct URL is not a way
+   * around the list. The advertiser is joined for the same reason it is there.
+   */
+  findBrowsableById(id: string): Promise<Offer | null> {
+    return repository.findOne({
+      where: { id, status: OfferStatus.APPROVED },
+      relations: ['payoutRules', 'caps', 'advertiser'],
+    });
+  },
+
+  /** The offer ids this affiliate has bookmarked — one query for the whole list. */
+  async findFavouriteOfferIds(affiliateId: string): Promise<Set<string>> {
+    const rows = await favourites.find({ where: { affiliateId }, select: ['offerId'] });
+    return new Set(rows.map((row) => row.offerId));
+  },
+
+  /**
+   * Adds or removes a bookmark, and reports where it ended up.
+   *
+   * Written to be safe against a double-click or two tabs: `orIgnore` leans on the
+   * unique pair so a second add is a no-op rather than a constraint error, and a
+   * delete that matches nothing is already idempotent.
+   */
+  async setFavourite(offerId: string, affiliateId: string, favourite: boolean): Promise<boolean> {
+    if (favourite) {
+      await favourites.createQueryBuilder().insert().values({ offerId, affiliateId }).orIgnore().execute();
+    } else {
+      await favourites.delete({ offerId, affiliateId });
+    }
+    return favourite;
   },
 
   async updateStatus(id: string, status: OfferStatus): Promise<Offer | null> {

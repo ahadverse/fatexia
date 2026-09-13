@@ -12,7 +12,7 @@ import {
 } from '@fatexia/ui';
 import type { AffiliateOffer, ConversionStatus, OwnConversion } from '@fatexia/types';
 import { getOwnConversions } from '../../lib/portal-api';
-import { getAvailableOffers } from '../../lib/offers-api';
+import { getRunnableOffers } from '../../lib/offers-api';
 import { useAsync } from '../../hooks/useAsync';
 import { compactMoney, dateTime, money, number } from '../../lib/format';
 import { StatusPill } from '../../components/StatusPill';
@@ -36,7 +36,7 @@ export function Conversions() {
   );
 
   const conversions = useAsync(() => getOwnConversions(filters), [filters]);
-  const offers = useAsync<AffiliateOffer[]>(() => getAvailableOffers(), []);
+  const offers = useAsync<AffiliateOffer[]>(() => getRunnableOffers(), []);
 
   function changeFilter(apply: () => void) {
     apply();
