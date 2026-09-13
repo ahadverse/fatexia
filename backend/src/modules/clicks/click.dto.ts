@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { managerScopeField } from '../../common/manager-scope-sql';
-import { isRefId } from '../../common/ref-id';
+import { isPublicId, isRefId, isUuid } from '../../common/ref-id';
 import { ClickQualityStatus } from './click.entity';
 
 // Sub-ids are affiliate-controlled free text on a public endpoint — length-capped so
@@ -16,13 +16,18 @@ const subId = z.string().max(255).optional();
  * visitor never reached the advertiser and the click was never recorded at all.
  * Rejecting the whole redirect punishes the visitor for the affiliate's broken link.
  *
- * Either form is accepted: a short `refId` (what new links carry) or the uuid that
+ * Either form is accepted: the `publicId` new links carry (`AFF-1001`), or the uuid
  * every link already in the wild carries. Resolved to the uuid in click.service.
+ *
+ * Getting this list wrong is silent and expensive. It briefly accepted only digits and
+ * uuids, while the links being handed out carried `AFF-1001` — so every click came in
+ * unattributed, the affiliate earned nothing for it, and nothing anywhere reported an
+ * error. Whatever affiliateTrackingLinkFor puts in a link has to be accepted here.
  */
 const looseAffiliateId = z
   .string()
   .optional()
-  .transform((value) => (value && (isRefId(value) || z.string().uuid().safeParse(value).success) ? value : undefined));
+  .transform((value) => (value && (isPublicId(value) || isUuid(value)) ? value : undefined));
 
 /**
  * The offer a link names — its short `refId`, or the uuid older links carry.

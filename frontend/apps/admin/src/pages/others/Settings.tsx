@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { Button, Input, PageHeader, Skeleton, StatusBadge, Toggle, toast } from '@fatexia/ui';
 import type { NetworkSettings } from '@fatexia/types';
 import {
@@ -57,21 +58,42 @@ const GEOIP_EDITION_LABELS: Record<GeoipEditionKey, string> = {
 // A restart no longer costs a download: each fetch is also stored in Postgres and the
 // Tracker restores the files from there at boot (see backend infra/geoip/geoip-store.ts).
 // So "Present" can be true long after the last download, which is why both dates show.
+// How often the page asks whether the download has finished. The run takes a minute or
+// two; this is frequent enough to feel live and rare enough to be nothing.
+const POLL_MS = 3000;
+
 function GeoipSection() {
   const status = useAsync(() => getGeoipStatus(), []);
-  const [fetching, setFetching] = useState(false);
+  const [starting, setStarting] = useState(false);
+
+  // The Tracker is the authority on whether a run is in progress, not this component:
+  // the download survives a page reload, and another admin may have started it. Reading
+  // it from the status means the progress bar is right either way.
+  const running = status.data?.fetch.running ?? false;
+  const lastRun = status.data?.fetch ?? null;
+
+  // Poll only while something is actually happening, so an idle Settings page is not
+  // quietly hitting the Tracker every three seconds forever.
+  useEffect(() => {
+    if (!running) return;
+    const timer = setInterval(status.reload, POLL_MS);
+    return () => clearInterval(timer);
+  }, [running, status.reload]);
 
   async function refresh() {
-    setFetching(true);
-    const result = await runAction(() => fetchGeoipNow(), { success: 'GeoIP fetch attempted', onDone: status.reload });
-    if (result) {
-      const skipped = Object.entries(result.editions).filter(([, s]) => s === 'skipped-cooldown');
-      if (skipped.length > 0) {
-        toast.error(`${skipped.map(([edition]) => edition).join(', ')} skipped — daily fetch limit reached`);
-      }
-    }
-    setFetching(false);
+    setStarting(true);
+    await runAction(() => fetchGeoipNow(), {
+      success: 'Download started — this takes a minute or two',
+      onDone: status.reload,
+    });
+    setStarting(false);
   }
+
+  // Reported once the run is over. `skipped-cooldown` is the only outcome that needs
+  // explaining — the others are visible in the per-edition rows below.
+  const skipped = Object.entries(lastRun?.editions ?? {})
+    .filter(([, outcome]) => outcome === 'skipped-cooldown')
+    .map(([edition]) => GEOIP_EDITION_LABELS[edition as GeoipEditionKey]);
 
   return (
     <Section
@@ -81,8 +103,40 @@ function GeoipSection() {
       <div className="sm:col-span-2 space-y-2">
         {status.loading && <Skeleton className="h-16 w-full" />}
         {status.error && <p className="text-sm text-destructive">{status.error}</p>}
+
+        {/* While the download runs. The bar is indeterminate on purpose: MaxMind sends
+            no content-length worth trusting and the work is download → extract → store,
+            so any percentage would be invented. It says "something is happening and you
+            do not need to press the button again", which is the whole job. */}
+        {running && (
+          <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
+            <div className="flex items-center gap-2">
+              <Loader2 className="size-4 shrink-0 animate-spin text-primary" />
+              <p className="text-sm font-medium text-card-foreground">Downloading from MaxMind…</p>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              About 74MB across both databases — a minute or two. You can leave this page; it keeps going.
+            </p>
+            <div className="mt-2 h-1 overflow-hidden rounded-full bg-primary/15">
+              <div className="h-full w-1/3 animate-[fatexia-indeterminate_1.4s_ease-in-out_infinite] rounded-full bg-primary" />
+            </div>
+          </div>
+        )}
+
+        {!running && lastRun?.error && (
+          <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
+            Last download failed: {lastRun.error}
+          </p>
+        )}
+
+        {!running && skipped.length > 0 && (
+          <p className="rounded-md border border-warning/30 bg-warning/5 p-3 text-xs text-warning">
+            {skipped.join(' and ')} skipped — the daily fetch limit is spent. It resets 24h after the first attempt.
+          </p>
+        )}
+
         {status.data &&
-          (Object.entries(status.data) as [GeoipEditionKey, GeoipEditionStatus][]).map(([edition, info]) => (
+          (Object.entries(status.data.editions) as [GeoipEditionKey, GeoipEditionStatus][]).map(([edition, info]) => (
             <div key={edition} className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
               <div>
                 <p className="text-sm text-card-foreground">{GEOIP_EDITION_LABELS[edition]}</p>
@@ -104,8 +158,11 @@ function GeoipSection() {
               <StatusBadge variant={info.present ? 'success' : 'warning'}>{info.present ? 'Active' : 'Missing'}</StatusBadge>
             </div>
           ))}
-        <Button variant="secondary" disabled={fetching} onClick={refresh}>
-          {fetching ? 'Fetching…' : 'Refresh now'}
+        {/* Disabled while a run is in flight — a second press cannot start a second
+            download (the Tracker refuses), but a button that looks pressable and does
+            nothing invites exactly the repeat-clicking that spends MaxMind's allowance. */}
+        <Button variant="secondary" disabled={starting || running} onClick={refresh}>
+          {running ? 'Downloading…' : starting ? 'Starting…' : 'Refresh now'}
         </Button>
       </div>
     </Section>

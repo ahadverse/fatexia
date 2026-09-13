@@ -1,7 +1,7 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { env } from '../../common/env';
 import { ForbiddenError } from '../../common/errors';
-import { ensureGeoipDatabases, getGeoipStatus } from '../../infra/geoip/ensure-geoip';
+import { getGeoipStatus, startGeoipFetch } from '../../infra/geoip/ensure-geoip';
 
 /**
  * Lives only on the Tracker service — it's the one process that owns GEOIP_DB_DIR and
@@ -31,10 +31,10 @@ geoipInternalRoutes.get('/status', async (_req, res, next) => {
   }
 });
 
-geoipInternalRoutes.post('/fetch', async (_req, res, next) => {
-  try {
-    res.json(await ensureGeoipDatabases());
-  } catch (err) {
-    next(err);
-  }
+// Starts the download and answers immediately. Fetching both editions moves ~74MB and
+// takes well over a minute — longer than the platform will hold a request open — so
+// waiting for it made a successful fetch report as a 502. Progress is read from
+// /status instead (see startGeoipFetch).
+geoipInternalRoutes.post('/fetch', (_req, res) => {
+  res.json(startGeoipFetch());
 });

@@ -12,18 +12,6 @@ import { mountTrackingRoutes } from './tracking-routes';
 async function bootstrap(): Promise<void> {
   await AppDataSource.initialize();
 
-  // No automatic GeoLite2 *download* here on purpose — see infra/geoip/ensure-geoip.ts.
-  // MaxMind is only contacted when an admin triggers POST /internal/geoip/fetch
-  // (proxied from the Admin panel).
-  //
-  // Restoring from our own database is a different thing entirely, and it is what makes
-  // the above workable: this filesystem does not survive a restart, so without this the
-  // files would be gone every time the service woke from idle and an admin would have to
-  // fetch again — which is exactly what was running into MaxMind's rate limit. Costs one
-  // query and no external call, and never throws; geo-source.ts still degrades to
-  // "unknown" if there is nothing stored yet, so the click path is unaffected either way.
-  await restoreGeoipFromStore();
-
   const app = createApp({ json: false, cors: false });
 
   mountTrackingRoutes(app);
@@ -32,6 +20,22 @@ async function bootstrap(): Promise<void> {
 
   app.listen(env.TRACKING_PORT, () => {
     logger.info(`Fatexia tracker listening on port ${env.TRACKING_PORT} (${env.NODE_ENV})`);
+
+    // No automatic GeoLite2 *download* here on purpose — see infra/geoip/ensure-geoip.ts.
+    // MaxMind is only contacted when an admin triggers POST /internal/geoip/fetch.
+    //
+    // Restoring from our own database is a different thing, and it is what makes that
+    // rule workable: this filesystem does not survive a restart, so without it the files
+    // are gone after every wake from idle and an admin has to fetch again — which is
+    // what was running into MaxMind's rate limit.
+    //
+    // Started after the server is listening, and deliberately not awaited. Held in front
+    // of listen(), a slow or failing restore delays the health check and can take the
+    // whole service down with it — and a Tracker that will not boot serves no clicks at
+    // all, which is far worse than the missing geo data this exists to prevent. Clicks
+    // in the first second or so resolve without geo, exactly as they do today when
+    // nothing has been fetched yet.
+    void restoreGeoipFromStore();
   });
 }
 

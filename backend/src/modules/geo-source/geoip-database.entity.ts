@@ -30,6 +30,16 @@ export class GeoipDatabase {
   @Column({ type: 'integer' })
   byteSize!: number;
 
+  /**
+   * SHA-256 of the uncompressed .mmdb, checked after every restore.
+   *
+   * The blob moves in chunks in both directions, and either loop can stop half-way. A
+   * truncated database that still parses is the dangerous outcome — it answers lookups,
+   * wrongly, until someone notices. Null only for rows stored before this existed.
+   */
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  checksum!: string | null;
+
   @UpdateDateColumn({ type: 'timestamp with time zone' })
   updatedAt!: Date;
 }

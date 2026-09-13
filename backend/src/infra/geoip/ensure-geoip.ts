@@ -56,7 +56,36 @@ export interface GeoipEditionStatus {
   storedAt: string | null;
 }
 
-export type GeoipStatus = Record<Edition, GeoipEditionStatus>;
+/** What the last (or current) download run is doing. */
+export interface GeoipFetchState {
+  running: boolean;
+  startedAt: string | null;
+  finishedAt: string | null;
+  /** Per-edition outcome of the last completed run; null before the first one. */
+  editions: Record<Edition, EditionFetchStatus> | null;
+  error: string | null;
+}
+
+export interface GeoipStatus {
+  editions: Record<Edition, GeoipEditionStatus>;
+  fetch: GeoipFetchState;
+}
+
+/**
+ * State of the current or last download run.
+ *
+ * In-process and deliberately not persisted: it describes what this Tracker is doing
+ * right now, and a restart means nothing is running any more, which is exactly what a
+ * fresh value says. What survives a restart is the outcome — the files, and the copy in
+ * Postgres — and that is read from disk and the database, not from here.
+ */
+let fetchState: GeoipFetchState = {
+  running: false,
+  startedAt: null,
+  finishedAt: null,
+  editions: null,
+  error: null,
+};
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -174,14 +203,59 @@ export async function ensureGeoipDatabases(): Promise<GeoipFetchResult> {
   return { attempted: true, editions };
 }
 
-/** What the admin panel shows: what is on disk, and when it was last fetched. */
+/**
+ * The download, started and not waited for.
+ *
+ * Fetching both editions means pulling ~74MB, extracting it, writing it to disk and
+ * storing a compressed copy in Postgres — comfortably over a minute. Held open as one
+ * HTTP request (admin → API → Tracker), that outlives the platform's request timeout,
+ * so the admin saw a 502 while the Tracker quietly finished the job. A failure that
+ * reports as a failure is fine; success that reports as a failure is worse than either,
+ * because the natural response is to press the button again and spend more of
+ * MaxMind's daily allowance.
+ *
+ * So this returns as soon as the work is under way, and the status endpoint reports
+ * how it went. A run already in progress is reported, never duplicated — that is also
+ * what makes a double-click free instead of a second 74MB download.
+ */
+export function startGeoipFetch(): GeoipFetchState {
+  if (fetchState.running) return { ...fetchState };
+
+  fetchState = { running: true, startedAt: new Date().toISOString(), finishedAt: null, editions: null, error: null };
+
+  void ensureGeoipDatabases()
+    .then((result) => {
+      fetchState = {
+        running: false,
+        startedAt: fetchState.startedAt,
+        finishedAt: new Date().toISOString(),
+        editions: result.editions,
+        error: null,
+      };
+    })
+    .catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : 'GeoIP fetch failed';
+      logger.error({ err }, '[geoip] fetch run failed');
+      fetchState = {
+        running: false,
+        startedAt: fetchState.startedAt,
+        finishedAt: new Date().toISOString(),
+        editions: null,
+        error: message,
+      };
+    });
+
+  return { ...fetchState };
+}
+
+/** What the admin panel shows: what is on disk, when it was fetched, and any run in flight. */
 export async function getGeoipStatus(): Promise<GeoipStatus> {
   const stored = await storedGeoipDates(EDITIONS);
-  const status = {} as GeoipStatus;
+  const editions = {} as Record<Edition, GeoipEditionStatus>;
   for (const edition of EDITIONS) {
-    status[edition] = { ...diskStatus(edition), storedAt: stored.get(edition) ?? null };
+    editions[edition] = { ...diskStatus(edition), storedAt: stored.get(edition) ?? null };
   }
-  return status;
+  return { editions, fetch: { ...fetchState } };
 }
 
 /**

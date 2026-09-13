@@ -30,6 +30,22 @@ export function isRefId(value: string): boolean {
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// `AFF-1001`, `MAN-1004` — the sequential display id affiliates and managers are known
+// by (migration 1786400000000). Tracking links carry this form, so the tracker has to
+// recognise it as an identifier rather than as junk.
+const PUBLIC_ID_PATTERN = /^[A-Za-z]{2,6}-\d{1,12}$/;
+
+/**
+ * Whether a value is shaped like a `publicId`.
+ *
+ * Bounded and anchored because it reaches a query from a public endpoint. A value that
+ * fails this is not rejected — the click is still recorded, unattributed, which
+ * click.entity.ts treats as a signal worth keeping.
+ */
+export function isPublicId(value: string): boolean {
+  return PUBLIC_ID_PATTERN.test(value);
+}
+
 /**
  * Whether a value is shaped like a uuid.
  *

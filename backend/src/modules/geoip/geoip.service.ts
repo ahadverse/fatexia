@@ -9,6 +9,10 @@ import type { GeoipFetchResult, GeoipStatus } from '../../infra/geoip/ensure-geo
  * /internal/geoip/* routes, so the actual download always happens on the process that
  * will use the result.
  */
+// A cold start on the free plan is tens of seconds; nothing here does real work while
+// the caller waits, so anything past this is a service that is not coming back.
+const TRACKER_TIMEOUT_MS = 90_000;
+
 async function callTracker<T>(path: string, method: 'GET' | 'POST'): Promise<T> {
   if (!env.GEOIP_ADMIN_SECRET) {
     throw new AppError('GEOIP_ADMIN_SECRET is not configured on the API service', 500);
@@ -19,9 +23,18 @@ async function callTracker<T>(path: string, method: 'GET' | 'POST'): Promise<T> 
     res = await fetch(`${env.PUBLIC_TRACKING_URL}${path}`, {
       method,
       headers: { 'x-geoip-admin-secret': env.GEOIP_ADMIN_SECRET },
+      // Both routes answer immediately now — the download runs in the background — so a
+      // slow reply means the Tracker is waking from idle, not working. Generous enough
+      // to cover a cold start, bounded so a hung service cannot hold an admin request
+      // open indefinitely.
+      signal: AbortSignal.timeout(TRACKER_TIMEOUT_MS),
     });
   } catch (err) {
-    throw new AppError(`Could not reach the Tracker service: ${(err as Error).message}`, 502);
+    const message =
+      err instanceof Error && err.name === 'TimeoutError'
+        ? 'The Tracker service did not answer in time. On a free plan it can take up to a minute to wake — try again shortly.'
+        : `Could not reach the Tracker service: ${(err as Error).message}`;
+    throw new AppError(message, 502);
   }
 
   if (!res.ok) {

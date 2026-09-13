@@ -276,6 +276,18 @@ body,
   }
 }
 
+/* An indeterminate progress bar — for work whose length genuinely is not known, like
+   a download whose server sends no usable content-length. A made-up percentage is
+   worse than none: it strands at 90% and teaches people not to trust the bar. */
+@keyframes fatexia-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+
 @keyframes fatexia-toast-icon {
   from {
     opacity: 0;

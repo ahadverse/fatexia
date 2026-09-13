@@ -245,19 +245,36 @@ export interface GeoipEditionStatus {
   storedAt: string | null;
 }
 
-export type GeoipStatus = Record<GeoipEditionKey, GeoipEditionStatus>;
+export type GeoipEditionOutcome = 'downloaded' | 'skipped-cooldown' | 'failed';
 
-export interface GeoipFetchResult {
-  attempted: boolean;
-  editions: Record<GeoipEditionKey, 'downloaded' | 'skipped-cooldown' | 'failed'>;
+/**
+ * What the current or last download run is doing.
+ *
+ * The fetch no longer happens inside the request that starts it — moving ~74MB takes
+ * longer than the platform holds a connection open, which used to report a successful
+ * download as a 502. The button starts the run; this says how it went.
+ */
+export interface GeoipFetchState {
+  running: boolean;
+  startedAt: string | null;
+  finishedAt: string | null;
+  editions: Record<GeoipEditionKey, GeoipEditionOutcome> | null;
+  error: string | null;
+}
+
+export interface GeoipStatus {
+  editions: Record<GeoipEditionKey, GeoipEditionStatus>;
+  fetch: GeoipFetchState;
 }
 
 export function getGeoipStatus(): Promise<GeoipStatus> {
   return apiFetch<GeoipStatus>('/geoip/status');
 }
 
-export function fetchGeoipNow(): Promise<GeoipFetchResult> {
-  return apiFetch<GeoipFetchResult>('/geoip/fetch', { method: 'POST' });
+// Returns as soon as the download is under way, not when it finishes. Poll
+// `getGeoipStatus` until `fetch.running` goes false.
+export function fetchGeoipNow(): Promise<GeoipFetchState> {
+  return apiFetch<GeoipFetchState>('/geoip/fetch', { method: 'POST' });
 }
 
 // Integrations
