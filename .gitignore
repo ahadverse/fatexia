@@ -38,7 +38,7 @@ npm-debug.log*
 pnpm-debug.log*
 
 # Editor / OS
-.claude/settings.local.json
+.claude/*
 .DS_Store
 Thumbs.db
 .idea/

@@ -12,7 +12,6 @@ export const postbackQuerySchema = z.object({
    * *their* id, not ours, so substituting it would name an offer we have never heard
    * of. When absent the offer is taken from the click, which already knows it.
    *
-<<<<<<< HEAD
    * Still accepted for the per-offer URLs already handed out — which is why it takes
    * the offer's short `refId` (what the URL carries now) or the uuid (what every URL
    * handed to an advertiser before this carried). A postback URL lives in someone
@@ -22,11 +21,6 @@ export const postbackQuerySchema = z.object({
     .string()
     .refine((value) => isRefId(value) || isUuid(value), { message: 'Invalid offer' })
     .optional(),
-=======
-   * Still accepted for the per-offer URLs already handed out.
-   */
-  offerId: z.string().uuid().optional(),
->>>>>>> 9d481ff06ca31d0842066c6061ea1fe97ba18db1
   click_id: z.string().min(1).max(255),
   secret: z.string().min(1),
   transaction_id: z.string().max(255).optional(),
