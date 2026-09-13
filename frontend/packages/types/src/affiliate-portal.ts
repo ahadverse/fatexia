@@ -5,7 +5,7 @@
 // behind PLAN-affiliate-portal.md's hard rule — not a habit of remembering to hide a
 // column, but a shape that has nowhere to put the number.
 
-import type { ConversionStatus, ClickQualityStatus } from './traffic';
+import type { ClickGeo, ConversionStatus, ClickQualityStatus } from './traffic';
 import type { ActivityEvent } from './report';
 
 /** Paginated list plus the totals for the stat tiles, over the same filters. */
@@ -102,13 +102,14 @@ export interface OwnConversion {
  * Narrower than the admin click row.
  *
  * IP, user agent, geo and device detail *are* included — that is the affiliate's own
- * traffic and they need it to debug a source. What stays out is the network's fraud
- * *reasoning*: `asn`, `isDatacenter`, `isProxyOrVpn`, `riskScore` and `referer`. There
- * is no field here for any of them, so a future edit to the admin row cannot leak one.
- * The quality band is kept — an affiliate must know traffic was rejected, just not
- * precisely which signal caught it.
+ * traffic and they need it to debug a source, so it carries the whole `ClickGeo` shape
+ * down to the postcode and coordinates. What stays out is the network's fraud
+ * *reasoning*: `asn`, `registeredCountryCode`, `isDatacenter`, `isProxyOrVpn`, the
+ * MaxMind proxy traits, `riskScore` and `referer`. There is no field here for any of
+ * them, so a future edit to the admin row cannot leak one. The quality band is kept —
+ * an affiliate must know traffic was rejected, just not precisely which signal caught it.
  */
-export interface OwnClickLog {
+export interface OwnClickLog extends ClickGeo {
   id: string;
   /** The number the advertiser saw as `click_id`. */
   refId: number;
@@ -116,12 +117,6 @@ export interface OwnClickLog {
   offerName: string | null;
   ip: string;
   userAgent: string | null;
-  countryCode: string | null;
-  city: string | null;
-  region: string | null;
-  regionCode: string | null;
-  /** Pre-composed "City, ST, US" / "Local network" / "Unknown", built server-side. */
-  geoLabel: string;
   deviceType: string | null;
   deviceBrand: string | null;
   os: string | null;

@@ -3,7 +3,42 @@
 
 export type ClickQualityStatus = 'GOOD' | 'SUSPECT' | 'BLOCKED' | 'UNSCORED';
 
-export interface ClickLog {
+/**
+ * Everything GeoLite2 resolved about the visitor's address.
+ *
+ * Shared by the admin and affiliate click rows, because both carry all of it — a
+ * visitor's location is the affiliate's own traffic. The fields that stay network-side
+ * are the *fraud reasoning* (ASN, registered country, proxy traits, risk score), and
+ * those live on `ClickLog` alone. Mirrors `ClickGeoDto` on the backend.
+ */
+export interface ClickGeo {
+  countryCode: string | null;
+  countryName: string | null;
+  continentCode: string | null;
+  continentName: string | null;
+  city: string | null;
+  /** GeoNames id for the city — the stable handle behind a name with spelling variants. */
+  cityGeonameId: number | null;
+  region: string | null;
+  regionCode: string | null;
+  /** Second-level subdivision — a county or district, where MaxMind has one. */
+  region2: string | null;
+  region2Code: string | null;
+  postalCode: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  /** MaxMind's confidence in the coordinates, in km. 1000 means "somewhere in this country". */
+  accuracyRadiusKm: number | null;
+  /** IANA zone, e.g. `America/New_York`. */
+  timeZone: string | null;
+  /** US metro/DMA code; null everywhere else. */
+  metroCode: number | null;
+  /** Pre-composed "City, ST, US" / "Local network" / "Unknown", built server-side so
+   *  an unresolvable address reads as information rather than as a missing value. */
+  geoLabel: string;
+}
+
+export interface ClickLog extends ClickGeo {
   id: string;
   /** The number the advertiser saw as `click_id` — what a postback dispute quotes. */
   refId: number;
@@ -13,13 +48,8 @@ export interface ClickLog {
   affiliateName: string | null;
   ip: string;
   userAgent: string | null;
-  countryCode: string | null;
-  city: string | null;
-  region: string | null;
-  regionCode: string | null;
-  /** Pre-composed "City, ST, US" / "Local network" / "Unknown", built server-side so
-   *  an unresolvable address reads as information rather than as a missing value. */
-  geoLabel: string;
+  /** Where the block is registered. A mismatch against `countryCode` reads as a VPN. */
+  registeredCountryCode: string | null;
   deviceType: string | null;
   deviceBrand: string | null;
   os: string | null;
@@ -27,6 +57,12 @@ export interface ClickLog {
   browser: string | null;
   browserVersion: string | null;
   asn: string | null;
+  /** The same ASN split apart — the number is what a filter can actually match on. */
+  asnNumber: number | null;
+  asnOrganization: string | null;
+  /** MaxMind's own legacy traits; null when GeoLite2 does not set them, which is usual. */
+  isAnonymousProxy: boolean | null;
+  isSatelliteProvider: boolean | null;
   isDatacenter: boolean;
   // null = the proxy check never resolved, which is not the same as a confirmed false.
   isProxyOrVpn: boolean | null;

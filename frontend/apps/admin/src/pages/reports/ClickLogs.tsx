@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   Button,
+  ClickGeoRows,
   DataTable,
   DateRangeFilter,
   Drawer,
@@ -119,9 +120,7 @@ function ClickDetailDrawer({ click, onClose }: { click: ClickLog | null; onClose
           <DrawerRow label="Date">{dateTime(click.createdAt)}</DrawerRow>
           <DrawerRow label="Offer">{click.offerName ?? '—'}</DrawerRow>
           <DrawerRow label="Affiliate">{click.affiliateName ?? 'Unattributed'}</DrawerRow>
-          <DrawerRow label="Country">{click.countryCode ?? click.geoLabel}</DrawerRow>
-          <DrawerRow label="City">{click.city ?? '—'}</DrawerRow>
-          <DrawerRow label="Region">{click.region ?? '—'}</DrawerRow>
+          <ClickGeoRows geo={click} />
           <DrawerRow label="Device">{click.deviceType ?? '—'}</DrawerRow>
           <DrawerRow label="Device brand">{click.deviceBrand ?? '—'}</DrawerRow>
           <DrawerRow label="IP address" mono>
@@ -150,7 +149,22 @@ function ClickDetailDrawer({ click, onClose }: { click: ClickLog | null; onClose
           <DrawerRow label="Risk score">{number(click.riskScore)}</DrawerRow>
           <DrawerRow label="Datacenter IP">{flag(click.isDatacenter)}</DrawerRow>
           <DrawerRow label="Proxy / VPN">{flag(click.isProxyOrVpn)}</DrawerRow>
-          <DrawerRow label="ASN">{click.asn ?? '—'}</DrawerRow>
+          <DrawerRow label="ASN">{click.asnNumber !== null ? `AS${click.asnNumber}` : '—'}</DrawerRow>
+          <DrawerRow label="ASN operator">{click.asnOrganization ?? '—'}</DrawerRow>
+          {/* The country the block is registered in, shown only when it disagrees with
+              where the click answered from — a match is the ordinary case and would
+              just be the Country row repeated. A mismatch reads as a VPN. */}
+          {click.registeredCountryCode && click.registeredCountryCode !== click.countryCode && (
+            <DrawerRow label="Registered in">{click.registeredCountryCode}</DrawerRow>
+          )}
+          {/* MaxMind's own legacy traits. GeoLite2 leaves them unset almost always, so
+              they appear only on the rare row that actually carries one. */}
+          {click.isAnonymousProxy !== null && (
+            <DrawerRow label="MaxMind anon. proxy">{flag(click.isAnonymousProxy)}</DrawerRow>
+          )}
+          {click.isSatelliteProvider !== null && (
+            <DrawerRow label="Satellite provider">{flag(click.isSatelliteProvider)}</DrawerRow>
+          )}
           <DrawerRow label="Referer" mono>
             {click.referer ?? '—'}
           </DrawerRow>

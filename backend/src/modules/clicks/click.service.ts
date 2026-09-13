@@ -129,7 +129,8 @@ export const clickService = {
     // proxy-detection.ts) — none of this blocks the redirect below.
     const settings = await getTrackerSettings();
 
-    const { asn, countryCode, city, region, regionCode } = await geoSource.lookup(req.ip);
+    const geo = await geoSource.lookup(req.ip);
+    const { asn, countryCode } = geo;
     const isDatacenter = isLikelyDatacenter(asn);
     const isProxyOrVpn = await checkResidentialProxy(req.ip);
     const { riskScore, qualityStatus } = scoreClick(isDatacenter, isProxyOrVpn, settings);
@@ -195,10 +196,31 @@ export const clickService = {
         smartLinkId,
         ip: req.ip,
         userAgent: req.userAgent,
+        // Every geo field the lookup resolved, not a chosen few — the City record was
+        // decoded in full either way, so narrowing here would only discard what we
+        // already paid to read. `isPrivateIp` is the one field that stays out: it
+        // describes the address, and the row already has `ip` to say the same thing.
         countryCode,
-        city,
-        region,
-        regionCode,
+        countryName: geo.countryName,
+        registeredCountryCode: geo.registeredCountryCode,
+        continentCode: geo.continentCode,
+        continentName: geo.continentName,
+        city: geo.city,
+        cityGeonameId: geo.cityGeonameId,
+        region: geo.region,
+        regionCode: geo.regionCode,
+        region2: geo.region2,
+        region2Code: geo.region2Code,
+        postalCode: geo.postalCode,
+        latitude: geo.latitude === null ? null : String(geo.latitude),
+        longitude: geo.longitude === null ? null : String(geo.longitude),
+        accuracyRadiusKm: geo.accuracyRadiusKm,
+        timeZone: geo.timeZone,
+        metroCode: geo.metroCode,
+        asnNumber: geo.asnNumber,
+        asnOrganization: geo.asnOrganization,
+        isAnonymousProxy: geo.isAnonymousProxy,
+        isSatelliteProvider: geo.isSatelliteProvider,
         // UAParser already returns the vendor and both version strings — the previous
         // version parsed them and then dropped them on the floor.
         deviceType,

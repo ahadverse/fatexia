@@ -90,7 +90,40 @@ export const clickLogFiltersSchema = z.object({
 
 export type ClickLogFiltersDto = z.infer<typeof clickLogFiltersSchema>;
 
-export interface ClickLogDto {
+/**
+ * Where the click came from, at the full detail GeoLite2 gives.
+ *
+ * Its own interface because both the admin row and the affiliate row carry all of it:
+ * a visitor's location is the affiliate's own traffic, and they need it to debug a
+ * source. What separates the two rows is the *fraud reasoning* below — the registered
+ * country, the ASN and the proxy traits — which is why those live on `ClickLogDto` and
+ * not here. Keeping the split structural means a field added to the wrong interface is
+ * a compile error rather than a leak nobody notices.
+ */
+export interface ClickGeoDto {
+  countryCode: string | null;
+  countryName: string | null;
+  continentCode: string | null;
+  continentName: string | null;
+  city: string | null;
+  cityGeonameId: number | null;
+  region: string | null;
+  regionCode: string | null;
+  /** Second-level subdivision — a county or district, where MaxMind has one. */
+  region2: string | null;
+  region2Code: string | null;
+  postalCode: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  /** MaxMind's confidence in the coordinates, in km. 1000 means "somewhere in this country". */
+  accuracyRadiusKm: number | null;
+  timeZone: string | null;
+  metroCode: number | null;
+  /** Pre-composed "City, ST, US" / "Local network" / "Unknown" — see click-log.service. */
+  geoLabel: string;
+}
+
+export interface ClickLogDto extends ClickGeoDto {
   id: string;
   /** The number the advertiser saw as `click_id` — what a postback dispute quotes. */
   refId: number;
@@ -100,12 +133,6 @@ export interface ClickLogDto {
   // The raw UA is the row-level detail behind the parsed device/os/browser — "why was
   // this scored that way" often comes down to the exact agent string.
   userAgent: string | null;
-  countryCode: string | null;
-  city: string | null;
-  region: string | null;
-  regionCode: string | null;
-  /** Pre-composed "City, ST, US" / "Local network" / "Unknown" — see click-log.service. */
-  geoLabel: string;
   deviceType: string | null;
   deviceBrand: string | null;
   os: string | null;
@@ -113,6 +140,19 @@ export interface ClickLogDto {
   browser: string | null;
   browserVersion: string | null;
   asn: string | null;
+  asnNumber: number | null;
+  asnOrganization: string | null;
+  /**
+   * The country the address block is registered in.
+   *
+   * Network-side only, like the rest of this group: a mismatch against `countryCode` is
+   * ordinary for a VPN and unusual for organic traffic, so it is a signal, and telling
+   * the traffic source which signal caught them is how they learn to dodge it.
+   */
+  registeredCountryCode: string | null;
+  /** MaxMind's own legacy traits — null when GeoLite2 does not set them, which is usual. */
+  isAnonymousProxy: boolean | null;
+  isSatelliteProvider: boolean | null;
   isDatacenter: boolean;
   isProxyOrVpn: boolean | null;
   isUnique: boolean;

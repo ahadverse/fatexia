@@ -20,10 +20,20 @@ const FORBIDDEN_KEYS = [
   // source. What they must not see is which signal caught them, because that is a
   // recipe for evading it.
   'asn',
+  'asnNumber',
+  'asnOrganization',
   'isDatacenter',
   'isProxyOrVpn',
   'riskScore',
   'leadRiskScore',
+  // Where the address block is *registered*, as opposed to where the click came from.
+  // A mismatch against the resolved country is how a VPN shows up, which makes this a
+  // signal — the location fields beside it (city, postcode, coordinates, timezone) are
+  // the visitor's whereabouts and are deliberately NOT forbidden.
+  'registeredCountryCode',
+  // MaxMind's own proxy/satellite traits, same reasoning.
+  'isAnonymousProxy',
+  'isSatelliteProvider',
 ];
 const ZEROED_KEYS = ['revenueAmount'];
 

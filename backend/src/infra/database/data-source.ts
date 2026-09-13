@@ -28,7 +28,7 @@ import { EmailTemplate } from '../../modules/email-templates/email-template.enti
 import { NetworkSetting } from '../../modules/network-settings/network-setting.entity';
 import { GlobalPostback } from '../../modules/global-postbacks/global-postback.entity';
 import { Integration } from '../../modules/integrations/integration.entity';
-import { GeoipDatabase } from '../../modules/geo-source/geoip-database.entity';
+import { GeoipDatabase, GeoipDatabaseChunk } from '../../modules/geo-source/geoip-database.entity';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -77,6 +77,7 @@ export const AppDataSource = new DataSource({
     NetworkSetting,
     Integration,
     GeoipDatabase,
+    GeoipDatabaseChunk,
   ],
   migrations: [`${__dirname}/migrations/*.{ts,js}`],
 });
