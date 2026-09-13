@@ -10,6 +10,11 @@ import {
   Modal,
   PageHeader,
   CountryFlag,
+<<<<<<< HEAD
+=======
+  RichText,
+  TrafficSourceList,
+>>>>>>> 9d481ff06ca31d0842066c6061ea1fe97ba18db1
   Select,
   TableSkeleton,
   Textarea,
@@ -176,6 +181,7 @@ export function Browse() {
       key: 'title',
       header: 'Title',
       render: (offer) => (
+<<<<<<< HEAD
         <div className="space-y-1">
           {/* Only a granted offer opens. The row is as far as a gated one goes — the
               server refuses the detail page for it (see offerService.getAvailableOffer),
@@ -187,11 +193,27 @@ export function Browse() {
             disabled={offer.access !== 'GRANTED'}
             className="text-left font-medium text-card-foreground enabled:hover:text-primary enabled:hover:underline disabled:cursor-default"
           >
+=======
+        <button type="button" onClick={() => setDetail(offer)} className="flex items-center gap-2.5 text-left">
+          {/* Thumbnail was uploadable on the admin side and rendered nowhere. A tinted
+              initial stands in when an offer has none, so rows keep a single shape. */}
+          {offer.iconUrl ? (
+            <img src={offer.iconUrl} alt="" className="size-9 shrink-0 rounded-md border border-border object-cover" />
+          ) : (
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-xs font-semibold text-primary">
+              {offer.name.slice(0, 2).toUpperCase()}
+            </span>
+          )}
+          {/* No advertiser name: which advertiser is behind an offer is the network's
+              commercial relationship, not something an affiliate runs traffic against. */}
+          <p className="min-w-0 font-medium text-card-foreground hover:underline">
+>>>>>>> 9d481ff06ca31d0842066c6061ea1fe97ba18db1
             {offer.featured && <span className="mr-1.5 text-xs text-primary">Featured</span>}
             {/* The offer number, in front of the name where every network puts it — it
                 is what a message to a manager quotes and what the tracking link carries. */}
             <span className="mr-1 text-muted-foreground">({offer.refId})</span>
             {offer.name}
+<<<<<<< HEAD
             {offer.access !== 'GRANTED' && (
               <Lock className="ml-1.5 inline size-3 text-muted-foreground" aria-label="Access required" />
             )}
@@ -202,6 +224,10 @@ export function Browse() {
             </span>
           )}
         </div>
+=======
+          </p>
+        </button>
+>>>>>>> 9d481ff06ca31d0842066c6061ea1fe97ba18db1
       ),
     },
     {
@@ -241,8 +267,23 @@ export function Browse() {
       // paid for is exactly the payout mode (see payoutModes).
       header: 'Model',
       render: (offer) => {
+<<<<<<< HEAD
         const modes = payoutModes(offer);
         return modes.length === 0 ? <span className="text-muted-foreground">—</span> : <span>{modes.join(', ')}</span>;
+=======
+        const countries = offer.payoutRules[0]?.countries ?? [];
+        if (countries.length === 0) return 'All';
+        return (
+          <div className="flex flex-wrap items-center gap-1">
+            {countries.map((code) => (
+              <span key={code} className="flex items-center gap-1 text-xs">
+                <CountryFlag code={code} title={code} />
+                {code}
+              </span>
+            ))}
+          </div>
+        );
+>>>>>>> 9d481ff06ca31d0842066c6061ea1fe97ba18db1
       },
     },
     {
@@ -329,6 +370,7 @@ export function Browse() {
         <DataTable columns={columns} rows={rows} getRowKey={(offer) => offer.id} emptyMessage="No offers match these filters." />
       )}
 
+<<<<<<< HEAD
       <Modal
         open={!!requesting}
         onOpenChange={(open) => {
@@ -360,6 +402,110 @@ export function Browse() {
             <Button disabled={saving} onClick={submitRequest}>
               {saving ? 'Sending…' : 'Send request'}
             </Button>
+=======
+      <Modal open={!!detail} onOpenChange={(open) => !open && setDetail(null)} title={detail?.name ?? 'Offer'} className="max-w-2xl">
+        {detail && (
+          <div className="space-y-4 text-sm">
+            {detail.iconUrl && (
+              <img src={detail.iconUrl} alt="" className="h-24 w-full rounded-md border border-border object-cover" />
+            )}
+
+            {(detail.payoutRules[0]?.countries.length ?? 0) > 0 && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Countries</p>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {detail.payoutRules[0]!.countries.map((code) => (
+                    <span
+                      key={code}
+                      className="flex items-center gap-1 rounded-full border border-border bg-secondary px-2 py-0.5 text-xs text-secondary-foreground"
+                    >
+                      <CountryFlag code={code} title={code} />
+                      {code}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+              {[
+                ['Category', detail.category ?? '—'],
+
+                ['Deep linking', detail.allowDeepLinking ? 'Allowed' : 'Not allowed'],
+                [
+                  'Payout',
+                  detail.payoutRules[0]
+                    ? `${money(detail.payoutRules[0].amount, detail.currency)} / ${detail.payoutRules[0].payoutMode}`
+                    : '—',
+                ],
+                [
+                  'Hold',
+                  detail.payoutRules[0]?.holdSchedule.enabled
+                    ? `${detail.payoutRules[0].holdSchedule.days} days after approval`
+                    : 'No hold',
+                ],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+                  <dd className="mt-0.5 text-card-foreground">{value}</dd>
+                </div>
+              ))}
+            </dl>
+
+            {/* Prominent, not a row in the grid above: sending a forbidden source is
+                how an affiliate gets a batch of conversions voided, so it should be
+                readable before they copy the link rather than after. */}
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Traffic sources</p>
+              <TrafficSourceList
+                allowed={detail.trafficTypes}
+                disallowed={detail.disallowedTrafficTypes}
+                emptyMessage="No traffic restrictions stated — check with your manager before running anything unusual."
+                className="mt-1"
+              />
+            </div>
+
+            {detail.kpi && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">What counts as a conversion</p>
+                <p className="mt-0.5 text-card-foreground">{detail.kpi}</p>
+              </div>
+            )}
+            {detail.description && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Description</p>
+                <RichText html={detail.description} className="mt-0.5 text-muted-foreground" />
+              </div>
+            )}
+            {detail.remarksForAffiliateManager && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Notes from your manager</p>
+                <p className="mt-0.5 text-muted-foreground">{detail.remarksForAffiliateManager}</p>
+              </div>
+            )}
+
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Your tracking link</p>
+              <p className="mt-1 break-all rounded-md border border-border bg-background p-2 font-mono text-xs">
+                {detail.trackingLink}
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              {detail.previewLink && (
+                <a
+                  href={detail.previewLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex h-9 items-center rounded-md border border-border px-4 text-sm hover:bg-accent"
+                >
+                  Preview landing page
+                </a>
+              )}
+              <ExternalLinkButton href={detail.trackingLink} label="Open tracking link in new tab" />
+              <Button onClick={() => copyLink(detail)}>Copy tracking link</Button>
+            </div>
+>>>>>>> 9d481ff06ca31d0842066c6061ea1fe97ba18db1
           </div>
         </div>
       </Modal>

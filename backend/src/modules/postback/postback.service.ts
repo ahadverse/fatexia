@@ -85,8 +85,12 @@ export const postbackService = {
   async handlePostback(req: PostbackRequest): Promise<PostbackResult> {
     // The click is loaded first because it, not the caller, decides which offer this
     // conversion belongs to when no offerId was sent.
+<<<<<<< HEAD
     // By refId or uuid — see clickRepository.findByPostbackId for why both.
     const click = await clickRepository.findByPostbackId(req.clickId);
+=======
+    const click = await clickRepository.findById(req.clickId);
+>>>>>>> 9d481ff06ca31d0842066c6061ea1fe97ba18db1
 
     // Global authorisation is checked before anything offer-specific. It used to be a
     // fallback *after* the per-offer gate, which made it unreachable in exactly the
@@ -94,6 +98,7 @@ export const postbackService = {
     // line above, so the network-level entry never got a look.
     const globalAuthId = await matchGlobalInbound(req.secret, req.sourceIp);
 
+<<<<<<< HEAD
     // The caller's value may be the offer's refId or its uuid; the click's is always a
     // uuid. findForClick takes either, so both paths resolve through one read.
     const offerId = req.offerId ?? click?.offerId ?? null;
@@ -103,6 +108,13 @@ export const postbackService = {
       // Not `offerId`: the caller's value may be a refId, and the log column is a uuid.
       // Nothing is lost — the whole query string is stored as the payload.
       await logAttempt(req, { offerId: null, success: false, errorMessage: 'Offer not found, and no click to resolve one from' });
+=======
+    const offerId = req.offerId ?? click?.offerId ?? null;
+    const offer = offerId ? await offerRepository.findByIdWithPayoutRules(offerId) : null;
+
+    if (!offer) {
+      await logAttempt(req, { offerId, success: false, errorMessage: 'Offer not found, and no click to resolve one from' });
+>>>>>>> 9d481ff06ca31d0842066c6061ea1fe97ba18db1
       throw new NotFoundError('Offer not available');
     }
 
