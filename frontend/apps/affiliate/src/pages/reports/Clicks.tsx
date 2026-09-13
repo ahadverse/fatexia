@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   Button,
+  ClickGeoRows,
   DataTable,
   DateRangeFilter,
   Drawer,
@@ -110,9 +111,10 @@ function ClickDetailDrawer({ click, onClose }: { click: OwnClickLog | null; onCl
           </DrawerRow>
           <DrawerRow label="Date">{dateTime(click.createdAt)}</DrawerRow>
           <DrawerRow label="Offer">{click.offerName ?? '—'}</DrawerRow>
-          <DrawerRow label="Country">{click.countryCode ?? click.geoLabel}</DrawerRow>
-          <DrawerRow label="City">{click.city ?? '—'}</DrawerRow>
-          <DrawerRow label="Region">{click.region ?? '—'}</DrawerRow>
+          {/* The same geo block the admin drawer renders — this is the affiliate's own
+              traffic, and the fields withheld from them are the fraud signals, not the
+              visitor's location. */}
+          <ClickGeoRows geo={click} />
           <DrawerRow label="Device">{click.deviceType ?? '—'}</DrawerRow>
           <DrawerRow label="Device brand">{click.deviceBrand ?? '—'}</DrawerRow>
           <DrawerRow label="IP address" mono>

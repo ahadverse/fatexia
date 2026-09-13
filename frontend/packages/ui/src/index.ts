@@ -14,6 +14,7 @@ export * from './components/LogoMark';
 export * from './components/Toggle';
 export * from './components/Modal';
 export * from './components/Drawer';
+export * from './components/ClickGeoRows';
 export * from './components/ConfirmModal';
 export * from './components/Skeleton';
 export * from './components/Pagination';

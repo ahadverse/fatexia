@@ -27,8 +27,15 @@ import { logger } from '../../common/logger';
  * Tracker that cannot boot serves no clicks at all, which is a far worse failure than
  * the missing geo data this exists to prevent.
  *
- * Reading with `substring` and writing with `||` keeps the peak at roughly one chunk,
- * and needs no schema change: the blob stays one row, it is simply never handled whole.
+ * The chunks are **rows**, not slices of one blob. The version before this kept the
+ * whole file in a single `bytea` and grew it with `UPDATE ... SET data = data || $chunk`,
+ * which held the peak down exactly as intended and was catastrophic for storage:
+ * Postgres rewrites an entire row on every UPDATE and TOAST carries the blob with it, so
+ * 29 one-megabyte appends leave 1+2+…+29 ≈ 435MB of dead tuples per fetch. With
+ * autovacuum never having run, `geoip_databases` reached 490MB for 29MB of live data and
+ * filled the plan. Chunking for memory and chunking for storage are opposite designs if
+ * the second one is done by appending — so a fetch now INSERTs its chunks and DELETEs
+ * the previous set, and the dead weight of one fetch is one copy of the file.
  *
  * Disk remains the read path — `maxmind.open()` wants a file, and the click hot path
  * should never touch Postgres.
@@ -38,6 +45,10 @@ import { logger } from '../../common/logger';
 // costs roughly twice its size in transient string before it is a Buffer at all — and
 // this runs on a 512MB instance that is also holding ~75MB of open databases. A 31MB
 // blob is ~31 round trips at this size, which takes about a second once, at boot.
+//
+// It is a read-ahead size, not a contract: `createReadStream` may hand back a shorter
+// chunk, and that is harmless now that the restore walks the rows in index order rather
+// than computing byte offsets.
 const CHUNK_BYTES = 1024 * 1024;
 
 function pathFor(edition: string): string {
@@ -63,10 +74,35 @@ function restoreScratch(edition: string): string {
 }
 
 /**
+ * Reclaims the space the copy being replaced occupied, before the new one is written.
+ *
+ * Deleting rows does not free anything on its own — a plain VACUUM is what puts those
+ * pages back on the free space map. Running it *between* the delete and the inserts is
+ * the whole trick: the new chunks then land in the pages the old ones just vacated
+ * rather than extending the file, so a refresh costs roughly nothing and the table
+ * settles at about one copy. Vacuuming afterwards instead leaves the table a full copy
+ * larger than its contents, permanently.
+ *
+ * It matters here more than it usually would because autovacuum had never run on this
+ * table at all — that is how 29MB of live data became 490MB on disk.
+ *
+ * Best-effort: VACUUM cannot run inside a transaction and a managed plan may refuse it
+ * outright. A skipped vacuum costs disk, not data.
+ */
+async function reclaimChunkSpace(): Promise<void> {
+  try {
+    await AppDataSource.query(`VACUUM "geoip_database_chunks"`);
+  } catch (err) {
+    logger.warn({ err }, '[geoip] could not vacuum the chunk table — the replaced copy stays on disk until autovacuum runs');
+  }
+}
+
+/**
  * Copies a freshly downloaded .mmdb into Postgres.
  *
- * Compressed to a scratch file first, then appended a chunk at a time, so neither the
- * 63MB original nor its 31MB compressed form is ever held whole.
+ * Compressed to a scratch file first, then written one chunk row at a time, so neither
+ * the 63MB original nor its 31MB compressed form is ever held whole — and no row is ever
+ * rewritten, which is what keeps a refresh from leaving a stack of dead copies behind.
  *
  * Failure is logged, not thrown: the file is already on disk and working at this point,
  * so a database hiccup should cost the next restart's convenience, not the download the
@@ -96,42 +132,58 @@ export async function saveGeoipDatabase(edition: string): Promise<void> {
     );
     const checksum = hash.digest('hex');
 
-    // Replaced rather than updated in place: a half-appended blob from a failed run
-    // must not be mistaken for a complete one, and starting from empty makes the
-    // append loop below the only thing that can produce a valid row.
+    // Replaced rather than updated in place: a half-written set of chunks from a failed
+    // run must not be mistaken for a complete one, and starting from empty makes the
+    // insert loop below the only thing that can produce a valid copy.
     //
-    // The checksum is written last, once the bytes are all there — so a row that has
-    // one is a row that finished, and an interrupted upload is visibly unfinished
-    // rather than quietly wrong.
+    // `chunkCount` and `checksum` are both written last, once the bytes are all there —
+    // so a row that has them is a row that finished, and an interrupted upload reads as
+    // zero chunks (nothing to restore) rather than as a short database.
+    await AppDataSource.query(`DELETE FROM geoip_database_chunks WHERE edition = $1`, [edition]);
     await AppDataSource.query(`DELETE FROM geoip_databases WHERE edition = $1`, [edition]);
+
+    // Between the delete and the inserts, so the chunks below reuse those pages.
+    await reclaimChunkSpace();
+
     await AppDataSource.query(
-      `INSERT INTO geoip_databases (edition, data, "byteSize", checksum, "updatedAt") VALUES ($1, ''::bytea, $2, NULL, now())`,
+      `INSERT INTO geoip_databases (edition, "byteSize", "chunkCount", checksum, "updatedAt") VALUES ($1, $2, 0, NULL, now())`,
       [edition, byteSize],
     );
 
     const expected = statSync(compressed).size;
-    let appended = 0;
+    let chunks = 0;
+    let written = 0;
     for await (const chunk of createReadStream(compressed, { highWaterMark: CHUNK_BYTES })) {
-      await AppDataSource.query(`UPDATE geoip_databases SET data = data || $1 WHERE edition = $2`, [chunk, edition]);
-      appended += (chunk as Buffer).byteLength;
+      await AppDataSource.query(`INSERT INTO geoip_database_chunks (edition, "chunkIndex", data) VALUES ($1, $2, $3)`, [
+        edition,
+        chunks,
+        chunk,
+      ]);
+      chunks += 1;
+      written += (chunk as Buffer).byteLength;
     }
 
-    // What Postgres actually holds, not what we believe we sent. A short blob here
-    // means a chunk was lost, and the row is dropped rather than left to fail every
-    // restore from now on while the admin page reports a successful download.
-    const [stored]: { len: string }[] = await AppDataSource.query(
-      `SELECT octet_length(data) AS len FROM geoip_databases WHERE edition = $1`,
+    // What Postgres actually holds, not what we believe we sent. A missing chunk here
+    // means the copy is short, and it is dropped rather than left to fail every restore
+    // from now on while the admin page reports a successful download.
+    const [stored]: { chunks: number; len: string }[] = await AppDataSource.query(
+      `SELECT COUNT(*)::int AS chunks, COALESCE(SUM(octet_length(data)), 0)::bigint AS len FROM geoip_database_chunks WHERE edition = $1`,
       [edition],
     );
-    if (!stored || Number(stored.len) !== expected || appended !== expected) {
+    if (!stored || Number(stored.len) !== expected || Number(stored.chunks) !== chunks || written !== expected) {
+      await AppDataSource.query(`DELETE FROM geoip_database_chunks WHERE edition = $1`, [edition]);
       await AppDataSource.query(`DELETE FROM geoip_databases WHERE edition = $1`, [edition]);
       throw new Error(`stored ${stored?.len ?? 0} of ${expected} bytes — discarded the incomplete copy`);
     }
 
-    await AppDataSource.query(`UPDATE geoip_databases SET checksum = $1 WHERE edition = $2`, [checksum, edition]);
+    await AppDataSource.query(`UPDATE geoip_databases SET checksum = $1, "chunkCount" = $2 WHERE edition = $3`, [
+      checksum,
+      chunks,
+      edition,
+    ]);
 
     logger.info(
-      `[geoip] stored ${edition} in the database (${Math.round(byteSize / 1048576)}MB raw, ${Math.round(expected / 1048576)}MB compressed, sha256 ${checksum.slice(0, 12)}…)`,
+      `[geoip] stored ${edition} in the database (${Math.round(byteSize / 1048576)}MB raw, ${Math.round(expected / 1048576)}MB compressed in ${chunks} chunks, sha256 ${checksum.slice(0, 12)}…)`,
     );
   } catch (err) {
     logger.warn({ err, edition }, '[geoip] could not store the database copy — a restart will need a fresh download');
@@ -148,31 +200,38 @@ export async function saveGeoipDatabase(edition: string): Promise<void> {
  * would be worse than no file at all, which they already handle.
  */
 async function restoreOne(edition: string): Promise<boolean> {
-  const rows: { len: string; updatedAt: Date; byteSize: number; checksum: string | null }[] = await AppDataSource.query(
-    `SELECT octet_length(data) AS len, "updatedAt", "byteSize", checksum FROM geoip_databases WHERE edition = $1`,
-    [edition],
-  );
+  const rows: { chunkCount: number; updatedAt: Date; byteSize: number; checksum: string | null }[] =
+    await AppDataSource.query(
+      `SELECT "chunkCount", "updatedAt", "byteSize", checksum FROM geoip_databases WHERE edition = $1`,
+      [edition],
+    );
   const row = rows[0];
   if (!row) return false;
 
-  const total = Number(row.len);
+  // Zero means the upload never finished stamping its count, so there is no complete
+  // copy here — the same answer as never having fetched at all.
+  const total = Number(row.chunkCount);
   if (total === 0) return false;
 
   const scratch = restoreScratch(edition);
 
-  // The chunks are slices of one gzip stream, so they are pushed through a single
-  // gunzip rather than decompressed individually — only the whole sequence is valid
-  // compressed data.
+  // The chunks are consecutive slices of one gzip stream, so they are pushed through a
+  // single gunzip rather than decompressed individually — only the whole sequence is
+  // valid compressed data. Walked by index rather than by byte offset, so a chunk that
+  // was stored short (the read stream is free to hand back less than it was asked for)
+  // still reassembles exactly.
   const source = Readable.from(
     (async function* () {
-      for (let offset = 0; offset < total; offset += CHUNK_BYTES) {
-        // Postgres substring is 1-indexed.
-        const slice: { chunk: Buffer }[] = await AppDataSource.query(
-          `SELECT substring(data from $2 for $3) AS chunk FROM geoip_databases WHERE edition = $1`,
-          [edition, offset + 1, CHUNK_BYTES],
+      for (let index = 0; index < total; index += 1) {
+        const slice: { data: Buffer }[] = await AppDataSource.query(
+          `SELECT data FROM geoip_database_chunks WHERE edition = $1 AND "chunkIndex" = $2`,
+          [edition, index],
         );
-        const chunk = slice[0]?.chunk;
-        if (chunk?.length) yield chunk;
+        const chunk = slice[0]?.data;
+        // A gap would otherwise be silently concatenated over, producing a file that
+        // gunzip might still accept.
+        if (!chunk) throw new Error(`chunk ${index} of ${total} is missing`);
+        if (chunk.length) yield chunk;
       }
     })(),
   );
@@ -257,8 +316,8 @@ export async function restoreGeoipDatabases(editions: readonly string[]): Promis
 /** When each edition was last downloaded from MaxMind, per the stored copy. */
 export async function storedGeoipDates(editions: readonly string[]): Promise<Map<string, string>> {
   try {
-    // Deliberately never selects `data` — this runs on every status poll, and reading
-    // the blob to report a timestamp would pull tens of megabytes through for nothing.
+    // Cheap by construction now: the bytes live in `geoip_database_chunks`, so the
+    // status poll reads a metadata table rather than skirting a 29MB column.
     const rows: { edition: string; updatedAt: Date }[] = await AppDataSource.query(
       `SELECT edition, "updatedAt" FROM geoip_databases`,
     );

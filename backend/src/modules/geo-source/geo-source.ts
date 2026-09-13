@@ -3,15 +3,67 @@ import { open, type Reader, type CityResponse, type AsnResponse } from 'maxmind'
 import { env } from '../../common/env';
 import { logger } from '../../common/logger';
 
+/**
+ * Everything the GeoLite2 pair actually knows about an address.
+ *
+ * The lookup reads one record per database whatever we ask of it, so a narrower shape
+ * here does not make the click path faster — it only throws information away. It has
+ * been narrowed twice before: the first version kept `country.iso_code` alone, which is
+ * why no screen could show a city, and the second added city/region and still dropped
+ * the postcode, the coordinates, the timezone and the registered country.
+ *
+ * The one thing deliberately not carried across is MaxMind's localized `names` maps —
+ * the same city in eight languages, none of which any screen renders. `geonameId` is
+ * kept instead, since that is what a translation would be looked up by.
+ */
 export interface GeoLookupResult {
   countryCode: string | null;
+  /** Country name, English — so a report can render "Bangladesh", not just "BD". */
+  countryName: string | null;
+  /**
+   * Where the address block is *registered*, which is not always where it is used.
+   *
+   * A US-registered range answering from Germany is ordinary for a VPN and unusual for
+   * organic traffic, so the mismatch is a fraud signal in its own right. Network-facing
+   * only, like the rest of the fraud reasoning.
+   */
+  registeredCountryCode: string | null;
+  continentCode: string | null;
+  continentName: string | null;
   /** City name, English. Null when the IP resolves to a country but no finer. */
   city: string | null;
+  /** GeoNames id for the city — the stable handle behind the name. */
+  cityGeonameId: number | null;
   /** Subdivision name, e.g. "Illinois". */
   region: string | null;
   /** Subdivision ISO code, e.g. "IL" — what the compact geo label uses. */
   regionCode: string | null;
+  /** Second-level subdivision where MaxMind has one (a county, a district). */
+  region2: string | null;
+  region2Code: string | null;
+  postalCode: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  /**
+   * MaxMind's own confidence, in kilometres.
+   *
+   * Worth storing next to the coordinates because it is what stops them being
+   * over-read: a 1000km radius is the middle of the country, not a location, and
+   * 8.8.8.8 returns exactly that.
+   */
+  accuracyRadiusKm: number | null;
+  /** IANA zone, e.g. `America/New_York` — the honest basis for a local-time column. */
+  timeZone: string | null;
+  /** US metro/DMA code. Null everywhere else. */
+  metroCode: number | null;
+  /** `7922 Comcast Cable Communications, LLC` — kept whole for the datacenter filter. */
   asn: string | null;
+  /** The same thing split, so a report can group or filter on the number itself. */
+  asnNumber: number | null;
+  asnOrganization: string | null;
+  /** MaxMind's own legacy proxy/satellite traits. Rarely set in GeoLite2, free when it is. */
+  isAnonymousProxy: boolean | null;
+  isSatelliteProvider: boolean | null;
   /** Loopback/RFC1918/link-local. MaxMind has no record for these by design, so this
    *  distinguishes "we know it's a local address" from "lookup failed". */
   isPrivateIp: boolean;
@@ -19,10 +71,27 @@ export interface GeoLookupResult {
 
 const EMPTY_RESULT: Omit<GeoLookupResult, 'isPrivateIp'> = {
   countryCode: null,
+  countryName: null,
+  registeredCountryCode: null,
+  continentCode: null,
+  continentName: null,
   city: null,
+  cityGeonameId: null,
   region: null,
   regionCode: null,
+  region2: null,
+  region2Code: null,
+  postalCode: null,
+  latitude: null,
+  longitude: null,
+  accuracyRadiusKm: null,
+  timeZone: null,
+  metroCode: null,
   asn: null,
+  asnNumber: null,
+  asnOrganization: null,
+  isAnonymousProxy: null,
+  isSatelliteProvider: null,
 };
 
 let cityReader: Reader<CityResponse> | null = null;
@@ -131,17 +200,41 @@ export const geoSource = {
       logger.warn({ err, ip: normalized }, 'ASN lookup failed');
     }
 
+    // MaxMind orders subdivisions largest-first: [state, county] in the US, and often
+    // just the one. The second is absent far more often than not.
     const subdivision = city?.subdivisions?.[0];
+    const subdivision2 = city?.subdivisions?.[1];
+    const location = city?.location;
+    // GeoLite2 populates these only sometimes, and the typings make them optional, so
+    // an absent trait has to stay null rather than collapse to a confident `false`.
+    const traits = city?.traits as { is_anonymous_proxy?: boolean; is_satellite_provider?: boolean } | undefined;
+    const asnNumber = asnRecord?.autonomous_system_number ?? null;
+    const asnOrganization = asnRecord?.autonomous_system_organization ?? null;
 
     return {
       countryCode: city?.country?.iso_code ?? null,
+      countryName: city?.country?.names?.en ?? null,
+      registeredCountryCode: city?.registered_country?.iso_code ?? null,
+      continentCode: city?.continent?.code ?? null,
+      continentName: city?.continent?.names?.en ?? null,
       city: city?.city?.names?.en ?? null,
+      cityGeonameId: city?.city?.geoname_id ?? null,
       region: subdivision?.names?.en ?? null,
       regionCode: subdivision?.iso_code ?? null,
-      asn: asnRecord
-        ? `${asnRecord.autonomous_system_number ?? ''} ${asnRecord.autonomous_system_organization ?? ''}`.trim() ||
-          null
-        : null,
+      region2: subdivision2?.names?.en ?? null,
+      region2Code: subdivision2?.iso_code ?? null,
+      postalCode: city?.postal?.code ?? null,
+      latitude: location?.latitude ?? null,
+      longitude: location?.longitude ?? null,
+      accuracyRadiusKm: location?.accuracy_radius ?? null,
+      timeZone: location?.time_zone ?? null,
+      metroCode: location?.metro_code ?? null,
+      // Kept as the combined string the datacenter filter already keyword-matches on.
+      asn: asnNumber || asnOrganization ? `${asnNumber ?? ''} ${asnOrganization ?? ''}`.trim() || null : null,
+      asnNumber,
+      asnOrganization,
+      isAnonymousProxy: traits?.is_anonymous_proxy ?? null,
+      isSatelliteProvider: traits?.is_satellite_provider ?? null,
       isPrivateIp: false,
     };
   },

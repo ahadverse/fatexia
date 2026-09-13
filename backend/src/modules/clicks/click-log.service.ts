@@ -3,7 +3,7 @@ import { affiliateNames, offerNames } from '../../common/entity-names';
 import { isPrivateOrLoopback } from '../geo-source/geo-source';
 import { affiliateService } from '../affiliates/affiliate.service';
 import { clickRepository } from './click.repository';
-import type { ClickLogDto, ClickLogFiltersDto, ClickSummaryDto } from './click.dto';
+import type { ClickGeoDto, ClickLogDto, ClickLogFiltersDto, ClickSummaryDto } from './click.dto';
 import type { Click } from './click.entity';
 
 // The admin read side of the clicks table. Kept separate from click.service.ts, which
@@ -32,8 +32,40 @@ export function geoLabel(click: Pick<Click, 'countryCode' | 'city' | 'regionCode
   return isPrivateOrLoopback(click.ip) ? 'Local network' : 'Unknown';
 }
 
+/**
+ * The location half of a click row, projected once for both audiences.
+ *
+ * Both rows carry all of it, so building it twice would be two places for a new field
+ * to be forgotten — which is exactly how city and region came to be stored but never
+ * shown. The fraud-signal fields are deliberately not here; see `ClickGeoDto`.
+ */
+function toGeo(click: Click): ClickGeoDto {
+  return {
+    countryCode: click.countryCode,
+    countryName: click.countryName,
+    continentCode: click.continentCode,
+    continentName: click.continentName,
+    city: click.city,
+    cityGeonameId: click.cityGeonameId,
+    region: click.region,
+    regionCode: click.regionCode,
+    region2: click.region2,
+    region2Code: click.region2Code,
+    postalCode: click.postalCode,
+    // Postgres hands `numeric` back as a string, so the conversion happens once here
+    // rather than in each consumer that wants to place a pin on a map.
+    latitude: click.latitude === null ? null : Number(click.latitude),
+    longitude: click.longitude === null ? null : Number(click.longitude),
+    accuracyRadiusKm: click.accuracyRadiusKm,
+    timeZone: click.timeZone,
+    metroCode: click.metroCode,
+    geoLabel: geoLabel(click),
+  };
+}
+
 function toClickLogRow(click: Click, offerName: string | null, affiliateName: string | null): ClickLogRow {
   return {
+    ...toGeo(click),
     id: click.id,
     refId: click.refId,
     offerId: click.offerId,
@@ -42,11 +74,7 @@ function toClickLogRow(click: Click, offerName: string | null, affiliateName: st
     affiliateName,
     ip: click.ip,
     userAgent: click.userAgent,
-    countryCode: click.countryCode,
-    city: click.city,
-    region: click.region,
-    regionCode: click.regionCode,
-    geoLabel: geoLabel(click),
+    registeredCountryCode: click.registeredCountryCode,
     deviceType: click.deviceType,
     deviceBrand: click.deviceBrand,
     os: click.os,
@@ -54,6 +82,10 @@ function toClickLogRow(click: Click, offerName: string | null, affiliateName: st
     browser: click.browser,
     browserVersion: click.browserVersion,
     asn: click.asn,
+    asnNumber: click.asnNumber,
+    asnOrganization: click.asnOrganization,
+    isAnonymousProxy: click.isAnonymousProxy,
+    isSatelliteProvider: click.isSatelliteProvider,
     isDatacenter: click.isDatacenter,
     isProxyOrVpn: click.isProxyOrVpn,
     isUnique: click.isUnique,
@@ -82,18 +114,13 @@ function toClickLogRow(click: Click, offerName: string | null, affiliateName: st
  * sending bad traffic exactly which signal caught them. The quality band is kept — an
  * affiliate does need to know traffic was rejected, just not precisely why.
  */
-export interface OwnClickLogRow {
+export interface OwnClickLogRow extends ClickGeoDto {
   id: string;
   refId: number;
   offerId: string;
   offerName: string | null;
   ip: string;
   userAgent: string | null;
-  countryCode: string | null;
-  city: string | null;
-  region: string | null;
-  regionCode: string | null;
-  geoLabel: string;
   deviceType: string | null;
   deviceBrand: string | null;
   os: string | null;
@@ -127,17 +154,13 @@ export const clickLogService = {
     return {
       ...paginate(
         rows.map((row) => ({
+          ...toGeo(row),
           id: row.id,
           refId: row.refId,
           offerId: row.offerId,
           offerName: offers.get(row.offerId) ?? null,
           ip: row.ip,
           userAgent: row.userAgent,
-          countryCode: row.countryCode,
-          city: row.city,
-          region: row.region,
-          regionCode: row.regionCode,
-          geoLabel: geoLabel(row),
           deviceType: row.deviceType,
           deviceBrand: row.deviceBrand,
           os: row.os,

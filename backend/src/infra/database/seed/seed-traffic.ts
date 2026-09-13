@@ -33,6 +33,22 @@ const CLICK_COUNT = 2400;
 const TRAFFIC_WINDOW_DAYS = 60;
 const SEED_CONSTANT = 0x5f3a19;
 
+/**
+ * Turns a fixture's `AS7922 Comcast Cable` into the three columns a real lookup writes.
+ *
+ * The Tracker stores the ASN both whole (the datacenter filter keyword-matches it) and
+ * split; a seed that filled only the first would leave every seeded row looking like the
+ * split had failed.
+ */
+function splitSeedAsn(asn: string): { asn: string; asnNumber: number | null; asnOrganization: string | null } {
+  const match = /^AS(\d+)\s+(.+)$/.exec(asn);
+  return {
+    asn,
+    asnNumber: match ? Number(match[1]) : null,
+    asnOrganization: match ? (match[2] ?? null) : null,
+  };
+}
+
 interface GeneratedClick {
   id: string;
   offerId: string;
@@ -124,9 +140,22 @@ export async function seedTraffic(dataSource: DataSource, core: CoreSeedResult):
         ip,
         userAgent: `Mozilla/5.0 (${profile.os}; ${profile.deviceType}) ${browser}/${profile.browserVersion}`,
         countryCode,
+        countryName: geo.countryName,
+        registeredCountryCode: geo.registeredCountryCode,
+        continentCode: geo.continentCode,
+        continentName: geo.continentName,
         city: geo.city,
+        cityGeonameId: geo.cityGeonameId,
         region: geo.region,
         regionCode: geo.regionCode,
+        region2: geo.region2,
+        region2Code: geo.region2Code,
+        postalCode: geo.postalCode,
+        latitude: geo.latitude === null ? null : String(geo.latitude),
+        longitude: geo.longitude === null ? null : String(geo.longitude),
+        accuracyRadiusKm: geo.accuracyRadiusKm,
+        timeZone: geo.timeZone,
+        metroCode: geo.metroCode,
         deviceType: profile.deviceType,
         deviceBrand: profile.deviceBrand,
         os: profile.os,
@@ -137,7 +166,10 @@ export async function seedTraffic(dataSource: DataSource, core: CoreSeedResult):
         // the demo needs a deliberate spread of BLOCKED/SUSPECT rows, and real consumer
         // ISP ranges would score clean every time. Mildly inconsistent with `ip` on
         // purpose — the geo fields above are the ones that must be truthful.
-        asn: pick(random, TRAFFIC_ASNS),
+        //
+        // Split the same way the Tracker splits a real one, so the drawer never shows a
+        // combined ASN string next to two blank fields that look like a parsing bug.
+        ...splitSeedAsn(pick(random, TRAFFIC_ASNS)),
         isDatacenter,
         isProxyOrVpn,
         isUnique,

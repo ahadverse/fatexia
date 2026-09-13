@@ -75,11 +75,58 @@ const UA =
   // Geo depends on whether the proxy header was honoured; both outcomes must be sane.
   if (newest.ip === TEST_IP) {
     check('public IP resolved to a city', Boolean(newest.city && newest.countryCode), `${newest.city}, ${newest.regionCode}, ${newest.countryCode}`);
+
+    // Every other field the City record carries. These were decoded on this very
+    // lookup and discarded by two previous versions of the geo source, so the point of
+    // asserting them one by one is that a narrowing regression names the field it lost.
+    const expected = {
+      countryName: 'United States',
+      continentCode: 'NA',
+      continentName: 'North America',
+      regionCode: 'MA',
+      timeZone: 'America/New_York',
+    };
+    for (const [field, value] of Object.entries(expected)) {
+      check(`geo: ${field}`, newest[field] === value, `${newest[field]}`);
+    }
+    check('geo: postalCode', Boolean(newest.postalCode), `${newest.postalCode}`);
+    check('geo: coordinates', newest.latitude !== null && newest.longitude !== null, `${newest.latitude}, ${newest.longitude}`);
+    // Stored with the coordinates on purpose — without it a 1000km guess reads as a
+    // location. Comcast in Somerville resolves far tighter than that.
+    check('geo: accuracyRadiusKm', newest.accuracyRadiusKm > 0, `± ${newest.accuracyRadiusKm} km`);
+    check('geo: cityGeonameId', newest.cityGeonameId > 0, `${newest.cityGeonameId}`);
+    check('geo: registeredCountryCode', Boolean(newest.registeredCountryCode), `${newest.registeredCountryCode}`);
+    check('geo: metroCode (US address)', newest.metroCode > 0, `${newest.metroCode}`);
+    check(
+      'asn split into number + organisation',
+      Number.isInteger(newest.asnNumber) && Boolean(newest.asnOrganization),
+      `AS${newest.asnNumber} ${newest.asnOrganization}`,
+    );
+    check('asn kept whole for the datacenter filter', Boolean(newest.asn), `${newest.asn}`);
   } else {
     check(
       'loopback IP degrades cleanly instead of throwing',
       newest.countryCode === null && newest.city === null,
       `ip=${newest.ip} (TRUST_PROXY not set — the header was correctly ignored)`,
+    );
+    // The wider lookup must degrade exactly as the narrow one did: null everywhere, not
+    // a partially-filled row and not a throw on the redirect path.
+    check(
+      'and the wider geo fields degrade with it',
+      [
+        'countryName',
+        'continentCode',
+        'postalCode',
+        'latitude',
+        'longitude',
+        'accuracyRadiusKm',
+        'timeZone',
+        'metroCode',
+        'asnNumber',
+        'asnOrganization',
+        'registeredCountryCode',
+      ].every((field) => newest[field] === null),
+      'all null',
     );
   }
 
@@ -111,6 +158,21 @@ const UA =
     'and it names the reason the lookup found nothing',
     row?.countryCode ? true : row?.geoLabel === 'Local network' || row?.geoLabel === 'Unknown',
     row?.geoLabel,
+  );
+  // The stored columns are only half of it — the admin DTO has to carry them too, which
+  // is where the previous city/region regression actually lived.
+  check(
+    'the admin DTO carries the full geo block',
+    row !== undefined &&
+      ['countryName', 'continentCode', 'continentName', 'postalCode', 'latitude', 'longitude', 'accuracyRadiusKm', 'timeZone', 'cityGeonameId', 'region2', 'region2Code', 'metroCode'].every(
+        (field) => field in row,
+      ),
+    '12 geo fields present',
+  );
+  check(
+    'and the admin-only fraud fields alongside it',
+    row !== undefined && ['asn', 'asnNumber', 'asnOrganization', 'registeredCountryCode', 'isAnonymousProxy', 'isSatelliteProvider'].every((field) => field in row),
+    '',
   );
 
   await client.query(`DELETE FROM clicks WHERE "subId8" = 'probe_8'`);

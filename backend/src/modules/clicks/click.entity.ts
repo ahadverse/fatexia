@@ -64,15 +64,74 @@ export class Click {
   @Column({ type: 'varchar', nullable: true })
   countryCode!: string | null;
 
+  @Column({ type: 'varchar', nullable: true })
+  countryName!: string | null;
+
+  /**
+   * Where the address block is registered, as opposed to where it answered from.
+   *
+   * A mismatch against `countryCode` is normal for a VPN and unusual for organic
+   * traffic, which makes it fraud reasoning — network-side only, like `asn` and the
+   * proxy flags.
+   */
+  @Column({ type: 'varchar', nullable: true })
+  registeredCountryCode!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  continentCode!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  continentName!: string | null;
+
   // City-level geo, read from the same GeoLite2-City lookup that resolves the country.
   @Column({ type: 'varchar', nullable: true })
   city!: string | null;
+
+  /** GeoNames id for the city — the stable handle behind a name that has spelling variants. */
+  @Column({ type: 'integer', nullable: true })
+  cityGeonameId!: number | null;
 
   @Column({ type: 'varchar', nullable: true })
   region!: string | null;
 
   @Column({ type: 'varchar', nullable: true })
   regionCode!: string | null;
+
+  // Second-level subdivision (a county, a district) where MaxMind has one.
+  @Column({ type: 'varchar', nullable: true })
+  region2!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  region2Code!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  postalCode!: string | null;
+
+  // decimal, not float — and read back as a string, like every other decimal column
+  // here. Four places is about 11 metres, well inside MaxMind's best accuracy radius.
+  @Column({ type: 'decimal', precision: 8, scale: 4, nullable: true })
+  latitude!: string | null;
+
+  @Column({ type: 'decimal', precision: 8, scale: 4, nullable: true })
+  longitude!: string | null;
+
+  /**
+   * MaxMind's own confidence in the coordinates, in kilometres.
+   *
+   * Stored with them deliberately. 8.8.8.8 resolves to a point in Kansas with a 1000km
+   * radius — that is "somewhere in the United States", and without this column the
+   * coordinates read as a location.
+   */
+  @Column({ type: 'smallint', nullable: true })
+  accuracyRadiusKm!: number | null;
+
+  /** IANA zone, e.g. `America/New_York`. */
+  @Column({ type: 'varchar', nullable: true })
+  timeZone!: string | null;
+
+  /** US metro/DMA code; null everywhere else. */
+  @Column({ type: 'smallint', nullable: true })
+  metroCode!: number | null;
 
   @Column({ type: 'varchar', nullable: true })
   deviceType!: string | null;
@@ -94,6 +153,24 @@ export class Click {
 
   @Column({ type: 'varchar', nullable: true })
   asn!: string | null;
+
+  // The same ASN split apart. `asn` is the combined string the datacenter keyword filter
+  // reads; these two are what a report can actually group or filter on, since "7922
+  // Comcast Cable Communications, LLC" is not a number and not an organisation.
+  @Column({ type: 'integer', nullable: true })
+  asnNumber!: number | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  asnOrganization!: string | null;
+
+  // MaxMind's own legacy traits. Distinct from `isProxyOrVpn`, which is the residential
+  // -proxy cascade's verdict — these come free with the city record and are null when
+  // GeoLite2 does not set them, which is most of the time.
+  @Column({ type: 'boolean', nullable: true })
+  isAnonymousProxy!: boolean | null;
+
+  @Column({ type: 'boolean', nullable: true })
+  isSatelliteProvider!: boolean | null;
 
   @Column({ type: 'boolean', default: false })
   isDatacenter!: boolean;
