@@ -101,7 +101,12 @@ function GeoipSection() {
       hint="Used by the Tracker for country/ASN lookups. Kept in the database and restored automatically when the Tracker restarts, so a fetch is only needed when the data is stale or has never been downloaded. Limited to 10 attempts per database per 24h (MaxMind's rate limit)."
     >
       <div className="sm:col-span-2 space-y-2">
-        {status.loading && <Skeleton className="h-16 w-full" />}
+        {/* First load only. `loading` goes true on every reload, and this section
+            reloads every 3s while a download runs — so keying the skeleton on it alone
+            flashed an empty block in above the progress banner on each poll, next to
+            content that was already on screen. A placeholder is for when there is
+            nothing to show, and once `data` exists there always is. */}
+        {status.loading && !status.data && <Skeleton className="h-16 w-full" />}
         {status.error && <p className="text-sm text-destructive">{status.error}</p>}
 
         {/* While the download runs. The bar is indeterminate on purpose: MaxMind sends
