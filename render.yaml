@@ -45,7 +45,10 @@ services:
     # Migrations run at start, not during build, because the build step has no
     # access to the database on Render. `migration:run` is idempotent — already
     # applied migrations are skipped — so re-running on every boot is safe.
-    startCommand: npm run migration:run:prod && npm start
+    #
+    # Through the locking wrapper, because the Tracker now runs this too — see the
+    # note on its startCommand below, and backend/scripts/migrate-prod.js.
+    startCommand: npm run migrate && npm start
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
@@ -140,10 +143,18 @@ services:
     # devDependencies — and `typescript` (for `npm run build`) and `tsx` (for
     # `seed:prod`) both live there. Without it the build fails on "tsc: not found".
     buildCommand: npm ci --include=dev && npm run build
-    # No migrations here — the API service owns the schema. Two services racing to
-    # migrate the same database on a simultaneous deploy is how you get a half
-    # applied migration.
-    startCommand: npm run start:tracking
+    # The Tracker migrates too, which reverses the previous rule here. That rule
+    # ("the API owns the schema") assumed the Tracker only ever read columns the API
+    # had already added; it does not. The Tracker writes clicks.refId and reads
+    # offers.refId, so booting it against a database the API has not finished
+    # migrating does not degrade a feature — every click redirect fails.
+    #
+    # Both services deploy in parallel from this one blueprint, so the order is not
+    # something the operator gets to choose. The race the old comment warned about is
+    # real, and is handled where it should be: scripts/migrate-prod.js takes a
+    # Postgres advisory lock, so the second service waits and then finds nothing left
+    # to apply.
+    startCommand: npm run migrate && npm run start:tracking
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
