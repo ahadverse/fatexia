@@ -27,31 +27,60 @@ import { IntegrationProvider, IntegrationStatus } from './integration.entity';
 // how long the API and Tracker processes can disagree after a change.
 const CACHE_TTL_MS = 60_000;
 
-interface CachedCredential {
-  apiKey: string | null;
+/** One usable credential: the key, and the row id its quota is counted against. */
+export interface ProviderCredential {
+  id: string;
+  apiKey: string;
+}
+
+interface CachedCredentials {
+  credentials: ProviderCredential[];
   expiresAt: number;
 }
 
-const cache = new Map<IntegrationProvider, CachedCredential>();
+const cache = new Map<IntegrationProvider, CachedCredentials>();
 
-export async function getIntegrationApiKey(provider: IntegrationProvider): Promise<string | null> {
+/**
+ * Every usable credential for a provider, in cascade order.
+ *
+ * A provider can hold several — the free tiers are metered per key, so a second IPHub
+ * key is a second daily allowance. Rows with no key, or switched off, are dropped here
+ * rather than in the caller, so "skip this one and try the next" is one rule in one
+ * place.
+ *
+ * The id comes back with the key because quota is counted per credential. Counting per
+ * provider would make three keys share one allowance, which is the opposite of why a
+ * second key was added.
+ */
+export async function getIntegrationCredentials(provider: IntegrationProvider): Promise<ProviderCredential[]> {
   const cached = cache.get(provider);
-  if (cached && cached.expiresAt > Date.now()) return cached.apiKey;
+  if (cached && cached.expiresAt > Date.now()) return cached.credentials;
 
-  let apiKey: string | null;
+  let credentials: ProviderCredential[];
   try {
-    const record = await integrationRepository.findByProvider(provider);
-    apiKey = record && record.status !== IntegrationStatus.DISABLED ? (record.apiKey?.trim() || null) : null;
+    const records = await integrationRepository.findAllByProvider(provider);
+    credentials = records
+      .filter((record) => record.status !== IntegrationStatus.DISABLED)
+      .flatMap((record) => {
+        const apiKey = record.apiKey?.trim();
+        return apiKey ? [{ id: record.id, apiKey }] : [];
+      });
   } catch (err) {
     // A database hiccup must not block a click. Skip the provider for this call and
     // do not cache the failure, so the next click retries the table rather than being
     // stuck without a credential for a full TTL.
     logger.warn({ err, provider }, 'Integration credential lookup failed, skipping provider');
-    return null;
+    return [];
   }
 
-  cache.set(provider, { apiKey, expiresAt: Date.now() + CACHE_TTL_MS });
-  return apiKey;
+  cache.set(provider, { credentials, expiresAt: Date.now() + CACHE_TTL_MS });
+  return credentials;
+}
+
+/** The first usable credential — for providers that only ever have one, like SMTP. */
+export async function getIntegrationApiKey(provider: IntegrationProvider): Promise<string | null> {
+  const [first] = await getIntegrationCredentials(provider);
+  return first?.apiKey ?? null;
 }
 
 /** Called after an admin saves an integration, so the change is visible immediately

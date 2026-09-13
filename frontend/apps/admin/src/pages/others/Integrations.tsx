@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import { Button, ConfirmModal, Input, Modal, PageHeader, Skeleton, Toggle, toast } from '@fatexia/ui';
-import type { Integration } from '@fatexia/types';
-import { getIntegrations, testIntegration, updateIntegration } from '../../lib/platform-api';
+import type { Integration, IntegrationProvider } from '@fatexia/types';
+import {
+  addIntegrationCredential,
+  deleteIntegration,
+  getIntegrations,
+  testIntegration,
+  updateIntegration,
+} from '../../lib/platform-api';
 import { useAsync } from '../../hooks/useAsync';
 import { dateTime } from '../../lib/format';
 import { StatusPill } from '../../components/StatusPill';
@@ -53,6 +59,12 @@ const UNUSED_PROVIDERS = ['PAYPAL', 'WISE', 'MAXMIND'];
 // accepted a bucket name nothing reads is worse than no card at all.
 const HIDDEN_PROVIDERS = ['SMTP', 'S3'];
 
+// Providers the fraud cascade reads as an ordered list, where each key carries its own
+// daily allowance — so a second key is extra capacity, not a replacement. Everything
+// else is read first-row-only (see MULTI_CREDENTIAL in integration.service.ts), and
+// offering to add a second would be offering a setting that does nothing.
+const MULTI_CREDENTIAL_PROVIDERS = ['IPHUB', 'IPAPI_IS', 'IPQS'];
+
 export function Integrations() {
   const integrations = useAsync<Integration[]>(() => getIntegrations(), []);
   const [edit, setEdit] = useState<EditState | null>(null);
@@ -60,6 +72,40 @@ export function Integrations() {
   const [testingId, setTestingId] = useState<string | null>(null);
   const [toggleDecision, setToggleDecision] = useState<ToggleDecision | null>(null);
   const [toggleSaving, setToggleSaving] = useState(false);
+  const [addingProvider, setAddingProvider] = useState<IntegrationProvider | null>(null);
+  const [removing, setRemoving] = useState<Integration | null>(null);
+
+  // How many credentials each provider holds, so a card can say "1 of 3" and the
+  // delete button can be hidden on the last one — where the server refuses anyway.
+  const countByProvider = (integrations.data ?? []).reduce<Record<string, number>>((acc, row) => {
+    acc[row.provider] = (acc[row.provider] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  async function addCredential(provider: IntegrationProvider) {
+    setAddingProvider(provider);
+    try {
+      const created = await addIntegrationCredential(provider);
+      toast.success(`${created.name} added — paste its key, then test it`);
+      integrations.reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not add another key');
+    } finally {
+      setAddingProvider(null);
+    }
+  }
+
+  async function confirmRemove() {
+    if (!removing) return;
+    try {
+      await deleteIntegration(removing.id);
+      toast.success(`${removing.name} removed`);
+      integrations.reload();
+      setRemoving(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not remove this key');
+    }
+  }
 
   // A failed test resolves rather than throwing — the error lands on the row, which
   // is more useful than a toast the admin has to remember while they fix the key.
@@ -149,6 +195,16 @@ export function Integrations() {
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-sm font-semibold text-card-foreground">{integration.name}</h2>
+                  {/* Where this key sits in the cascade. Only shown once a provider
+                      actually holds more than one — "1 of 1" is noise. */}
+                  {(countByProvider[integration.provider] ?? 0) > 1 && (
+                    <span
+                      title="Keys are tried in this order; the next one is used when this one is exhausted or failing."
+                      className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary"
+                    >
+                      {integration.position + 1} of {countByProvider[integration.provider]}
+                    </span>
+                  )}
                   {UNUSED_PROVIDERS.includes(integration.provider) && (
                     <span
                       title="Credentials are stored, but no feature reads them yet."
@@ -222,8 +278,31 @@ export function Integrations() {
                 >
                   {integration.hasApiKey ? 'Replace credentials' : 'Add credentials'}
                 </Button>
+                {/* Absent on a provider's only key: removing it would take the provider
+                    off this page with no way back. The server refuses that too. */}
+                {MULTI_CREDENTIAL_PROVIDERS.includes(integration.provider) &&
+                  (countByProvider[integration.provider] ?? 0) > 1 && (
+                    <Button size="sm" variant="ghost" onClick={() => setRemoving(integration)}>
+                      Remove
+                    </Button>
+                  )}
               </div>
             </div>
+
+            {/* One more key is one more daily allowance — the free tiers meter per key,
+                so this is how the network buys headroom without changing provider. */}
+            {MULTI_CREDENTIAL_PROVIDERS.includes(integration.provider) &&
+              integration.position === (countByProvider[integration.provider] ?? 1) - 1 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-3 w-full"
+                  disabled={addingProvider === integration.provider}
+                  onClick={() => addCredential(integration.provider)}
+                >
+                  {addingProvider === integration.provider ? 'Adding…' : `Add another ${integration.provider} key`}
+                </Button>
+              )}
           </div>
         ))}
       </div>
@@ -297,6 +376,16 @@ export function Integrations() {
         destructive={!toggleDecision?.enabled}
         loading={toggleSaving}
         onConfirm={confirmToggle}
+      />
+
+      <ConfirmModal
+        open={!!removing}
+        onOpenChange={(open) => !open && setRemoving(null)}
+        title={`Remove ${removing?.name}?`}
+        description="The key is deleted and its daily allowance stops counting toward this provider. The remaining keys move up the order and keep handling traffic."
+        confirmLabel="Remove"
+        destructive
+        onConfirm={confirmRemove}
       />
     </div>
   );

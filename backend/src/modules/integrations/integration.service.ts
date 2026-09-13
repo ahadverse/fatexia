@@ -4,7 +4,12 @@ import { probeBrevoAccount } from '../../infra/email/brevo-mailer';
 import { integrationRepository } from './integration.repository';
 import { IntegrationProvider, IntegrationStatus } from './integration.entity';
 import { invalidateIntegrationCache } from './integration-credentials';
-import { toIntegrationDto, type IntegrationDto, type UpdateIntegrationDto } from './integration.dto';
+import {
+  toIntegrationDto,
+  type CreateIntegrationDto,
+  type IntegrationDto,
+  type UpdateIntegrationDto,
+} from './integration.dto';
 
 // Providers whose credentials this service can actually exercise. A "test" button
 // that silently no-ops for the rest would be worse than not offering one.
@@ -13,6 +18,15 @@ const TESTABLE = new Set<IntegrationProvider>([
   IntegrationProvider.IPAPI_IS,
   IntegrationProvider.IPQS,
   IntegrationProvider.SMTP,
+]);
+
+// Providers the fraud cascade reads as a list, where a second key buys a second daily
+// allowance (see fraud/proxy-detection.ts). Everything else is read first-row-only, so
+// a second credential there would be a setting that does nothing.
+const MULTI_CREDENTIAL = new Set<IntegrationProvider>([
+  IntegrationProvider.IPHUB,
+  IntegrationProvider.IPAPI_IS,
+  IntegrationProvider.IPQS,
 ]);
 
 // A stable, publicly-known datacenter IP (Google DNS). Every provider recognises it,
@@ -31,6 +45,70 @@ export const integrationService = {
       throw new NotFoundError('Integration not found');
     }
     return toIntegrationDto(integration);
+  },
+
+  /**
+   * Adds another credential to an existing provider.
+   *
+   * Appended at the end of that provider's cascade, because a newly pasted key is the
+   * spare: the ones already there have been tested and are presumably carrying the
+   * traffic. Reordering is a separate, deliberate act.
+   *
+   * Restricted to the providers that actually cascade. A second SMTP relay or S3
+   * bucket would be silently ignored — only the first is ever read — and offering to
+   * create one would be offering a setting that does nothing.
+   */
+  async createIntegration(dto: CreateIntegrationDto): Promise<IntegrationDto> {
+    if (!MULTI_CREDENTIAL.has(dto.provider)) {
+      throw new ValidationError(`${dto.provider} uses a single credential — edit the existing one instead`);
+    }
+
+    const existing = await integrationRepository.findByProvider(dto.provider);
+    if (!existing) {
+      throw new NotFoundError(`${dto.provider} is not configured on this network`);
+    }
+
+    const position = (await integrationRepository.maxPosition(dto.provider)) + 1;
+    const apiKey = dto.apiKey?.trim() || null;
+
+    const created = await integrationRepository.create({
+      provider: dto.provider,
+      position,
+      // Numbered from the position so the cards are distinguishable at a glance; the
+      // description is copied because it describes the provider, not the key.
+      name: dto.name?.trim() || `${existing.name} #${position + 1}`,
+      description: existing.description,
+      apiKey,
+      config: existing.config ?? {},
+      status: apiKey ? IntegrationStatus.ACTIVE : IntegrationStatus.NOT_CONFIGURED,
+    });
+
+    invalidateIntegrationCache(dto.provider);
+    return toIntegrationDto(created);
+  },
+
+  /**
+   * Removes one credential.
+   *
+   * The last remaining credential for a provider is kept: deleting it would take the
+   * provider off the Integrations page entirely, with no way to put it back short of a
+   * migration. Clearing the key or disabling the row is how a provider is turned off.
+   */
+  async deleteIntegration(id: string): Promise<void> {
+    const integration = await integrationRepository.findById(id);
+    if (!integration) {
+      throw new NotFoundError('Integration not found');
+    }
+
+    const siblings = await integrationRepository.findAllByProvider(integration.provider);
+    if (siblings.length <= 1) {
+      throw new ValidationError(
+        `${integration.name} is the only ${integration.provider} credential — clear its key or disable it instead of deleting it`,
+      );
+    }
+
+    await integrationRepository.remove(id);
+    invalidateIntegrationCache(integration.provider);
   },
 
   async updateIntegration(id: string, dto: UpdateIntegrationDto): Promise<IntegrationDto> {

@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
 // Every third-party credential in the system is configured here and nowhere else
 // (PLAN-admin.md: "all credentials handled by admin").
@@ -30,9 +30,19 @@ export class Integration {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ type: 'enum', enum: IntegrationProvider, unique: true })
+  // Not unique: a provider may hold several credentials, tried in `position` order.
+  // The free tiers are metered per key, so a second IPHub key is a second daily
+  // allowance — see fraud/proxy-detection.ts.
+  @Index('IDX_integrations_provider_position', ['provider', 'position'])
+  @Column({ type: 'enum', enum: IntegrationProvider })
   provider!: IntegrationProvider;
 
+  /** Where this credential sits in its provider's cascade. Lower is tried first. */
+  @Column({ type: 'integer', default: 0 })
+  position!: number;
+
+  // Distinguishes one credential from another on the Admin page, so an admin
+  // rotating a key knows which of three IPHub entries they are editing.
   @Column({ type: 'varchar' })
   name!: string;
 

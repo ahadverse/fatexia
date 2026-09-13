@@ -250,6 +250,13 @@ export type IntegrationStatus = 'NOT_CONFIGURED' | 'ACTIVE' | 'DISABLED' | 'ERRO
 export interface Integration {
   id: string;
   provider: IntegrationProvider;
+  /**
+   * Where this credential sits in its provider's cascade — lower is tried first.
+   *
+   * A provider can hold several: the fraud providers meter their free tiers per key,
+   * so a second IPHub key is a second daily allowance rather than a replacement.
+   */
+  position: number;
   name: string;
   description: string | null;
   // Masked previews only — the API never returns a raw secret.

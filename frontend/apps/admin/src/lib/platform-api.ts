@@ -7,6 +7,7 @@ import type {
   CreateSmartLinkInput,
   EmailTemplate,
   Integration,
+  IntegrationProvider,
   Invoice,
   InvoiceStatus,
   Message,
@@ -279,6 +280,19 @@ export function updateIntegration(
 // integration's `status`/`lastError`, not by rejecting.
 export function testIntegration(id: string): Promise<Integration> {
   return apiFetch<Integration>(`/integrations/${id}/test`, { method: 'POST' });
+}
+
+// Adds another credential to a provider that cascades (the fraud providers). Appended
+// at the end of that provider's order, so the keys already carrying traffic keep
+// precedence over a freshly pasted spare.
+export function addIntegrationCredential(provider: IntegrationProvider, name?: string): Promise<Integration> {
+  return apiFetch<Integration>('/integrations', { method: 'POST', body: JSON.stringify({ provider, name }) });
+}
+
+// Refused for a provider's last remaining credential — clearing the key or disabling
+// the row is how a provider is turned off.
+export function deleteIntegration(id: string): Promise<void> {
+  return apiFetch<void>(`/integrations/${id}`, { method: 'DELETE' });
 }
 
 /**

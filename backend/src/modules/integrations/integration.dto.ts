@@ -13,9 +13,27 @@ export const updateIntegrationSchema = z.object({
 
 export type UpdateIntegrationDto = z.infer<typeof updateIntegrationSchema>;
 
+/**
+ * Adds another credential to a provider that already has one.
+ *
+ * Only the provider is required: the point of this is "another IPHub key", and the row
+ * is created empty for the admin to paste into, exactly like the ones seeded at
+ * install. `name` is offered because three rows all reading "IPHub" would leave nobody
+ * able to tell which one they were rotating.
+ */
+export const createIntegrationSchema = z.object({
+  provider: z.nativeEnum(IntegrationProvider),
+  name: z.string().min(1).max(120).optional(),
+  apiKey: z.string().max(500).optional(),
+});
+
+export type CreateIntegrationDto = z.infer<typeof createIntegrationSchema>;
+
 export interface IntegrationDto {
   id: string;
   provider: IntegrationProvider;
+  /** Position in this provider's cascade — lower is tried first. */
+  position: number;
   name: string;
   description: string | null;
   // Never the raw secret — a last-4 preview is enough to confirm which key is loaded.
@@ -42,6 +60,7 @@ export function toIntegrationDto(integration: Integration): IntegrationDto {
   return {
     id: integration.id,
     provider: integration.provider,
+    position: integration.position,
     name: integration.name,
     description: integration.description,
     apiKeyPreview: mask(integration.apiKey),

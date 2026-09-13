@@ -1,22 +1,26 @@
 import { logger } from '../../common/logger';
 import { redis } from '../../infra/redis/redis-client';
 import { IntegrationProvider } from '../integrations/integration.entity';
-import { getIntegrationApiKey } from '../integrations/integration-credentials';
+import { getIntegrationCredentials } from '../integrations/integration-credentials';
 import { isPrivateOrLoopback, normalizeIp } from '../geo-source/geo-source';
 
 // Cascading free-tier residential-proxy detection (PLAN-tracker.md Step 5): IPHub →
-// ipapi.is → IPQS, each with its own quota, falling through to the next when one is
-// exhausted or unconfigured. Returns null (never scored) rather than throwing, so a
-// provider outage/quota-exhaustion never blocks a click — that's the fail-open rule.
+// ipapi.is → IPQS, falling through to the next when one is exhausted or unconfigured.
+// Returns null (never scored) rather than throwing, so a provider outage or quota
+// exhaustion never blocks a click — that's the fail-open rule.
 //
-// Keys come from `getIntegrationApiKey`, which reads the Admin Integrations page's
-// stored credential and falls back to env. Reading env directly here was the reason a
-// key entered in the UI had no effect: it was saved, and then never looked at.
+// Each provider may hold several credentials, tried in order before the cascade moves
+// on. The free tiers are metered per key, so adding a second IPHub key doubles the
+// daily allowance; quota is therefore counted per credential, never per provider.
 //
-// Cache (24h TTL) and per-provider quota counters live in Redis (see
+// Keys come from `getIntegrationCredentials`, which reads the Admin Integrations page
+// and nothing else. There is no env fallback: a key that can also live in `.env` makes
+// the page lie about what is configured, in both directions.
+//
+// Cache (24h TTL) and per-credential quota counters live in Redis (see
 // infra/redis/redis-client.ts) so they survive restarts and are shared across
 // multiple Tracker processes, per PLAN-tracker.md Step 4/5. A Redis error is treated
-// the same as "quota unavailable" — the provider is skipped, never called unmetered.
+// the same as "quota unavailable" — the credential is skipped, never called unmetered.
 const CACHE_TTL_SECONDS = 24 * 60 * 60;
 const CACHE_KEY_PREFIX = 'proxy-detect:cache:';
 const QUOTA_KEY_PREFIX = 'proxy-detect:quota:';
@@ -43,16 +47,19 @@ function startOfNextMonth(): number {
 
 // Atomic INCR + EXPIRE-on-first-increment. The key itself expires at the reset
 // boundary, so there's no separate reset bookkeeping to get out of sync.
-async function takeQuota(provider: string, limit: number, resetAtMs: number): Promise<boolean> {
+//
+// Counted per credential id, not per provider: the allowance being spent belongs to
+// one API key, and several keys sharing a counter would make the second one useless.
+async function takeQuota(credentialId: string, limit: number, resetAtMs: number): Promise<boolean> {
   try {
-    const key = `${QUOTA_KEY_PREFIX}${provider}`;
+    const key = `${QUOTA_KEY_PREFIX}${credentialId}`;
     const count = await redis.incr(key);
     if (count === 1) {
       await redis.expire(key, secondsUntil(resetAtMs));
     }
     return count <= limit;
   } catch (err) {
-    logger.warn({ err, provider }, 'Redis quota check failed, skipping provider');
+    logger.warn({ err, credentialId }, 'Redis quota check failed, skipping credential');
     return false;
   }
 }
@@ -103,23 +110,39 @@ export async function probeProvider(
   throw new Error(`${provider} is not a proxy-detection provider`);
 }
 
+/**
+ * Tries every credential a provider holds, in order, and returns the first answer.
+ *
+ * A provider can be configured several times over — the free tiers are metered per
+ * key, so three IPHub keys are three thousand lookups a day rather than one thousand.
+ * Each is spent in turn: exhausted, unconfigured or failing, the next one is tried,
+ * and only when all of them are used up does the cascade move to the next provider.
+ *
+ * Quota is counted against the credential's own id, not the provider's name. Keyed by
+ * name, a second key would share the first one's allowance and buy nothing.
+ *
+ * A failure is a skip, never a throw. This sits on the click path, where the fail-open
+ * rule says an unavailable provider must cost a signal, not a redirect.
+ */
 async function checkProvider(
   provider: IntegrationProvider,
   ip: string,
-  quotaKey: string,
   limit: number,
   resetAtMs: number,
 ): Promise<boolean | null> {
-  const apiKey = await getIntegrationApiKey(provider);
-  if (!apiKey) return null;
-  if (!(await takeQuota(quotaKey, limit, resetAtMs))) return null;
+  const credentials = await getIntegrationCredentials(provider);
 
-  try {
-    return await probeProvider(provider, apiKey, ip);
-  } catch (err) {
-    logger.warn({ err, provider }, 'Proxy check failed');
-    return null;
+  for (const credential of credentials) {
+    if (!(await takeQuota(credential.id, limit, resetAtMs))) continue;
+
+    try {
+      return await probeProvider(provider, credential.apiKey, ip);
+    } catch (err) {
+      logger.warn({ err, provider, credentialId: credential.id }, 'Proxy check failed, trying the next credential');
+    }
   }
+
+  return null;
 }
 
 // null = never resolved (all providers unconfigured/exhausted/failed) — the caller
@@ -144,10 +167,13 @@ export async function checkResidentialProxy(ip: string): Promise<boolean | null>
     logger.warn({ err }, 'Redis cache read failed, falling through to providers');
   }
 
+  // Each provider exhausts all of its own keys before the next provider is reached —
+  // a second IPHub key is preferred over ipapi.is, because it is the same signal from
+  // the provider the operator ordered first.
   const result =
-    (await checkProvider(IntegrationProvider.IPHUB, normalized, 'iphub:daily', DAILY_LIMIT, startOfNextDay())) ??
-    (await checkProvider(IntegrationProvider.IPAPI_IS, normalized, 'ipapiIs:daily', DAILY_LIMIT, startOfNextDay())) ??
-    (await checkProvider(IntegrationProvider.IPQS, normalized, 'ipqs:monthly', MONTHLY_LIMIT, startOfNextMonth()));
+    (await checkProvider(IntegrationProvider.IPHUB, normalized, DAILY_LIMIT, startOfNextDay())) ??
+    (await checkProvider(IntegrationProvider.IPAPI_IS, normalized, DAILY_LIMIT, startOfNextDay())) ??
+    (await checkProvider(IntegrationProvider.IPQS, normalized, MONTHLY_LIMIT, startOfNextMonth()));
 
   if (result === null) {
     return null;
