@@ -220,19 +220,25 @@ export function Integrations() {
             </div>
 
             <dl className="mt-4 space-y-2 text-xs">
+              {/* shrink-0 on the term and truncate on the value: a provider key can run
+                  long, and without this the row pushed the card wider than a phone. */}
               <div className="flex items-center justify-between gap-3">
-                <dt className="text-muted-foreground">API key</dt>
-                <dd className="font-mono text-card-foreground">{integration.apiKeyPreview ?? 'Not set'}</dd>
+                <dt className="shrink-0 text-muted-foreground">API key</dt>
+                <dd className="truncate font-mono text-card-foreground" title={integration.apiKeyPreview ?? undefined}>
+                  {integration.apiKeyPreview ?? 'Not set'}
+                </dd>
               </div>
               {integration.hasApiSecret && (
                 <div className="flex items-center justify-between gap-3">
-                  <dt className="text-muted-foreground">API secret</dt>
-                  <dd className="font-mono text-card-foreground">{integration.apiSecretPreview}</dd>
+                  <dt className="shrink-0 text-muted-foreground">API secret</dt>
+                  <dd className="truncate font-mono text-card-foreground" title={integration.apiSecretPreview ?? undefined}>
+                    {integration.apiSecretPreview}
+                  </dd>
                 </div>
               )}
               {Object.entries(integration.config).map(([key, value]) => (
                 <div key={key} className="flex items-center justify-between gap-3">
-                  <dt className="text-muted-foreground">{key}</dt>
+                  <dt className="shrink-0 text-muted-foreground">{key}</dt>
                   <dd className="truncate text-card-foreground">{String(value) || '—'}</dd>
                 </div>
               ))}

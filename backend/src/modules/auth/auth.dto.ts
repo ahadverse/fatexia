@@ -92,3 +92,20 @@ export const resendVerificationSchema = z.object({
 });
 
 export type ResendVerificationDto = z.infer<typeof resendVerificationSchema>;
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+
+export type ForgotPasswordDto = z.infer<typeof forgotPasswordSchema>;
+
+export const resetPasswordSchema = z.object({
+  // Opaque to the client: 32 random bytes, base64url. Bounded rather than exact so a
+  // future change to the token length is not also a breaking API change.
+  token: z.string().trim().min(20).max(200),
+  // Same floor as registration. Enforced here too because this endpoint is the other
+  // way a password enters the system, and it is the one an attacker reaches first.
+  password: z.string().min(8).max(255),
+});
+
+export type ResetPasswordDto = z.infer<typeof resetPasswordSchema>;

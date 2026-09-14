@@ -193,8 +193,16 @@ export interface CreateNewsInput {
   pinned?: boolean;
 }
 
+/**
+ * Mirrors the backend's `EmailTemplateKey` enum. Adding a template there means adding
+ * it here — the admin lists whatever the API returns, so a missing key does not hide
+ * the row, it just types it as something this union says cannot exist.
+ */
 export type EmailTemplateKey =
+  /** The verification code email, sent on register. Named before there was a separate welcome. */
   | 'AFFILIATE_WELCOME'
+  /** The actual welcome, sent once the code is accepted. */
+  | 'AFFILIATE_VERIFIED'
   | 'PASSWORD_RESET'
   | 'ACCESS_REQUEST_APPROVED'
   | 'ACCESS_REQUEST_REJECTED'
@@ -202,6 +210,7 @@ export type EmailTemplateKey =
   | 'AFFILIATE_REJECTED'
   | 'AFFILIATE_SUSPENDED'
   | 'PAYOUT_SENT'
+  | 'PAYOUT_REJECTED'
   | 'OFFER_LIVE';
 
 export interface EmailTemplate {

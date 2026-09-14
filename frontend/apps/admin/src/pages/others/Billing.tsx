@@ -38,6 +38,10 @@ export function Billing() {
   const [periodFrom, setPeriodFrom] = useState(daysAgoIso(30));
   const [periodTo, setPeriodTo] = useState(isoDate(new Date()));
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('BANK_TRANSFER');
+  // '' = every affiliate with an eligible balance, which is the original batch
+  // behaviour and stays the default.
+  const [batchAffiliateId, setBatchAffiliateId] = useState('');
+  const [ignoreThreshold, setIgnoreThreshold] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [payment, setPayment] = useState<PaymentState | null>(null);
   const [saving, setSaving] = useState(false);
@@ -51,7 +55,14 @@ export function Billing() {
   async function runBatch() {
     setGenerating(true);
     const result = await runAction(
-      () => generatePayoutBatch({ periodFrom: `${periodFrom}T00:00:00.000Z`, periodTo: `${periodTo}T23:59:59.999Z`, paymentMethod }),
+      () =>
+        generatePayoutBatch({
+          periodFrom: `${periodFrom}T00:00:00.000Z`,
+          periodTo: `${periodTo}T23:59:59.999Z`,
+          paymentMethod,
+          ...(batchAffiliateId && { affiliateIds: [batchAffiliateId] }),
+          ignoreThreshold,
+        }),
       {
         success: 'Payout batch generated',
         onDone: () => {
@@ -131,7 +142,19 @@ export function Billing() {
       <PageHeader
         title="Billing"
         description="Affiliate payout batches. Balances are recomputed from conversions on every read — nothing here is a stored total that could drift."
-        actions={<Button onClick={() => setBatchOpen(true)}>Generate payout batch</Button>}
+        actions={
+          <Button
+            onClick={() => {
+              // Both exceptions reset on open — a waived minimum left armed from a
+              // previous run would quietly pay out the next batch below threshold.
+              setBatchAffiliateId('');
+              setIgnoreThreshold(false);
+              setBatchOpen(true);
+            }}
+          >
+            Generate payout batch
+          </Button>
+        }
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -208,9 +231,31 @@ export function Billing() {
       <Modal open={batchOpen} onOpenChange={setBatchOpen} title="Generate payout batch">
         <div className="space-y-4">
           <p className="text-xs text-muted-foreground">
-            One invoice per affiliate whose eligible balance clears the network minimum. The amount is summed from the
-            conversions themselves and each one is stamped with the invoice, so a conversion can never land on two batches.
+            One invoice per affiliate, covering only the conversions that fall inside the period below. The amount is
+            summed from the conversions themselves and each one is stamped with the invoice, so a conversion can never
+            land on two batches.
           </p>
+
+          <label className="block">
+            <span className="text-xs font-medium text-muted-foreground">Affiliate</span>
+            <Select
+              value={batchAffiliateId}
+              onChange={(event) => setBatchAffiliateId(event.target.value)}
+              className="mt-1"
+            >
+              <option value="">Everyone with an eligible balance</option>
+              {(balances.data ?? []).map((row) => (
+                <option key={row.affiliateId} value={row.affiliateId}>
+                  {row.affiliateName ?? row.affiliateId} — {money(row.eligibleAmount)} unbilled
+                </option>
+              ))}
+            </Select>
+            <span className="mt-1 block text-[11px] text-muted-foreground">
+              The figure shown is the affiliate's whole unbilled balance. What actually gets invoiced is only the part
+              of it inside the period.
+            </span>
+          </label>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
               <span className="text-xs font-medium text-muted-foreground">Period from</span>
@@ -229,7 +274,28 @@ export function Billing() {
               <option value="CRYPTO">Cryptocurrency</option>
             </Select>
           </label>
-          <div className="flex justify-end gap-2">
+
+          {/* The minimum exists so the network doesn't spend a bank fee settling a
+              trivial amount. Waiving it is a deliberate exception — an affiliate
+              leaving, a correction, a balance that will never grow — so it is off by
+              default and re-arms every time the dialog opens. */}
+          <label className="flex cursor-pointer items-start gap-2 rounded-md border border-border p-3">
+            <input
+              type="checkbox"
+              checked={ignoreThreshold}
+              onChange={(event) => setIgnoreThreshold(event.target.checked)}
+              className="mt-0.5 size-4 shrink-0 accent-primary"
+            />
+            <span className="min-w-0">
+              <span className="block text-sm text-card-foreground">Pay below the network minimum</span>
+              <span className="block text-xs text-muted-foreground">
+                Invoice the affiliate even if their total for this period is under the minimum payout threshold. The
+                amount is still summed from their real conversions.
+              </span>
+            </span>
+          </label>
+
+          <div className="flex flex-wrap justify-end gap-2">
             <Button variant="outline" onClick={() => setBatchOpen(false)}>
               Cancel
             </Button>

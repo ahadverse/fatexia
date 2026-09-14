@@ -1,6 +1,14 @@
 import type { NextFunction, Request, Response } from 'express';
 import { authService } from './auth.service';
-import type { LoginDto, RefreshDto, RegisterDto, ResendVerificationDto, VerifyEmailDto } from './auth.dto';
+import type {
+  ForgotPasswordDto,
+  LoginDto,
+  RefreshDto,
+  RegisterDto,
+  ResendVerificationDto,
+  ResetPasswordDto,
+  VerifyEmailDto,
+} from './auth.dto';
 import type { AuthenticatedRequest } from '../../common/guards/auth.guard';
 
 export const authController = {
@@ -56,6 +64,22 @@ export const authController = {
   async resendVerification(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       res.json(await authService.resendVerification(req.body as ResendVerificationDto));
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async forgotPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      res.json(await authService.forgotPassword(req.body as ForgotPasswordDto));
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async resetPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      res.json(await authService.resetPassword(req.body as ResetPasswordDto));
     } catch (err) {
       next(err);
     }

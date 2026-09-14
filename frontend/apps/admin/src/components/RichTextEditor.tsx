@@ -145,7 +145,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
     editorProps: {
       attributes: {
         class:
-          'min-h-[8rem] w-full px-3 py-2 text-sm text-foreground focus:outline-none [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5 [&_p:not(:first-child)]:mt-2',
+          'min-h-[8rem] w-full break-words px-3 py-2 text-sm text-foreground focus:outline-none [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5 [&_p:not(:first-child)]:mt-2',
       },
     },
     onUpdate: ({ editor: instance }) => {

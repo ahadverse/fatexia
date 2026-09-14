@@ -85,7 +85,7 @@ export function Payments() {
       />
 
       {balance.loading ? (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, index) => (
             <StatCardSkeleton key={index} />
           ))}
@@ -93,7 +93,7 @@ export function Payments() {
       ) : (
         balance.data && (
           <>
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <StatCard tone="money" label="Ready to pay" value={money(balance.data.eligibleAmount)} />
               <StatCard tone="traffic" label="Eligible conversions" value={number(balance.data.eligibleConversions)} />
               <StatCard tone="money" label="Paid to date" value={money(paidTotal)} />

@@ -13,11 +13,21 @@ export type InvoiceFiltersDto = z.infer<typeof invoiceFiltersSchema>;
 
 // Triggers a payout batch. There is no amount field — the total is always computed
 // from the eligible conversions, never supplied by the caller (money integrity rule).
+// `ignoreThreshold` waives the network minimum, not that rule: the figure is still
+// summed from the conversions, so a waived invoice reconciles exactly like any other.
 export const generatePayoutBatchSchema = z.object({
   affiliateIds: z.array(z.string().uuid()).optional(),
   periodFrom: z.string(),
   periodTo: z.string(),
   paymentMethod: z.nativeEnum(PaymentMethod).default(PaymentMethod.BANK_TRANSFER),
+  /**
+   * Invoice an affiliate whose period total is under `minimumPayoutThreshold`.
+   *
+   * The threshold exists so the network does not spend a bank fee settling $3. Paying
+   * someone below it is a deliberate exception — an affiliate leaving, a correction, a
+   * balance that will never grow again — so it is opt-in per run and never a default.
+   */
+  ignoreThreshold: z.boolean().default(false),
 });
 
 export type GeneratePayoutBatchDto = z.infer<typeof generatePayoutBatchSchema>;

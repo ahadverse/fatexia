@@ -109,9 +109,13 @@ export const invoiceService = {
    *
    * The amount is summed from the conversion rows themselves and each included row is
    * stamped with the invoice id in the same pass, so a conversion can never land on
-   * two batches and the invoice total always reconciles against its members. Affiliates
-   * below the network's minimum threshold are skipped rather than invoiced for a
-   * trivial amount.
+   * two batches and the invoice total always reconciles against its members.
+   *
+   * Only conversions inside the requested period are included. The threshold is then
+   * tested against that period total rather than the affiliate's lifetime unbilled
+   * balance — otherwise an affiliate sitting on a large balance from earlier months
+   * would clear the minimum and be handed an August invoice for whatever scraps August
+   * happened to hold. `ignoreThreshold` waives the minimum for the whole run.
    */
   async generateBatch(dto: GeneratePayoutBatchDto): Promise<InvoiceDto[]> {
     const periodFrom = new Date(dto.periodFrom);
@@ -123,6 +127,17 @@ export const invoiceService = {
       throw new ValidationError('periodFrom must be on or before periodTo');
     }
 
+    // A bare `YYYY-MM-DD` parses to midnight, so used as-is the last day of the period
+    // contributes nothing and an August invoice silently drops everything that
+    // converted on the 31st. Extended to end-of-day only in that case: the admin UI
+    // already sends a full `…T23:59:59.999Z`, and blanket-normalising that with
+    // setHours() would re-interpret it in the server's local zone and cut hours off
+    // the window instead of adding them.
+    const periodEnd = /^\d{4}-\d{2}-\d{2}$/.test(dto.periodTo)
+      ? new Date(`${dto.periodTo}T23:59:59.999Z`)
+      : periodTo;
+    const period = { from: periodFrom, to: periodEnd };
+
     const settings = await networkSettingService.getSettings();
     const cutoff = holdCutoff(settings.defaultHoldDays);
 
@@ -132,19 +147,27 @@ export const invoiceService = {
       balances = balances.filter((b) => wanted.has(b.affiliateId));
     }
 
-    const payable = balances.filter((b) => Number(b.amount ?? 0) >= settings.minimumPayoutThreshold);
-    if (payable.length === 0) {
-      throw new ValidationError('No affiliates currently meet the minimum payout threshold');
+    if (balances.length === 0) {
+      throw new ValidationError('No affiliates currently have payout-eligible conversions');
     }
 
     let sequence = await invoiceRepository.countAll();
     const created: InvoiceDto[] = [];
+    // Tracked so the "nothing was created" case can say which of the two reasons it
+    // was. "No eligible conversions" and "everyone was under the minimum" send an
+    // admin looking in completely different places.
+    let skippedBelowThreshold = 0;
 
-    for (const balance of payable) {
-      const conversions = await conversionRepository.findPayable(balance.affiliateId, cutoff);
+    for (const balance of balances) {
+      const conversions = await conversionRepository.findPayable(balance.affiliateId, cutoff, period);
       if (conversions.length === 0) continue;
 
       const amount = conversions.reduce((sum, c) => sum + Number(c.payoutAmount), 0);
+
+      if (!dto.ignoreThreshold && amount < settings.minimumPayoutThreshold) {
+        skippedBelowThreshold += 1;
+        continue;
+      }
 
       sequence += 1;
       const invoice = await invoiceRepository.create({
@@ -177,6 +200,16 @@ export const invoiceService = {
       created.push(await this.getInvoice(invoice.id));
     }
 
+    // An empty run is always a mistake from the admin's side, so it fails loudly rather
+    // than returning [] and letting the UI report "0 invoices" as if that were a result.
+    if (created.length === 0) {
+      throw new ValidationError(
+        skippedBelowThreshold > 0
+          ? `No invoices created — every affiliate in this period is below the ${settings.minimumPayoutThreshold} ${settings.defaultCurrency} minimum. Re-run with the minimum waived to pay them anyway.`
+          : 'No invoices created — no payout-eligible conversions fall inside this period.',
+      );
+    }
+
     return created;
   },
 
@@ -189,6 +222,10 @@ export const invoiceService = {
     }
 
     const becomingPaid = dto.status === InvoiceStatus.PAID && invoice.status !== InvoiceStatus.PAID;
+    // Guarded on the transition, not the target, for the same reason as `becomingPaid`:
+    // re-saving an already-rejected invoice to add a note must not mail the affiliate
+    // a second time telling them their payout failed.
+    const becomingRejected = dto.status === InvoiceStatus.REJECTED && invoice.status !== InvoiceStatus.REJECTED;
     const paidAt = becomingPaid ? new Date() : invoice.paidAt;
 
     await invoiceRepository.update(id, {
@@ -224,6 +261,49 @@ export const invoiceService = {
               amount: `${Number(invoice.amount).toFixed(2)} ${invoice.currency}`,
               period: `${invoice.periodFrom.toISOString().slice(0, 10)} to ${invoice.periodTo.toISOString().slice(0, 10)}`,
               payment_reference: dto.paymentReference ?? '',
+            },
+          }),
+        );
+      }
+    }
+
+    /**
+     * A rejected payout used to change nothing the affiliate could see: the status
+     * moved, their balance stopped, and no message went anywhere. They found out by
+     * noticing money had not arrived.
+     *
+     * The conversions are deliberately NOT touched here. They were stamped with this
+     * invoice by `generateBatch` and stay stamped, so the amount remains reconcilable
+     * against the invoice that failed — un-stamping them would silently roll the money
+     * back into the next batch and leave a rejected invoice pointing at nothing. Which
+     * is also why the copy says the earnings return "on the next run once this is
+     * sorted", rather than claiming it has already happened.
+     */
+    if (becomingRejected) {
+      notificationService.safeNotify(
+        notificationService.notifyAffiliate(invoice.affiliateId, {
+          level: NotificationLevel.WARNING,
+          category: NotificationCategory.BILLING,
+          title: 'Payment could not be processed',
+          body: `${invoice.invoiceNumber} for ${Number(invoice.amount).toFixed(2)} ${invoice.currency} was not paid.${dto.notes ? ` ${dto.notes}` : ''}`,
+          link: '/payments',
+        }),
+      );
+
+      const affiliate = await affiliateRepository.findById(invoice.affiliateId);
+      if (affiliate?.user?.email) {
+        safeSendEmail(
+          sendTemplateEmail({
+            templateKey: EmailTemplateKey.PAYOUT_REJECTED,
+            to: { email: affiliate.user.email, name: affiliate.fullName },
+            macros: {
+              affiliate_name: affiliate.fullName ?? 'there',
+              invoice_number: invoice.invoiceNumber,
+              amount: `${Number(invoice.amount).toFixed(2)} ${invoice.currency}`,
+              period: `${invoice.periodFrom.toISOString().slice(0, 10)} to ${invoice.periodTo.toISOString().slice(0, 10)}`,
+              // The admin's note is the whole reason this email is worth sending. With
+              // nothing to say, a neutral line beats the word "Reason:" over a blank.
+              decision_note: dto.notes?.trim() || 'Your manager will follow up with the details.',
             },
           }),
         );

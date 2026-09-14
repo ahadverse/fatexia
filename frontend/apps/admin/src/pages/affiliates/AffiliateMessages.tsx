@@ -162,7 +162,7 @@ export function AffiliateMessages() {
 
       <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
         {/* ------------------------------------------------- Conversation list -- */}
-        <aside className="flex flex-col gap-3">
+        <aside className="flex min-w-0 flex-col gap-3">
           <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3">
             <Input
               value={search}
@@ -271,7 +271,8 @@ export function AffiliateMessages() {
         </aside>
 
         {/* ------------------------------------------------------- Conversation -- */}
-        <section className="flex flex-col gap-3">
+        {/* min-w-0 so a long message body sizes to the pane rather than the pane to it. */}
+        <section className="flex min-w-0 flex-col gap-3">
           {!activeId && !composeFor ? (
             <EmptyState
               title="No conversation selected"

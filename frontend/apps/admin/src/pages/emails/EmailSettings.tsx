@@ -213,9 +213,13 @@ export function EmailSettings() {
                   <StatusPill status={provider.status} />
                 </dd>
               </div>
+              {/* shrink-0 / truncate: a Brevo key preview is long enough to widen the
+                  card past a phone if the row is allowed to grow to fit it. */}
               <div className="flex items-center justify-between gap-3">
-                <dt className="text-muted-foreground">API key</dt>
-                <dd className="font-mono text-card-foreground">{provider.apiKeyPreview ?? 'Not set'}</dd>
+                <dt className="shrink-0 text-muted-foreground">API key</dt>
+                <dd className="truncate font-mono text-card-foreground" title={provider.apiKeyPreview ?? undefined}>
+                  {provider.apiKeyPreview ?? 'Not set'}
+                </dd>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-muted-foreground">Last checked</dt>

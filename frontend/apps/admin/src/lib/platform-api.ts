@@ -75,6 +75,8 @@ export function generatePayoutBatch(input: {
   periodFrom: string;
   periodTo: string;
   paymentMethod?: PaymentMethod;
+  /** Invoice affiliates whose period total is under the network minimum. */
+  ignoreThreshold?: boolean;
 }): Promise<Invoice[]> {
   return apiFetch<Invoice[]>('/invoices/batch', { method: 'POST', body: JSON.stringify(input) });
 }

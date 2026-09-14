@@ -28,6 +28,21 @@ export const userRepository = {
     return repository.update({ id }, { passwordHash }).then(() => undefined);
   },
 
+  /**
+   * Looks a user up by the *hash* of their reset token — the raw token never reaches
+   * the database, and the reset link carries no email to look up instead.
+   */
+  findByPasswordResetTokenHash(passwordResetTokenHash: string): Promise<User | null> {
+    return repository.findOne({ where: { passwordResetTokenHash } });
+  },
+
+  updatePasswordReset(
+    id: string,
+    fields: Pick<User, 'passwordResetTokenHash' | 'passwordResetExpiresAt'>,
+  ): Promise<void> {
+    return repository.update({ id }, fields).then(() => undefined);
+  },
+
   updateVerification(
     id: string,
     fields: Partial<Pick<User, 'emailVerifiedAt' | 'emailVerificationCode' | 'emailVerificationExpiresAt' | 'emailVerificationAttempts'>>,

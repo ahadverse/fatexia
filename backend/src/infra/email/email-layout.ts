@@ -1,6 +1,9 @@
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { env } from '../../common/env';
+import type { EmailTemplateKey } from '../../modules/email-templates/email-template.entity';
+import { BRAND, FONT, codePanel, cta, escapeHtml } from './templates/kit';
+import { EMAIL_SHELL, designFor } from './templates';
 
 // Matches the directory served by `express.static('public')` in app.ts — the logo has
 // to be read from disk (for its dimensions) and fetched over HTTP (by the recipient's
@@ -10,6 +13,17 @@ const LOGO_DIR = 'public';
 /**
  * Renders a plain-text template body into a branded HTML email.
  *
+ * Three pieces meet here:
+ *
+ *   templates/shell.ts      the header, card and footer every email shares
+ *   templates/<name>.ts     an optional per-email design (see templates/index.ts)
+ *   the admin's copy        from the `email_templates` row, macros already substituted
+ *
+ * This module renders the copy into HTML blocks, hands them to that email's design if
+ * it has one, and fills the shell's slots with the result. What stays here is whatever
+ * has to be computed: the block renderers below, the logo's height, and the
+ * conditional footer copy.
+ *
  * Written to the constraints email clients actually impose, not the ones a browser
  * does: table-based layout (Outlook's Word renderer has no flexbox/grid), every style
  * inlined (Gmail strips <style> when it clips a long message), a 600px shell, and no
@@ -18,31 +32,27 @@ const LOGO_DIR = 'public';
  *
  * Light palette on purpose: Fatexia's own surfaces are dark, but Gmail and Outlook
  * dark-mode auto-inversion mangles dark emails far more visibly than it does light
- * ones, so a light card with a dark header band is the version that renders the same
- * everywhere.
+ * ones, so a light card between two black bands — header and legal strip — is the
+ * version that renders the same everywhere. Auto-inversion leaves an already-dark band
+ * alone and only lifts the white middle, which is the one part that survives it well.
  */
 
-const BRAND = {
-  green: '#22b470',
-  greenDark: '#12ba9e',
-  greenLime: '#6acb2a',
-  ink: '#0f1720',
-  text: '#232f3b',
-  muted: '#6b7a89',
-  hairline: '#e3e8ed',
-  canvas: '#eef1f4',
-  tintBg: '#f1faf5',
-} as const;
+/**
+ * Fills {{slot}} placeholders in the shell.
+ *
+ * The replacement is a function, not a string: a subject line containing $& or $1
+ * would otherwise be read as a backreference by String.replace and corrupt the output.
+ * An unknown slot is left as-is, so a typo shows up as visible {{text}} in a test send
+ * instead of silently emptying part of the email.
+ */
+function fillSlots(template: string, slots: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (whole, key: string) => slots[key] ?? whole);
+}
 
-const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
-const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace";
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+// `env.AFFILIATE_PORTAL_URL` is already stripped; this covers a caller-supplied one, so
+// the footer never emits a `//offers/browse`.
+function stripSlash(url: string): string {
+  return url.replace(/\/+$/, '');
 }
 
 // `**bold**` is the one inline mark worth supporting — it shows up naturally in
@@ -66,33 +76,6 @@ function paragraph(text: string): string {
   ).replace(/\n/g, '<br>')}</p>`;
 }
 
-/** A verification code deserves to be the thing the eye lands on first. */
-function codeBlock(code: string): string {
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 20px;">
-  <tr><td align="center" style="background:${BRAND.tintBg};border:1px solid #cdeadb;border-radius:10px;padding:20px 16px;">
-    <div style="font-family:${FONT};font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:${BRAND.muted};margin-bottom:8px;">Your code</div>
-    <div style="font-family:${MONO};font-size:34px;font-weight:700;letter-spacing:.28em;color:${BRAND.ink};padding-left:.28em;">${escapeHtml(code)}</div>
-  </td></tr>
-</table>`;
-}
-
-/**
- * Bare URL on its own line reads as the message's call to action.
- *
- * The raw address is printed under the button on purpose: a client that strips the
- * table, or a recipient who doesn't trust a button in an email about money, still has
- * something to copy.
- */
-function button(url: string, label: string): string {
-  const safeUrl = escapeHtml(url);
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px;">
-  <tr><td align="center" bgcolor="${BRAND.green}" style="border-radius:8px;">
-    <a href="${safeUrl}" style="display:inline-block;padding:13px 30px;font-family:${FONT};font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">${escapeHtml(label)}</a>
-  </td></tr>
-  <tr><td style="padding-top:8px;font-family:${FONT};font-size:12px;color:${BRAND.muted};word-break:break-all;">${safeUrl}</td></tr>
-</table>`;
-}
-
 function bulletList(lines: string[]): string {
   const items = lines
     .map(
@@ -111,11 +94,13 @@ function renderBlocks(body: string): string {
     .map((raw) => raw.trim())
     .filter(Boolean)
     .map((block) => {
-      if (CODE_BLOCK.test(block)) return codeBlock(block);
+      // The code panel lives in the kit so a design can also place one deliberately.
+      // This is the automatic path: a bare 4-8 digit line in the admin's copy.
+      if (CODE_BLOCK.test(block)) return codePanel(block);
 
       const labelled = LABELLED_URL.exec(block);
-      if (labelled) return button(labelled[2]!, labelled[1]!);
-      if (URL_ONLY.test(block)) return button(block, 'Open');
+      if (labelled) return cta(labelled[2]!, labelled[1]!);
+      if (URL_ONLY.test(block)) return cta(block, 'Open');
 
       const lines = block.split('\n');
       if (lines.every((line) => BULLET.test(line))) return bulletList(lines);
@@ -133,6 +118,24 @@ export interface EmailLayoutInput {
   /** Absolute URL to the wordmark. Defaults to the API's own `/logo.png`; override
    *  only to point at a different host. */
   logoUrl?: string;
+  /**
+   * Base URL the footer's nav links point at. Defaults to the affiliate portal, which
+   * is where every template in this system sends its recipient — all nine of them are
+   * affiliate-facing, as is the admin's own bulk send.
+   */
+  portalUrl?: string;
+  /**
+   * Which email this is, used to pick a per-template design from `templates/`.
+   *
+   * Optional because the admin's manual compose has no template behind it — that one
+   * is one-off copy and correctly gets the plain shell.
+   */
+  templateKey?: EmailTemplateKey;
+  /**
+   * Macro values for this send, passed through to the design. Raw and unescaped — a
+   * design escapes what it interpolates.
+   */
+  macros?: Record<string, string>;
 }
 
 /**
@@ -182,67 +185,69 @@ const LOGO_HEIGHT = (() => {
   }
 })();
 
-export function renderEmailHtml({ subject, body, networkName, supportEmail, logoUrl }: EmailLayoutInput): string {
+/**
+ * One footer nav link. A table would be more robust than inline anchors, but a row of
+ * table cells cannot wrap, and four of them plus separators overflow a 320px client.
+ * Inline anchors in a single paragraph reflow instead.
+ */
+function footerLink(href: string, label: string): string {
+  // Semibold with an underline: in a footer full of grey copy, a plain-weight anchor
+  // with neither reads as a caption and does not get clicked. The underline is set
+  // explicitly rather than left to the client, several of which strip it by default.
+  return `<a href="${escapeHtml(href)}" style="font-family:${FONT};font-size:13px;font-weight:600;color:${BRAND.ink};text-decoration:underline;text-underline-offset:2px;white-space:nowrap;">${escapeHtml(label)}</a>`;
+}
+
+export function renderEmailHtml({
+  subject,
+  body,
+  networkName,
+  supportEmail,
+  logoUrl,
+  portalUrl,
+  templateKey,
+  macros,
+}: EmailLayoutInput): string {
   const logo = logoUrl ?? emailLogoUrl();
+  const portal = stripSlash(portalUrl ?? env.AFFILIATE_PORTAL_URL);
   const name = escapeHtml(networkName);
+  const separator = `<span style="color:${BRAND.separator};padding:0 9px;">&middot;</span>`;
+  const nav = [
+    footerLink(`${portal}/`, 'Dashboard'),
+    footerLink(`${portal}/offers/browse`, 'Offers'),
+    footerLink(`${portal}/payments`, 'Payments'),
+    footerLink(`${portal}/messages`, 'Support'),
+  ].join(separator);
   // Inbox preview line. Hidden in the body itself, so it never renders twice.
   const preheader = escapeHtml(body.replace(/\s+/g, ' ').trim().slice(0, 140));
   const year = new Date().getFullYear();
 
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light">
-<meta name="supported-color-schemes" content="light">
-<title>${escapeHtml(subject)}</title>
-</head>
-<body style="margin:0;padding:0;background:${BRAND.canvas};-webkit-font-smoothing:antialiased;">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;">${preheader}</div>
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${BRAND.canvas};">
-  <tr><td align="center" style="padding:32px 16px;">
+  // No "Questions?" prefix — the shell puts a "Need help?" label directly above this,
+  // and the two together read as a stutter.
+  const supportLine = supportEmail
+    ? `Reply to this email, or write to <a href="mailto:${escapeHtml(supportEmail)}" style="color:${BRAND.green};text-decoration:none;font-weight:600;">${escapeHtml(supportEmail)}</a>. A real person answers.`
+    : 'Just reply to this email — a real person answers.';
 
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:100%;">
+  // The admin's copy, rendered to blocks. A design for this email decides where that
+  // sits and what surrounds it; an email without one gets the copy on its own, which
+  // is the right answer for the three-sentence transactional messages.
+  const blocks = renderBlocks(body);
+  const design = designFor(templateKey);
+  const content = design
+    ? design.render({ content: blocks, macros: macros ?? {}, networkName: name, portalUrl: portal })
+    : blocks;
 
-      <!-- Light header, not the dark band the dashboards use: the wordmark is dark navy
-           on transparent, so on a dark ground it would be invisible for anyone whose
-           client renders the alpha channel. -->
-      <tr><td style="background:#ffffff;border-radius:14px 14px 0 0;padding:24px 32px 20px;">
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
-          <td>
-            <img src="${escapeHtml(logo)}" width="${LOGO_WIDTH}" height="${LOGO_HEIGHT}" alt="${name}"
-                 style="display:block;width:${LOGO_WIDTH}px;height:${LOGO_HEIGHT}px;border:0;outline:none;text-decoration:none;">
-          </td>
-          <td align="right" style="font-family:${FONT};font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:${BRAND.muted};">
-            Affiliate Network
-          </td>
-        </tr></table>
-      </td></tr>
-
-      <!-- Brand accent. Solid green in clients that drop the gradient. -->
-      <tr><td style="height:3px;line-height:3px;font-size:0;background:${BRAND.green};background-image:linear-gradient(90deg,${BRAND.greenDark},${BRAND.green},${BRAND.greenLime});">&nbsp;</td></tr>
-
-      <tr><td style="background:#ffffff;padding:28px 32px 26px;">
-        <h1 style="margin:0 0 20px;font-family:${FONT};font-size:21px;line-height:1.35;font-weight:700;letter-spacing:-.01em;color:${BRAND.ink};">${escapeHtml(subject)}</h1>
-        ${renderBlocks(body)}
-      </td></tr>
-
-      <tr><td style="background:#ffffff;border-radius:0 0 14px 14px;border-top:1px solid ${BRAND.hairline};padding:22px 32px 26px;">
-        <p style="margin:0 0 6px;font-family:${FONT};font-size:13px;line-height:1.6;color:${BRAND.muted};">
-          ${supportEmail ? `Questions? Reply to this email or reach us at <a href="mailto:${escapeHtml(supportEmail)}" style="color:${BRAND.green};text-decoration:none;font-weight:500;">${escapeHtml(supportEmail)}</a>.` : 'Questions? Just reply to this email.'}
-        </p>
-        <p style="margin:0;font-family:${FONT};font-size:12px;line-height:1.6;color:#9aa7b4;">
-          &copy; ${year} ${name}. You received this because you have an account with us.
-        </p>
-      </td></tr>
-
-    </table>
-
-  </td></tr>
-</table>
-</body>
-</html>`;
+  return fillSlots(EMAIL_SHELL, {
+    subject: escapeHtml(subject),
+    preheader,
+    content,
+    support_line: supportLine,
+    footer_nav: nav,
+    network_name: name,
+    year: String(year),
+    logo_url: escapeHtml(logo),
+    logo_width: String(LOGO_WIDTH),
+    logo_height: String(LOGO_HEIGHT),
+  });
 }
 
 /**

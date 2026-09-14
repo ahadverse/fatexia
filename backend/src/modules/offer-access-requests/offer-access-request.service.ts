@@ -1,8 +1,8 @@
+import { env } from '../../common/env';
 import { In } from 'typeorm';
 import { AppDataSource } from '../../infra/database/data-source';
 import { NotFoundError, ValidationError } from '../../common/errors';
 import { Offer } from '../offers/offer.entity';
-import { affiliateLinkId, affiliateTrackingLinkFor } from '../offers/offer.dto';
 import { affiliateRepository } from '../affiliates/affiliate.repository';
 import { notificationService } from '../notifications/notification.service';
 import { NotificationCategory, NotificationLevel } from '../notifications/notification.entity';
@@ -149,7 +149,11 @@ export const offerAccessRequestService = {
           macros: {
             affiliate_name: affiliate.fullName ?? 'there',
             offer_name: offer?.name ?? 'the offer',
-            offer_link: offer ? affiliateTrackingLinkFor(offer.refId, affiliateLinkId(affiliate)) : '',
+            // Portal page, not the tracking link — see the note in offer.service.ts.
+            // A mailed tracking link is fetched by spam scanners and Gmail's
+            // prefetcher, which books clicks against the affiliate before they have
+            // opened anything.
+            offer_link: offer ? `${env.AFFILIATE_PORTAL_URL}/offers/${offer.id}` : '',
             decision_note: dto.decisionNote ?? '',
           },
         }),

@@ -3,6 +3,8 @@ import { Toaster } from '@fatexia/ui';
 import { Shell } from './Shell';
 import { Login } from './pages/auth/Login';
 import { Register } from './pages/auth/Register';
+import { ForgotPassword } from './pages/auth/ForgotPassword';
+import { ResetPassword } from './pages/auth/ResetPassword';
 import { useSession } from './session/SessionContext';
 
 import { Dashboard } from './pages/Dashboard';
@@ -41,6 +43,10 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          {/* Both reachable only while signed out, which is correct: someone with a
+              live session changes their password from Profile, not from a mailed link. */}
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           {/* Any deep link while signed out lands on sign-in. The intended
               destination is not preserved — that would need the login to redirect
               back, which is a separate piece of work. */}

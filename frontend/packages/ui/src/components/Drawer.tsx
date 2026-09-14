@@ -65,7 +65,9 @@ export function DrawerSection({ title, children }: DrawerSectionProps) {
   return (
     <section className="border-b border-border py-4 first:pt-0 last:border-b-0 last:pb-0">
       <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
-      <dl className="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">{children}</dl>
+      {/* One column on a phone: the drawer is full-width there, which leaves two
+          columns ~150px each, and these fields carry ids, URLs and country lists. */}
+      <dl className="mt-2.5 grid grid-cols-1 gap-x-4 gap-y-2.5 text-sm sm:grid-cols-2">{children}</dl>
     </section>
   );
 }
@@ -111,7 +113,9 @@ export interface DrawerFieldProps {
 
 export function DrawerField({ label, children, wide, mono }: DrawerFieldProps) {
   return (
-    <div className={wide ? 'col-span-2' : ''}>
+    // col-span-full, not col-span-2: the section is one column on a phone, and asking
+    // for two there would create an implicit second track wider than the drawer.
+    <div className={wide ? 'col-span-full' : ''}>
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className={cn('mt-0.5 text-card-foreground', mono ? 'break-all font-mono text-xs' : 'break-words')}>{children}</dd>
     </div>

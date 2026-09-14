@@ -101,7 +101,9 @@ export function Dashboard() {
         </div>
       ) : (
         <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
-          <div className="space-y-6">
+          {/* min-w-0 — see the note on the admin dashboard: without it the trend chart
+              sets this column's width instead of the other way round. */}
+          <div className="min-w-0 space-y-6">
             {/* One-up / two-up / four-up — see the note on the admin dashboard. */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <StatCard label="Clicks" value={number(data.summary.clicks)} tone="traffic" icon={<MousePointerClick className="size-4" />} delta={data.deltas.clicks} deltaLabel={DELTA_LABEL} sparkline={spark((row) => row.clicks)} />
@@ -132,7 +134,7 @@ export function Dashboard() {
 
           {/* Same rail as the admin dashboard, narrowed to this affiliate: the feed
               comes from /dashboard/mine, so it can only ever contain their own rows. */}
-          <aside className="space-y-6">
+          <aside className="min-w-0 space-y-6">
             <ActivityFeed
               items={toActivityItems(data.activity)}
               action={{ label: 'View all', onClick: () => navigate('/reports/clicks') }}

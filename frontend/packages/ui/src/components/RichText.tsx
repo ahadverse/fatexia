@@ -46,7 +46,9 @@ export function RichText({ html, className }: RichTextProps) {
   return (
     <div
       className={cn(
-        'text-sm leading-relaxed [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3',
+        // break-words: an author can paste a bare URL into a description, and one
+        // unbroken 300-character token otherwise pushes the whole card off a phone.
+        'break-words text-sm leading-relaxed [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3',
         '[&_h3]:mt-3 [&_h3]:text-base [&_h3]:font-semibold [&_h4]:mt-3 [&_h4]:font-semibold',
         '[&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5 [&_p:not(:first-child)]:mt-2',
         className,

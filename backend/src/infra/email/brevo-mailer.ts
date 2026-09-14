@@ -26,6 +26,14 @@ export interface SendEmailInput {
   subject: string;
   /** Plain text — converted to HTML here, same as a template body. */
   body: string;
+  /**
+   * Which template this is, when it came from one. Selects that email's design in
+   * `email/templates/`. Absent for the admin's manual compose, which is one-off copy
+   * and correctly renders in the plain shell.
+   */
+  templateKey?: EmailTemplateKey;
+  /** Macro values for the send, passed to the design alongside the rendered copy. */
+  macros?: Record<string, string>;
 }
 
 /**
@@ -53,6 +61,8 @@ export async function sendEmail(input: SendEmailInput): Promise<void> {
     body: input.body,
     networkName: settings.networkName,
     supportEmail: settings.supportEmail,
+    templateKey: input.templateKey,
+    macros: input.macros,
   });
   const text = renderEmailText(input.body, settings.networkName, settings.supportEmail);
 
@@ -118,6 +128,10 @@ export async function sendTemplateEmail(input: SendTemplateEmailInput): Promise<
     to: input.to,
     subject: substituteMacros(template.subject, macros),
     body: substituteMacros(template.body, macros),
+    // Carried through so the layout can pick this email's design. The macros go with
+    // it because a design may need a value the copy did not happen to mention.
+    templateKey: input.templateKey,
+    macros,
   });
 }
 

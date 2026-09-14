@@ -118,7 +118,10 @@ export function Dashboard() {
         </div>
       ) : (
         <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
-          <div className="space-y-6">
+          {/* min-w-0: a grid item's default `min-width: auto` is its content's
+              min-content width, so one wide child (the trend chart) can stretch the
+              whole column past the viewport instead of being made to fit it. */}
+          <div className="min-w-0 space-y-6">
           {/* One-up on phones, two-up on laptops, four-up once the main column can
               actually hold four readable money figures. The sparkline inside each card
               flexes to whatever is left, so no width here needs to match it. */}
@@ -199,7 +202,7 @@ export function Dashboard() {
           {/* Current-state rail. Neither panel is filtered by the date range above —
               both answer "right now", which is why they sit outside the filtered
               column rather than inside it. */}
-          <aside className="space-y-6">
+          <aside className="min-w-0 space-y-6">
             <ActivityFeed
               items={toActivityItems(data.activity)}
               action={{ label: 'View all', onClick: () => navigate('/reports/clicks') }}

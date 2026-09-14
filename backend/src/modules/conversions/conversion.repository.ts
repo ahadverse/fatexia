@@ -87,15 +87,36 @@ export const conversionRepository = {
 
   // Payout-eligible = APPROVED and past the hold window. Used by the billing module
   // to build a batch; the amount is always recomputed from these rows.
-  findPayable(affiliateId: string, eligibleBefore: Date): Promise<Conversion[]> {
-    return repository
+  //
+  // `period` restricts the rows to conversions that happened inside the invoice's own
+  // window. It is optional only so a caller can deliberately sweep everything unbilled;
+  // the batch always passes one, because an invoice labelled "August" that carries
+  // July's conversions reconciles against nothing a human can check.
+  //
+  // Scoped on `createdAt` — when the conversion happened — not `approvedAt`, which is
+  // when an admin got round to it. That matches how every report filters by date, so
+  // an August invoice totals the same as an August report.
+  findPayable(
+    affiliateId: string,
+    eligibleBefore: Date,
+    period?: { from: Date; to: Date },
+  ): Promise<Conversion[]> {
+    const qb = repository
       .createQueryBuilder('conversion')
       .where('conversion."affiliateId" = :affiliateId', { affiliateId })
       .andWhere('conversion.status = :status', { status: ConversionStatus.APPROVED })
       .andWhere('conversion."invoiceId" IS NULL')
       .andWhere('conversion."approvedAt" IS NOT NULL')
-      .andWhere('conversion."approvedAt" <= :eligibleBefore', { eligibleBefore })
-      .getMany();
+      .andWhere('conversion."approvedAt" <= :eligibleBefore', { eligibleBefore });
+
+    if (period) {
+      qb.andWhere('conversion."createdAt" >= :periodFrom', { periodFrom: period.from }).andWhere(
+        'conversion."createdAt" <= :periodTo',
+        { periodTo: period.to },
+      );
+    }
+
+    return qb.getMany();
   },
 
   async markInvoiced(ids: string[], invoiceId: string): Promise<void> {

@@ -158,7 +158,7 @@ export function Performance() {
       />
 
       {totals && (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <StatCard tone="traffic" label="Clicks" value={number(totals.clicks)} />
           <StatCard tone="traffic" label="Unique" value={number(totals.uniqueClicks)} />
           <StatCard tone="traffic" label="Conversions" value={number(totals.conversions)} />

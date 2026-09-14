@@ -51,7 +51,14 @@ export function Login() {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Password</label>
+            <div className="flex items-baseline justify-between gap-3">
+              <label className="text-sm font-medium text-foreground">Password</label>
+              {/* Beside the field it belongs to, which is where someone looks the
+                  moment the password fails — not buried under the submit button. */}
+              <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">
+                Forgot password?
+              </Link>
+            </div>
             <input
               type="password"
               value={password}

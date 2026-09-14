@@ -593,10 +593,19 @@ export interface EmailTemplateFixture {
 export const EMAIL_TEMPLATES: EmailTemplateFixture[] = [
   {
     templateKey: EmailTemplateKey.AFFILIATE_WELCOME,
-    name: 'Affiliate welcome',
+    name: 'Email verification',
     subject: 'Verify your email for {network_name}',
-    body: 'Hi {affiliate_name},\n\nThanks for applying to {network_name}. First, verify your email with the code below — it expires in 15 minutes.\n\n{code}\n\nOnce verified, your application moves to review and we usually respond within one business day.\n\n— The {network_name} team',
+    // The "what happens next" sentence this used to end on now renders as a stepped
+    // block from the template design, so saying it here too said it twice.
+    body: 'Hi {affiliate_name},\n\nThanks for applying to {network_name}. First, verify your email with the code below — it expires in 15 minutes.\n\n{code}\n\n— The {network_name} team',
     availableMacros: ['{affiliate_name}', '{network_name}', '{support_email}', '{code}'],
+  },
+  {
+    templateKey: EmailTemplateKey.AFFILIATE_VERIFIED,
+    name: 'Email verified',
+    subject: 'Email verified — your application is in review',
+    body: 'Hi {affiliate_name},\n\nYour email is confirmed. Your application is now with our team.\n\nWe look at traffic sources and volume, and usually come back within one business day. You will get an email either way — there is nothing to do until then.',
+    availableMacros: ['{affiliate_name}', '{network_name}', '{support_email}'],
   },
   {
     templateKey: EmailTemplateKey.PASSWORD_RESET,
@@ -608,50 +617,68 @@ export const EMAIL_TEMPLATES: EmailTemplateFixture[] = [
   {
     templateKey: EmailTemplateKey.ACCESS_REQUEST_APPROVED,
     name: 'Offer access approved',
-    subject: 'You now have access to {offer_name}',
-    body: 'Hi {affiliate_name},\n\nYour request for {offer_name} was approved. Your tracking link is ready in the portal.\n\n{offer_link}',
+    subject: 'You can now run {offer_name}',
+    // Labelled, so the button says where it goes — a bare macro renders as "Open".
+    body: 'Hi {affiliate_name},\n\nYour request for {offer_name} was approved. Your tracking link is ready in the portal.\n\n[Open the offer]({offer_link})',
     availableMacros: ['{affiliate_name}', '{offer_name}', '{offer_link}', '{network_name}'],
   },
   {
     templateKey: EmailTemplateKey.ACCESS_REQUEST_REJECTED,
     name: 'Offer access declined',
-    subject: 'Update on your request for {offer_name}',
+    subject: 'Your access request for {offer_name} was not approved',
     body: 'Hi {affiliate_name},\n\nWe could not approve access to {offer_name} at this time.\n\nReason: {decision_note}\n\nYour manager is happy to talk through alternatives.',
     availableMacros: ['{affiliate_name}', '{offer_name}', '{decision_note}', '{network_name}'],
   },
   {
     templateKey: EmailTemplateKey.AFFILIATE_APPROVED,
     name: 'Account approved',
-    subject: 'Your {network_name} account is live',
-    body: 'Hi {affiliate_name},\n\nYour account is approved — you can log in now and start sending traffic.\n\n{portal_link}\n\nA few things worth doing first:\n\n- Browse the offers you have access to and grab a tracking link\n- Set your payout method under Profile\n- Add your postback URL so your own tracker stays in sync\n\nYour manager is **{manager_name}**, and they are the person to ask about caps, payout bumps or new offers.',
+    subject: "You're approved — your {network_name} account is live",
+    // Labelled link, not a bare macro: a bare URL renders as a button captioned
+    // "Open", which says nothing about where it goes.
+    // The closing manager sentence is gone — the design renders the manager as a
+    // contact card, which is the same fact told better.
+    // No link and no task list: the design renders the dashboard button and a stepped
+    // "first three things" block, so both were being said twice.
+    body: 'Hi {affiliate_name},\n\nYour application has been reviewed and approved. You can sign in now and start sending traffic.',
     availableMacros: ['{affiliate_name}', '{network_name}', '{manager_name}', '{portal_link}'],
   },
   {
     templateKey: EmailTemplateKey.AFFILIATE_REJECTED,
     name: 'Application declined',
-    subject: 'Update on your {network_name} application',
+    subject: 'Your {network_name} application was not approved',
     body: 'Hi {affiliate_name},\n\nThanks for your interest in {network_name}. After reviewing your application we are not able to approve an account for you at this time.\n\nThis is not always final — traffic sources and volumes change, and you are welcome to apply again later or reply to this email if you would like to talk it through.\n\n— The {network_name} team',
     availableMacros: ['{affiliate_name}', '{network_name}', '{support_email}'],
   },
   {
     templateKey: EmailTemplateKey.AFFILIATE_SUSPENDED,
     name: 'Account suspended',
-    subject: 'Your {network_name} account has been suspended',
+    subject: 'Your {network_name} account is on hold',
     body: 'Hi {affiliate_name},\n\nYour account has been suspended pending a traffic-quality review. Reply to this email to discuss it with your manager.',
     availableMacros: ['{affiliate_name}', '{network_name}', '{support_email}'],
   },
   {
     templateKey: EmailTemplateKey.PAYOUT_SENT,
     name: 'Payout sent',
-    subject: 'Payment {invoice_number} sent - {amount}',
-    body: 'Hi {affiliate_name},\n\nYour payout has been sent. Here are the details:\n\n- Amount: **{amount}**\n- Invoice: {invoice_number}\n- Period: {period}\n- Reference: {payment_reference}\n\nDepending on your payout method it can take a few business days to arrive.',
+    subject: '{amount} sent — invoice {invoice_number}',
+    // The amount, invoice, period and reference now render as a figure panel and a
+    // two-column table from the design, so the bullet list that used to carry them
+    // here was the same four values a second time.
+    body: 'Hi {affiliate_name},\n\nYour payout has been sent.',
     availableMacros: ['{affiliate_name}', '{invoice_number}', '{amount}', '{period}', '{payment_reference}'],
+  },
+  {
+    templateKey: EmailTemplateKey.PAYOUT_REJECTED,
+    name: 'Payout rejected',
+    subject: 'Payment {invoice_number} could not be sent',
+    body: 'Hi {affiliate_name},\n\nWe were not able to process this payout.\n\nReason: {decision_note}\n\nNothing has been lost — the conversions on this invoice go back to your balance and will be picked up on the next run once this is sorted.',
+    availableMacros: ['{affiliate_name}', '{invoice_number}', '{amount}', '{period}', '{decision_note}'],
   },
   {
     templateKey: EmailTemplateKey.OFFER_LIVE,
     name: 'Offer is live',
-    subject: '{offer_name} is now live',
-    body: 'Hi {affiliate_name},\n\n**{offer_name}** is live and ready for traffic, paying **{payout}** per conversion.\n\n{offer_link}\n\nCheck the offer page for the current caps and geo targeting before you scale.',
+    subject: '{offer_name} is live — {payout} per conversion',
+    // The caps/geo sentence is now the accent note in the design, so it goes.
+    body: 'Hi {affiliate_name},\n\n**{offer_name}** is live and ready for traffic, paying **{payout}** per conversion.\n\n[View the offer]({offer_link})',
     availableMacros: ['{affiliate_name}', '{offer_name}', '{payout}', '{offer_link}'],
   },
 ];

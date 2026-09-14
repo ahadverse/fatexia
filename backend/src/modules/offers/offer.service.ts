@@ -1,3 +1,4 @@
+import { env } from '../../common/env';
 import type { EntityManager } from 'typeorm';
 import { AppDataSource } from '../../infra/database/data-source';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../common/errors';
@@ -17,7 +18,6 @@ import { OfferCap } from './offer-cap.entity';
 import {
   toAffiliateOfferDto,
   toOfferDto,
-  affiliateTrackingLinkFor,
   affiliateLinkId,
   type AffiliateOfferDto,
   type OfferAccess,
@@ -120,7 +120,15 @@ function notifyOfferLive(offer: Offer): void {
                 affiliate_name: affiliate.fullName ?? 'there',
                 offer_name: offer.name,
                 payout: `${offer.currency} ${offer.defaultPayoutAmount}`,
-                offer_link: affiliateTrackingLinkFor(offer.refId, affiliateLinkId(affiliate)),
+                // The portal's offer page, NOT the affiliate's tracking link.
+                //
+                // A tracking link in an email is a live click: mail scanners and
+                // Gmail's own link prefetcher fetch it before anyone opens the
+                // message, so every recipient would collect phantom clicks they never
+                // sent — from datacenter IPs, which the fraud module then scores
+                // against them. It also lands on the advertiser's page, where none of
+                // the caps or geo targeting this email tells them to check is visible.
+                offer_link: `${env.AFFILIATE_PORTAL_URL}/offers/${offer.id}`,
               },
             }).catch((err) => logger.error({ err, affiliateId: affiliate.id }, 'Failed to send OFFER_LIVE email')),
           ),
