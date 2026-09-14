@@ -1,3 +1,7 @@
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+
 /**
  * Tailwind 3 + autoprefixer, the standard pair.
  *
