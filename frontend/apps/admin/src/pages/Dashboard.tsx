@@ -159,7 +159,7 @@ export function Dashboard() {
 
           <div>
             <h2 className="mb-3 text-sm font-medium text-muted-foreground">Needs attention</h2>
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {/* No deltas on this row: these are current-state queues, not a
                   measurement over the selected window, so a period-over-period change
                   would be meaningless.

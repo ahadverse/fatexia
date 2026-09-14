@@ -20,7 +20,11 @@ export function Modal({ open, onOpenChange, title, children, className }: ModalP
         <Dialog.Overlay className="fixed inset-0 z-50 bg-background/80" />
         <Dialog.Content
           className={cn(
-            'fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border border-border bg-card p-6 text-card-foreground shadow-md',
+            // Width leaves a gutter rather than running edge to edge on a phone, where
+            // `w-full` put the border and its rounded corners off-screen. Padding
+            // tightens with it — 24px a side inside a 328px dialog is most of the room
+            // a form field has to live in.
+            'fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border border-border bg-card p-4 text-card-foreground shadow-md sm:p-6',
             className,
           )}
         >

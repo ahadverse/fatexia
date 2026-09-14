@@ -29,10 +29,12 @@ export function BlogDetails() {
 
   return (
     <div className="max-w-3xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">{post.title}</h1>
-          <div className="mt-1 flex items-center gap-2">
+      {/* Wraps rather than squeezing the two buttons: a post title is arbitrary length
+          and the header is the one row on this page with no `max-w` to protect it. */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="break-words text-2xl font-semibold">{post.title}</h1>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
             <StatusBadge variant={STATUS_VARIANT[post.status]}>{post.status}</StatusBadge>
             <span className="text-sm text-muted-foreground">{post.readingTime}</span>
           </div>

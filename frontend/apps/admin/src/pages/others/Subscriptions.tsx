@@ -126,7 +126,7 @@ export function Subscriptions() {
         actions={<Button onClick={() => setForm({ ...EMPTY_FORM })}>New subscription</Button>}
       />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard tone="info" label="Subscriptions" value={number(rows.length)} />
         <StatCard tone="info" label="Active" value={number(rows.filter((row) => row.status === 'ACTIVE').length)} />
         <StatCard tone="warning" label="Past due" value={number(rows.filter((row) => row.status === 'PAST_DUE').length)} />

@@ -132,7 +132,7 @@ export function AllBlogs() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">All Blog Posts</h1>
         <button type="button" onClick={() => navigate('/blogs/create')} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
           Create Post

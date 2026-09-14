@@ -29,6 +29,30 @@ export interface DataTableProps<T> {
   onSortChange?: (sort: TableSort) => void;
   /** A totals row pinned below the body. */
   footer?: ReactNode;
+  /**
+   * Overrides the width below which the table scrolls instead of shrinking.
+   *
+   * Any CSS length. Rarely needed — the default is derived from the column count —
+   * but a table of nothing but short badges can afford less, and one carrying a URL
+   * or an email in every row needs more.
+   */
+  minWidth?: string;
+}
+
+/**
+ * The width a table stops shrinking at and starts scrolling.
+ *
+ * A `w-full` table inside a scroll container never scrolls: it shrinks to the
+ * container instead, and on a phone twelve columns become 33px each, which turns every
+ * cell into a vertical stack of broken words. Below six columns that is not a real
+ * risk and a fluid table looks better, so the floor only applies past that.
+ *
+ * Derived from the column count rather than hard-coded per table, because the tables
+ * here run from three columns to fifteen and one number cannot serve both. 5rem per
+ * column is about what a short value plus its padding needs.
+ */
+function defaultMinWidth(columnCount: number): string | undefined {
+  return columnCount > 6 ? `${columnCount * 5}rem` : undefined;
 }
 
 export function DataTable<T>({
@@ -39,6 +63,7 @@ export function DataTable<T>({
   sort,
   onSortChange,
   footer,
+  minWidth,
 }: DataTableProps<T>) {
   // A column only sorts when the table was actually given a handler — otherwise the
   // header would look interactive and do nothing.
@@ -55,7 +80,7 @@ export function DataTable<T>({
 
   return (
     <div className="overflow-x-auto rounded-lg border border-border bg-card">
-      <table className="w-full text-sm">
+      <table className="w-full text-sm" style={{ minWidth: minWidth ?? defaultMinWidth(columns.length) }}>
         <thead>
           <tr className="border-b border-border">
             {columns.map((col) => {
@@ -65,7 +90,9 @@ export function DataTable<T>({
                 <th
                   key={col.key}
                   aria-sort={active ? (sort!.direction === 'ASC' ? 'ascending' : 'descending') : 'none'}
-                  className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                  // nowrap: a header is two or three words and wrapping it into a
+                  // tower of single letters costs more height than the column saves.
+                  className="whitespace-nowrap px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground"
                 >
                   {sortable ? (
                     <button

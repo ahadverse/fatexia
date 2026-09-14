@@ -186,9 +186,12 @@ export function DateRangeFilter({ value, onChange, label = 'Date range', classNa
           <Popover.Content
             align="start"
             sideOffset={6}
-            className="z-50 flex rounded-md border border-border bg-popover text-popover-foreground shadow-md"
+            // Presets beside the calendar is ~400px of popover, which does not fit a
+            // phone. Below `sm` they stack instead: the preset list becomes a wrapping
+            // row above the month, which is also the order they are used in.
+            className="z-50 flex max-w-[calc(100vw-1rem)] flex-col rounded-md border border-border bg-popover text-popover-foreground shadow-md sm:flex-row"
           >
-            <div className="flex w-36 shrink-0 flex-col gap-0.5 border-r border-border p-2">
+            <div className="flex flex-row flex-wrap gap-0.5 border-b border-border p-2 sm:w-36 sm:shrink-0 sm:flex-col sm:flex-nowrap sm:border-b-0 sm:border-r">
               {PRESET_ORDER.map((id) => (
                 <button
                   key={id}

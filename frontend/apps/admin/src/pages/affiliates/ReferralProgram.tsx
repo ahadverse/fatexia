@@ -100,7 +100,7 @@ export function ReferralProgram() {
         <TableSkeleton columns={4} />
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <StatCard tone="info" label="Active referrers" value={number(rows.length)} />
             <StatCard tone="info" label="Affiliates referred" value={number(totalReferred)} />
             <StatCard

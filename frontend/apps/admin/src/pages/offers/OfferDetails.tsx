@@ -18,8 +18,11 @@ const STATUS_VARIANT: Record<OfferStatus, 'success' | 'destructive' | 'warning' 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex justify-between gap-4 border-b border-border/50 py-2 text-sm last:border-0">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="text-right font-medium text-foreground">{value ?? '—'}</span>
+      <span className="shrink-0 text-muted-foreground">{label}</span>
+      {/* A value here can be a country list or a long name, and a flex child will not
+          shrink below its content without min-w-0 — which pushed the row past the card
+          on a narrow screen instead of wrapping inside it. */}
+      <span className="min-w-0 break-words text-right font-medium text-foreground">{value ?? '—'}</span>
     </div>
   );
 }
@@ -98,14 +101,16 @@ export function OfferDetails() {
 
   return (
     <div className="max-w-4xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      {/* Wraps: an offer name here runs to "US,AU,NZ,UK,CA| SOI |NotAloneAtHome|All
+          devices", which on a phone leaves nothing for the buttons beside it. */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           {offer.iconUrl && (
             <img src={offer.iconUrl} alt="" className="size-12 shrink-0 rounded-md border border-border object-cover" />
           )}
-          <div>
-          <h1 className="text-2xl font-semibold">{offer.name}</h1>
-          <div className="mt-1 flex items-center gap-2">
+          <div className="min-w-0">
+          <h1 className="break-words text-2xl font-semibold">{offer.name}</h1>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
             {/* The offer number — what the tracking and postback URLs below carry, and
                 what an advertiser or affiliate will quote in a message about it. */}
             <span className="font-mono text-sm text-muted-foreground">#{offer.refId}</span>

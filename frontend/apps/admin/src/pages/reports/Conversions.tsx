@@ -163,7 +163,7 @@ export function Conversions() {
       {conversions.error && <p className="text-sm text-destructive">{conversions.error}</p>}
 
       {totals && (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard tone="traffic" label="Conversions" value={number(totals.count)} />
           <StatCard tone="money" label="Revenue" value={compactMoney(totals.revenue)} />
           <StatCard tone="money" label="Payout" value={compactMoney(totals.payout)} />

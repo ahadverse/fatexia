@@ -134,7 +134,7 @@ export function Billing() {
         actions={<Button onClick={() => setBatchOpen(true)}>Generate payout batch</Button>}
       />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard tone="money" label="Ready to pay" value={compactMoney(payableTotal)} />
         <StatCard tone="warning" label="Below threshold" value={compactMoney(heldTotal)} />
         <StatCard tone="info" label="Affiliates with a balance" value={number((balances.data ?? []).length)} />

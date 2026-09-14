@@ -486,7 +486,7 @@ export function ClickLogs() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <StatCard tone="traffic" label="Total clicks" value={number(summary?.clicks ?? 0)} />
         <StatCard tone="traffic" label="Unique clicks" value={number(summary?.uniqueClicks ?? 0)} />
       </div>

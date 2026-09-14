@@ -62,7 +62,9 @@ export function AppShell({
       </div>
       <div className="flex flex-1 flex-col overflow-hidden">
         <Topbar {...topbarProps} onMenuClick={() => setMobileNavOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        {/* Tighter gutters on a phone: 24px a side costs 48px of a 360px screen, which
+            is the difference between a stat tile's figure fitting on one line and not. */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6">{children}</main>
       </div>
     </div>
   );
