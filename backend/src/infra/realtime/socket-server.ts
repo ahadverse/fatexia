@@ -6,6 +6,7 @@ import { logger } from '../../common/logger';
 import { verifyAccessToken } from '../../common/jwt';
 import { UserRole } from '../../modules/users/user.entity';
 import { affiliateRepository } from '../../modules/affiliates/affiliate.repository';
+import { redis } from '../redis/redis-client';
 import { ROOMS } from './events';
 
 interface SocketUser {
@@ -99,16 +100,69 @@ export function initRealtime(httpServer: HttpServer): Server {
 }
 
 /**
- * Emits to a room if realtime is running.
+ * Carries an emit from a process that has no Socket.IO server to the one that does.
  *
- * Deliberately a no-op when `io` is null rather than throwing: the seed scripts and
- * the test suite exercise the same services without an HTTP server attached, and a
- * message must still be *written* even if nobody can be notified about it. Realtime
- * is a delivery optimisation on top of the database, never the source of truth.
+ * The Tracker is a separate process (tracking.ts) and the socket server lives on the
+ * API's HTTP server, so anything the Tracker wants to announce — a conversion from an
+ * advertiser's postback, most of all — has no browser to reach from where it is. Redis
+ * is already a dependency of both, so one channel is enough; a Socket.IO Redis adapter
+ * would do the same job by pulling in two more packages and taking over the emit path.
+ *
+ * Fire-and-forget by design. Realtime is a delivery optimisation on top of the database
+ * and never the source of truth, so a publish that fails costs a live toast, never the
+ * conversion it was announcing.
+ */
+const BRIDGE_CHANNEL = 'realtime:emit';
+
+interface BridgedEmit {
+  room: string;
+  event: string;
+  payload: unknown;
+}
+
+/**
+ * Emits to a room, wherever this process happens to be.
+ *
+ * With a socket server attached the emit is direct; without one it goes over Redis to
+ * the process that has it. Still a no-op-ish for the seed scripts and the test suite,
+ * which run these services with neither: the publish simply fails and is swallowed.
  */
 export function emitToRoom(room: string, event: string, payload: unknown): void {
-  if (!io) return;
-  io.to(room).emit(event, payload);
+  if (io) {
+    io.to(room).emit(event, payload);
+    return;
+  }
+
+  redis
+    .publish(BRIDGE_CHANNEL, JSON.stringify({ room, event, payload } satisfies BridgedEmit))
+    .catch((err: unknown) => logger.debug({ err, event }, 'Could not bridge a realtime emit'));
+}
+
+/**
+ * Listens for emits published by the other process and delivers them.
+ *
+ * Called once by the API after initRealtime — it is the only process with sockets to
+ * deliver to. Uses its own connection because a client in subscribe mode cannot run
+ * ordinary commands, and the shared one is busy doing exactly that.
+ */
+export function subscribeToBridgedEmits(): void {
+  const subscriber = redis.duplicate();
+
+  subscriber.on('error', (err) => logger.warn({ err }, 'Realtime bridge subscriber error'));
+
+  subscriber.subscribe(BRIDGE_CHANNEL).catch((err: unknown) => {
+    logger.warn({ err }, 'Could not subscribe to the realtime bridge — Tracker-side events will not reach browsers');
+  });
+
+  subscriber.on('message', (_channel, raw) => {
+    try {
+      const { room, event, payload } = JSON.parse(raw) as BridgedEmit;
+      // Straight to io, not back through emitToRoom: a republish here would loop.
+      io?.to(room).emit(event, payload);
+    } catch (err) {
+      logger.warn({ err }, 'Ignored an unreadable realtime bridge message');
+    }
+  });
 }
 
 export function isRealtimeReady(): boolean {

@@ -46,6 +46,10 @@ vi.mock('../global-postbacks/global-postback.repository', () => ({
   globalPostbackRepository: { findEnabled: findGlobalPostbacks, markUsed: vi.fn() },
 }));
 vi.mock('../smart-links/smart-link.repository', () => ({ smartLinkRepository: { findById: async () => null } }));
+// The live alert an admin hears. Mocked so these tests do not reach the socket/Redis
+// layer, and so the one thing worth asserting about it — that it fires at all — can be.
+const { announce } = vi.hoisted(() => ({ announce: vi.fn() }));
+vi.mock('../conversions/conversion-announce', () => ({ announceConversion: announce }));
 
 const SECRET = 'sk_correct_secret';
 const IP = '203.0.113.10';
@@ -121,6 +125,20 @@ beforeEach(() => {
   createConversion.mockImplementation(async (data: Record<string, unknown>) => ({ id: 'conv-1', ...data }));
   createLog.mockResolvedValue(undefined);
   markPostbackVerified.mockResolvedValue(undefined);
+});
+
+describe('live announcement', () => {
+  it('announces an accepted postback so an admin watching the portal hears it', async () => {
+    await postbackService.handlePostback(request());
+
+    expect(announce).toHaveBeenCalledTimes(1);
+    expect(announce.mock.calls[0]![1]).toBe('postback');
+  });
+
+  it('announces nothing for a postback that was rejected', async () => {
+    await expect(postbackService.handlePostback(request({ secret: 'sk_wrong' }))).rejects.toThrow();
+    expect(announce).not.toHaveBeenCalled();
+  });
 });
 
 describe('postback verification signal', () => {

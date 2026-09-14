@@ -5,7 +5,7 @@ import { requireRole } from '../../common/guards/role.guard';
 import { attachManagerScope, requirePermission } from '../../common/guards/manager-scope.guard';
 import { UserRole } from '../users/user.entity';
 import { conversionController } from './conversion.controller';
-import { conversionFiltersSchema, ownConversionFiltersSchema, updateConversionStatusSchema } from './conversion.dto';
+import { conversionFiltersSchema, createConversionSchema, ownConversionFiltersSchema, updateConversionStatusSchema } from './conversion.dto';
 
 export const conversionRoutes = Router();
 
@@ -27,5 +27,10 @@ conversionRoutes.use(
 );
 
 conversionRoutes.get('/', validate(conversionFiltersSchema, 'query'), conversionController.getConversions);
+
+// Admin only, unlike the rest of this router: creating a conversion creates money owed
+// to an affiliate out of nothing an advertiser said. A manager who can review and
+// approve what the advertiser reported should not also be able to author the report.
+conversionRoutes.post('/', requireRole(UserRole.ADMIN), validate(createConversionSchema), conversionController.create);
 conversionRoutes.get('/:id', conversionController.getConversion);
 conversionRoutes.patch('/:id/status', validate(updateConversionStatusSchema), conversionController.updateStatus);

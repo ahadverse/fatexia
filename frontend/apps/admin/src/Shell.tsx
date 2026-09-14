@@ -7,6 +7,7 @@ import { useSession } from './session/SessionContext';
 import { useAccess } from './session/AccessContext';
 import { useRealtime } from './realtime/RealtimeContext';
 import { useNotificationBell } from './hooks/useNotificationBell';
+import { useConversionAlerts } from './hooks/useConversionAlerts';
 
 export function Shell({ children }: { children: ReactNode }) {
   const location = useLocation();
@@ -17,6 +18,9 @@ export function Shell({ children }: { children: ReactNode }) {
   // Spread straight into AppShell: AppShellProps extends TopbarProps and the shell
   // forwards the rest, so the bell needs no plumbing of its own.
   const bell = useNotificationBell();
+  // Here rather than on the Conversions page: a conversion landing is worth hearing
+  // about from whatever screen you happen to be on.
+  useConversionAlerts();
 
   // Rebuilt only when the grid actually changes — `can` is stable per permission set.
   const menu = useMemo(() => buildMenu({ isAdmin, can }), [isAdmin, can]);

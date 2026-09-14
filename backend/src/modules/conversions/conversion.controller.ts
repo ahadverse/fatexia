@@ -3,7 +3,7 @@ import type { AuthenticatedRequest } from '../../common/guards/auth.guard';
 import type { ScopedRequest } from '../../common/guards/manager-scope.guard';
 import { scopedQuery } from '../../common/manager-scope-sql';
 import { conversionService } from './conversion.service';
-import type { ConversionFiltersDto, OwnConversionFiltersDto, UpdateConversionStatusDto } from './conversion.dto';
+import type { ConversionFiltersDto, CreateConversionDto, OwnConversionFiltersDto, UpdateConversionStatusDto } from './conversion.dto';
 
 export const conversionController = {
   // Scoped to the signed-in manager's own affiliates; unrestricted for an admin
@@ -27,6 +27,15 @@ export const conversionController = {
   async getConversion(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       res.json(await conversionService.getConversion(req.params.id!));
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  // 201: this is the one conversion route that brings a row into existence.
+  async create(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      res.status(201).json(await conversionService.createForClick(req.body as CreateConversionDto));
     } catch (err) {
       next(err);
     }

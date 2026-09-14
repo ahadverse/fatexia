@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   Button,
   ClickGeoRows,
+  ConfirmModal,
   DataTable,
   DateRangeFilter,
   Drawer,
@@ -9,9 +10,11 @@ import {
   DrawerRows,
   FilterBar,
   FilterField,
+  Input,
   PageHeader,
   Pagination,
   Select,
+  Skeleton,
   StatCard,
   TableSkeleton,
   defaultRange,
@@ -23,12 +26,19 @@ import {
   type DateRange,
   type TableSort,
 } from '@fatexia/ui';
-import type { Affiliate, ClickLog, Offer } from '@fatexia/types';
-import { getClickCountries, getClickLogs } from '../../lib/reports-api';
+import type { Affiliate, ClickLog, Conversion, ConversionStatus, Offer } from '@fatexia/types';
+import {
+  createConversionForClick,
+  getClickCountries,
+  getClickLogs,
+  getConversionForClick,
+  updateConversionStatus,
+} from '../../lib/reports-api';
 import { getOffers } from '../../lib/offers-api';
 import { getAffiliates } from '../../lib/affiliates-api';
-import { useAsync } from '../../hooks/useAsync';
-import { dateTime, number } from '../../lib/format';
+import { runAction, useAsync } from '../../hooks/useAsync';
+import { useAccess } from '../../session/AccessContext';
+import { dateTime, money, number } from '../../lib/format';
 import { StatusPill } from '../../components/StatusPill';
 
 const QUALITY_OPTIONS = ['GOOD', 'SUSPECT', 'BLOCKED', 'UNSCORED'];
@@ -75,6 +85,177 @@ function versioned(name: string | null, version: string | null): string {
   return version ? `${name} ${version}` : name;
 }
 
+// PAID is absent on purpose: money is marked as sent by a payout batch, never by hand
+// on a single row (updateConversionStatusSchema on the backend refuses it).
+const CONVERSION_STATUSES: ConversionStatus[] = ['PENDING', 'APPROVED', 'REJECTED', 'DUPLICATE', 'CHARGEBACK'];
+
+const STATUS_CONFIRM: Record<string, { description: string; destructive: boolean }> = {
+  PENDING: { description: 'The conversion goes back to awaiting review and is not payable until it is approved again.', destructive: false },
+  APPROVED: {
+    description: 'Its payout becomes eligible for the next payout batch once the hold period elapses, and the affiliate’s own tracker is notified.',
+    destructive: false,
+  },
+  REJECTED: { description: 'It will not be paid out.', destructive: true },
+  DUPLICATE: { description: 'It is recorded as a repeat of a conversion already counted, and will not be paid out.', destructive: true },
+  CHARGEBACK: {
+    description: 'This reverses a conversion already marked PAID — use it only when the advertiser has genuinely disputed it.',
+    destructive: true,
+  },
+};
+
+/**
+ * The conversion side of a click: what it produced, and what an admin can do about it.
+ *
+ * Both halves exist because the advertiser's postback is not always the last word. It
+ * can fail to arrive at all — a pixel that never fired, a postback URL configured a day
+ * late — which is what "Add conversion" answers; and it can arrive saying something the
+ * network disagrees with, which is what the status control answers. The amount is part
+ * of neither: it comes from the offer's payout rule here exactly as it does on the
+ * postback path (money integrity rule, PLAN-backend.md).
+ *
+ * Mounted per click (keyed by the caller), so opening a different row loads that row's
+ * conversion instead of showing the previous one until the fetch lands.
+ */
+function ClickConversionPanel({ click }: { click: ClickLog }) {
+  // Creating a conversion is admin-only on the backend (see conversion.routes.ts), so a
+  // manager is shown the state without a button that could only ever fail. Changing an
+  // existing conversion's status stays available to both, as it already is on the
+  // Conversions page — reviewing what was reported is a manager's job; authoring it is
+  // not.
+  const { isAdmin } = useAccess();
+  const existing = useAsync(() => getConversionForClick(click.id), [click.id]);
+  const conversion: Conversion | null = existing.data?.rows[0] ?? null;
+
+  const [transactionId, setTransactionId] = useState('');
+  const [confirmAdd, setConfirmAdd] = useState(false);
+  const [nextStatus, setNextStatus] = useState<ConversionStatus | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // Not runAction, unlike every other mutation on this page: the success toast for a
+  // new conversion comes from the realtime alert (useConversionAlerts), which fires for
+  // whoever recorded it as well as for everyone else watching. Toasting here too would
+  // stack two messages about one conversion on the person who pressed the button. A
+  // failure still has to be reported locally — no event is coming for one of those.
+  async function addConversion() {
+    setSaving(true);
+    try {
+      await createConversionForClick(click.id, transactionId.trim() || undefined);
+      setConfirmAdd(false);
+      setTransactionId('');
+      existing.reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not add the conversion');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function applyStatus() {
+    if (!conversion || !nextStatus) return;
+    setSaving(true);
+    const updated = await runAction(() => updateConversionStatus(conversion.id, nextStatus), {
+      success: `Conversion marked ${nextStatus.toLowerCase()}`,
+      onDone: existing.reload,
+    });
+    setSaving(false);
+    if (updated) setNextStatus(null);
+  }
+
+  if (existing.loading && !existing.data) {
+    return <Skeleton className="h-20 w-full" />;
+  }
+
+  return (
+    <div className="mb-4 space-y-3 rounded-md border border-border p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Conversion</p>
+
+      {existing.error && <p className="text-sm text-destructive">{existing.error}</p>}
+
+      {conversion ? (
+        <DrawerRows>
+          <DrawerRow label="Conversion ID" mono>
+            {conversion.refId}
+          </DrawerRow>
+          <DrawerRow label="Status">
+            <StatusPill status={conversion.status} />
+          </DrawerRow>
+          <DrawerRow label="Payout">{money(conversion.payoutAmount, conversion.currency)}</DrawerRow>
+          <DrawerRow label="Revenue">{money(conversion.revenueAmount, conversion.currency)}</DrawerRow>
+          <DrawerRow label="Recorded">{dateTime(conversion.createdAt)}</DrawerRow>
+          {conversion.transactionId && <DrawerRow label="Transaction ID">{conversion.transactionId}</DrawerRow>}
+          <DrawerRow label="Change status">
+            {/* Deliberately not bound to the current status: the pill above is what this
+                conversion *is*, and this only proposes a change the confirm step commits. */}
+            <Select
+              value=""
+              disabled={saving}
+              onChange={(event) => event.target.value && setNextStatus(event.target.value as ConversionStatus)}
+              className="w-40"
+            >
+              <option value="">Select…</option>
+              {CONVERSION_STATUSES.filter((status) => status !== conversion.status).map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </Select>
+          </DrawerRow>
+        </DrawerRows>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            {isAdmin
+              ? 'No conversion recorded for this click. Adding one prices it from the offer’s payout rule — the same amount the advertiser’s postback would have produced.'
+              : 'No conversion recorded for this click.'}
+          </p>
+          {isAdmin && (
+            <>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="manual-transaction-id">
+                  Transaction ID <span className="font-normal">(optional)</span>
+                </label>
+                <Input
+                  id="manual-transaction-id"
+                  value={transactionId}
+                  onChange={(event) => setTransactionId(event.target.value)}
+                  placeholder="The advertiser’s own order reference"
+                  className="mt-1"
+                />
+              </div>
+              <Button size="sm" disabled={saving} onClick={() => setConfirmAdd(true)}>
+                Add conversion
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+
+      <ConfirmModal
+        open={confirmAdd}
+        onOpenChange={(open) => !open && setConfirmAdd(false)}
+        title="Record a conversion for this click?"
+        description={`Click ${click.refId} on ${click.offerName ?? 'this offer'} will be credited to ${
+          click.affiliateName ?? 'no affiliate (this click is unattributed)'
+        }. The payout comes from the offer's payout rule, and the offer's own settings decide whether it starts approved or pending.`}
+        confirmLabel="Add conversion"
+        loading={saving}
+        onConfirm={addConversion}
+      />
+
+      <ConfirmModal
+        open={!!nextStatus}
+        onOpenChange={(open) => !open && setNextStatus(null)}
+        title={`Mark this conversion ${nextStatus?.toLowerCase() ?? ''}?`}
+        description={nextStatus ? (STATUS_CONFIRM[nextStatus]?.description ?? '') : ''}
+        confirmLabel={nextStatus ? `Mark ${nextStatus.toLowerCase()}` : 'Confirm'}
+        destructive={nextStatus ? (STATUS_CONFIRM[nextStatus]?.destructive ?? false) : false}
+        loading={saving}
+        onConfirm={applyStatus}
+      />
+    </div>
+  );
+}
+
 function ClickDetailDrawer({ click, onClose }: { click: ClickLog | null; onClose: () => void }) {
   async function copyClickId() {
     if (!click) return;
@@ -107,6 +288,10 @@ function ClickDetailDrawer({ click, onClose }: { click: ClickLog | null; onClose
         )
       }
     >
+      {/* Ahead of the record itself: what this click is worth is the reason most people
+          open this drawer, and it is the only part of it they can act on. */}
+      {click && <ClickConversionPanel key={click.id} click={click} />}
+
       {click && (
         <DrawerRows>
           <DrawerRow label="Click ID" mono>
@@ -246,17 +431,19 @@ export function ClickLogs() {
     // First column, because scanning for a click someone quoted is the single most
     // common reason to open this page.
     { key: 'refId', header: 'Click ID', render: (row) => <span className="font-mono text-xs">{row.refId}</span> },
+    { key: 'createdAt', header: 'Date', sortable: true, render: (row) => dateTime(row.createdAt) },
+    // The drawer opens from the offer name rather than the date: the offer is what
+    // someone is looking at when they decide a row needs opening, and a date column
+    // reads as a timestamp, not as a link.
     {
-      key: 'createdAt',
-      header: 'Date',
-      sortable: true,
+      key: 'offer',
+      header: 'Offer',
       render: (row) => (
-        <button type="button" onClick={() => setDetail(row)} className="text-left hover:underline">
-          {dateTime(row.createdAt)}
+        <button type="button" onClick={() => setDetail(row)} className="text-left text-primary hover:underline">
+          {row.offerName ?? '—'}
         </button>
       ),
     },
-    { key: 'offer', header: 'Offer', render: (row) => row.offerName ?? '—' },
     { key: 'affiliate', header: 'Affiliate', render: (row) => row.affiliateName ?? '—' },
     {
       key: 'countryCode',

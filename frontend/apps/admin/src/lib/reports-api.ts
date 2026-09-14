@@ -80,6 +80,8 @@ export function getClickCountries(): Promise<string[]> {
 export interface ConversionFilters {
   offerId?: string;
   affiliateId?: string;
+  /** The click's uuid — everything one specific click produced. */
+  clickId?: string;
   status?: ConversionStatus | '';
   countryCode?: string;
   subId1?: string;
@@ -99,6 +101,27 @@ export function getConversions(filters: ConversionFilters = {}): Promise<Convers
 
 export function updateConversionStatus(id: string, status: ConversionStatus): Promise<Conversion> {
   return apiFetch<Conversion>(`/conversions/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
+}
+
+/**
+ * The conversion a given click produced, if any. Used by the Click logs drawer, which
+ * has to know whether to offer "add a conversion" or to show the one that exists.
+ */
+export function getConversionForClick(clickId: string): Promise<ConversionList> {
+  return getConversions({ clickId, page: 1, pageSize: 1 });
+}
+
+/**
+ * Records a conversion against a click by hand — admin only.
+ *
+ * No amount is sent: the backend prices it from the offer's payout rule, exactly as it
+ * prices an advertiser's postback. See backend conversion.service.ts.
+ */
+export function createConversionForClick(clickId: string, transactionId?: string): Promise<Conversion> {
+  return apiFetch<Conversion>('/conversions', {
+    method: 'POST',
+    body: JSON.stringify(transactionId ? { clickId, transactionId } : { clickId }),
+  });
 }
 
 export interface PostbackLogFilters {

@@ -14,6 +14,9 @@ function applyFilters(qb: SelectQueryBuilder<Conversion>, filters: ConversionFil
   if (filters.affiliateId) {
     qb.andWhere('conversion."affiliateId" = :affiliateId', { affiliateId: filters.affiliateId });
   }
+  if (filters.clickId) {
+    qb.andWhere('conversion."clickId" = :clickId', { clickId: filters.clickId });
+  }
   applyManagerScope(qb, 'conversion', filters.managerScopeId);
   if (filters.status) {
     qb.andWhere('conversion.status = :status', { status: filters.status });

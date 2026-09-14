@@ -9,6 +9,7 @@ export const REALTIME_EVENTS = {
   MESSAGE_READ: 'message:read',
   NOTIFICATION_NEW: 'notification:new',
   NOTIFICATION_UNREAD: 'notification:unread',
+  CONVERSION_NEW: 'conversion:new',
 } as const;
 
 export interface MessageNewPayload {
@@ -34,4 +35,21 @@ export interface NotificationNewPayload {
 export interface NotificationUnreadPayload {
   // Absolute, like MessageUnreadPayload — the client never increments.
   unread: number;
+}
+
+/**
+ * A conversion was just recorded, from either origin: the advertiser's postback or an
+ * admin adding it by hand from the click drawer.
+ *
+ * Live-only — there is no notification row behind it, so this fires for whoever has the
+ * portal open and is not replayed on the next login.
+ */
+export interface ConversionNewPayload {
+  conversionId: string;
+  refId: number;
+  offerName: string | null;
+  payoutAmount: number;
+  currency: string;
+  status: string;
+  source: 'postback' | 'manual';
 }

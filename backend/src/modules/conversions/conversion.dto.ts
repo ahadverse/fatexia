@@ -6,6 +6,9 @@ import { ConversionStatus, type Conversion } from './conversion.entity';
 export const conversionFiltersSchema = paginationSchema.extend({
   offerId: z.string().uuid().optional(),
   affiliateId: z.string().uuid().optional(),
+  // "What did this one click produce" — the Click logs drawer asks this before offering
+  // to add a conversion, so it can show the existing one instead.
+  clickId: z.string().uuid().optional(),
   status: z.nativeEnum(ConversionStatus).optional(),
   countryCode: z.string().max(2).optional(),
   subId1: z.string().optional(),
@@ -33,6 +36,25 @@ export const updateConversionStatusSchema = z.object({
 });
 
 export type UpdateConversionStatusDto = z.infer<typeof updateConversionStatusSchema>;
+
+/**
+ * An admin recording a conversion the advertiser never posted back.
+ *
+ * Deliberately only identifies the click: no amount, no status. Both are derived from
+ * the offer's own payout rule exactly as the postback path derives them (money
+ * integrity rule, PLAN-backend.md) — a hand-typed payout here would be the one number
+ * in the system that cannot be re-derived from the rules, and it would be typed at
+ * precisely the moment someone is already working around normal tracking.
+ */
+export const createConversionSchema = z.object({
+  // The click's uuid or its short refId — whichever the caller has. The drawer sends
+  // the uuid; a human pasting the number an advertiser quoted sends the refId.
+  clickId: z.string().min(1).max(255),
+  // The advertiser's own order/sale reference, when there is one to record.
+  transactionId: z.string().max(255).optional(),
+});
+
+export type CreateConversionDto = z.infer<typeof createConversionSchema>;
 
 export interface ConversionDto {
   id: string;

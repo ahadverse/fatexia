@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { io, type Socket } from 'socket.io-client';
 import {
   REALTIME_EVENTS,
+  type ConversionNewPayload,
   type MessageNewPayload,
   type MessageReadPayload,
   type MessageUnreadPayload,
@@ -28,6 +29,7 @@ import { useSession } from '../session/SessionContext';
 type MessageListener = (payload: MessageNewPayload) => void;
 type ReadListener = (payload: MessageReadPayload) => void;
 type NotificationListener = (payload: NotificationNewPayload) => void;
+type ConversionListener = (payload: ConversionNewPayload) => void;
 
 interface RealtimeValue {
   connected: boolean;
@@ -39,6 +41,12 @@ interface RealtimeValue {
   onRead: (listener: ReadListener) => () => void;
   /** Subscribe to incoming notifications. */
   onNotification: (listener: NotificationListener) => () => void;
+  /**
+   * Subscribe to conversions as they are recorded — from an advertiser's postback or
+   * from an admin adding one by hand. Live-only: nothing is stored, so a listener that
+   * mounts later never sees what it missed.
+   */
+  onConversion: (listener: ConversionListener) => () => void;
   /** Lets a page that just marked a thread read correct the badge immediately. */
   refreshUnread: () => void;
   /** Same, for the notification bell after a mark-read. */
@@ -60,6 +68,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   const messageListeners = useRef(new Set<MessageListener>());
   const readListeners = useRef(new Set<ReadListener>());
   const notificationListeners = useRef(new Set<NotificationListener>());
+  const conversionListeners = useRef(new Set<ConversionListener>());
 
   const refreshUnread = useCallback(() => {
     getUnreadMessageCount()
@@ -120,6 +129,10 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       notificationListeners.current.forEach((listener) => listener(payload));
     });
 
+    socket.on(REALTIME_EVENTS.CONVERSION_NEW, (payload: ConversionNewPayload) => {
+      conversionListeners.current.forEach((listener) => listener(payload));
+    });
+
     return () => {
       socket.close();
       setConnected(false);
@@ -147,6 +160,13 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const onConversion = useCallback((listener: ConversionListener) => {
+    conversionListeners.current.add(listener);
+    return () => {
+      conversionListeners.current.delete(listener);
+    };
+  }, []);
+
   return (
     <RealtimeContext.Provider
       value={{
@@ -156,6 +176,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         onMessage,
         onRead,
         onNotification,
+        onConversion,
         refreshUnread,
         refreshNotificationUnread,
       }}

@@ -11,6 +11,7 @@ import { PostbackDirectionKind } from '../global-postbacks/global-postback.entit
 import { PostbackDirection } from '../postback-logs/postback-log.entity';
 import { resolvePayoutRuleForPricing, computeAmounts } from '../offers/payout-resolution';
 import { safeSendConversionPostback } from './outbound-postback.service';
+import { announceConversion } from '../conversions/conversion-announce';
 
 export interface PostbackRequest {
   /** Absent on a global postback — the click names the offer instead. */
@@ -183,6 +184,11 @@ export const postbackService = {
       conversionId: conversion.id,
       success: true,
     });
+
+    // Announced from the Tracker, which has no socket server of its own — the emit
+    // crosses to the API over Redis (see infra/realtime/socket-server.ts), so an admin
+    // watching the portal sees this land the moment the advertiser reports it.
+    announceConversion({ ...conversion, offerName: offer.name }, 'postback');
 
     // Auto-approved conversions never pass through conversion.updateStatus, so the
     // affiliate's own tracker would never hear about the ones that need no review —
