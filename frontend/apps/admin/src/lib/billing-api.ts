@@ -96,6 +96,14 @@ export function releaseInvoice(id: string, input: { notes?: string } = {}): Prom
   return apiFetch<Invoice>(`/invoices/${id}/release`, { method: 'POST', body: JSON.stringify(input) });
 }
 
+/**
+ * Permanently removes a rejected invoice. Refused by the server unless the invoice is
+ * REJECTED — a PAID one represents money that actually moved.
+ */
+export function deleteInvoice(id: string): Promise<void> {
+  return apiFetch<void>(`/invoices/${id}`, { method: 'DELETE' });
+}
+
 // ------------------------------------------------------------------ transactions
 
 export interface TransactionFilters {
@@ -126,4 +134,12 @@ export function recordAdjustment(input: {
   reference?: string;
 }): Promise<Transaction> {
   return apiFetch<Transaction>('/transactions/adjustment', { method: 'POST', body: JSON.stringify(input) });
+}
+
+/**
+ * Removes one manual adjustment. Refused by the server for any other transaction type —
+ * invoice-driven ledger rows are permanent history.
+ */
+export function deleteTransaction(id: string): Promise<void> {
+  return apiFetch<void>(`/transactions/${id}`, { method: 'DELETE' });
 }

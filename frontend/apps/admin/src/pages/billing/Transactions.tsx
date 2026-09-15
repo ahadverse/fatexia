@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Button,
+  ConfirmModal,
   DataTable,
   FilterBar,
   FilterField,
@@ -10,19 +11,33 @@ import {
   PageHeader,
   Pagination,
   Select,
+  SelectCombobox,
   StatCard,
   TableSkeleton,
   Textarea,
   type DataTableColumn,
+  type SelectComboboxOption,
 } from '@fatexia/ui';
 import type { Affiliate, Transaction, TransactionType } from '@fatexia/types';
-import { getTransactionSummary, getTransactions, recordAdjustment } from '../../lib/billing-api';
+import { deleteTransaction, getTransactionSummary, getTransactions, recordAdjustment } from '../../lib/billing-api';
 import { getAffiliates } from '../../lib/affiliates-api';
 import { runAction, useAsync } from '../../hooks/useAsync';
 import { compactMoney, dateTime, daysAgoIso, isoDate, money } from '../../lib/format';
 import { StatusPill } from '../../components/StatusPill';
 
 const PAGE_SIZE = 25;
+
+// Same rows as the invoice page's affiliate picker: the public id is displayed, and
+// the email and uuid are searchable behind it. Kept identical on both pages so the
+// ledger and the invoices are filtered by the same visible identity.
+function affiliateOptions(affiliates: Affiliate[]): SelectComboboxOption[] {
+  return affiliates.map((affiliate) => ({
+    value: affiliate.id,
+    label: affiliate.fullName ?? affiliate.companyName ?? affiliate.email,
+    sublabel: affiliate.publicId ?? affiliate.email,
+    keywords: `${affiliate.email} ${affiliate.id}`,
+  }));
+}
 
 const TYPE_LABEL: Record<TransactionType, string> = {
   INVOICE_GENERATED: 'Invoice raised',
@@ -61,6 +76,8 @@ export function Transactions() {
   const [dateFrom, setDateFrom] = useState(daysAgoIso(30));
   const [dateTo, setDateTo] = useState(isoDate(new Date()));
   const [page, setPage] = useState(1);
+  const [deleting, setDeleting] = useState<Transaction | null>(null);
+  const [deletingBusy, setDeletingBusy] = useState(false);
 
   // An invoice link is asking for that invoice's whole history, so the date window —
   // which would otherwise hide rows older than 30 days — does not apply to it.
@@ -91,6 +108,14 @@ export function Transactions() {
   function reload() {
     rows.reload();
     summary.reload();
+  }
+
+  async function confirmDelete() {
+    if (!deleting) return;
+    setDeletingBusy(true);
+    const result = await runAction(() => deleteTransaction(deleting.id), { success: 'Adjustment deleted', onDone: reload });
+    setDeletingBusy(false);
+    if (result !== null) setDeleting(null);
   }
 
   function resetPage<T>(setter: (value: T) => void) {
@@ -131,6 +156,18 @@ export function Transactions() {
       header: 'Detail',
       render: (row) => <span className="text-xs text-muted-foreground">{row.description ?? '—'}</span>,
     },
+    {
+      key: 'actions',
+      header: '',
+      // Only a manual adjustment can be deleted — every other row is written alongside
+      // the invoice event it describes and stays permanent history.
+      render: (row) =>
+        row.type === 'MANUAL_ADJUSTMENT' ? (
+          <Button size="sm" variant="destructive" onClick={() => setDeleting(row)}>
+            Delete
+          </Button>
+        ) : null,
+    },
   ];
 
   return (
@@ -167,14 +204,14 @@ export function Transactions() {
       ) : (
         <FilterBar>
           <FilterField label="Affiliate">
-            <Select value={affiliateId} onChange={(event) => resetPage(setAffiliateId)(event.target.value)} className="w-64">
-              <option value="">All affiliates</option>
-              {(affiliates.data ?? []).map((affiliate) => (
-                <option key={affiliate.id} value={affiliate.id}>
-                  {affiliate.fullName ?? affiliate.companyName ?? affiliate.email}
-                </option>
-              ))}
-            </Select>
+            <SelectCombobox
+              options={affiliateOptions(affiliates.data ?? [])}
+              value={affiliateId}
+              onChange={resetPage(setAffiliateId)}
+              placeholder="All affiliates"
+              clearLabel="All affiliates"
+              className="w-64"
+            />
           </FilterField>
           <FilterField label="Event">
             <Select
@@ -200,7 +237,7 @@ export function Transactions() {
       )}
 
       {rows.loading ? (
-        <TableSkeleton columns={7} />
+        <TableSkeleton columns={8} />
       ) : (
         <>
           <DataTable
@@ -212,6 +249,21 @@ export function Transactions() {
           <Pagination page={page} pageSize={PAGE_SIZE} total={rows.data?.total ?? 0} onPageChange={setPage} />
         </>
       )}
+
+      <ConfirmModal
+        open={!!deleting}
+        onOpenChange={(open) => !open && setDeleting(null)}
+        title="Delete this adjustment?"
+        description={
+          deleting
+            ? `Permanently removes the ${money(deleting.amount, deleting.currency)} adjustment "${deleting.description ?? ''}" from the ledger. This cannot be undone.`
+            : ''
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deletingBusy}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }
@@ -274,14 +326,15 @@ function AdjustmentButton({ affiliates, onDone }: { affiliates: Affiliate[]; onD
 
           <label className="block">
             <span className="text-xs font-medium text-muted-foreground">Affiliate</span>
-            <Select value={affiliateId} onChange={(event) => setAffiliateId(event.target.value)} className="mt-1">
-              <option value="">Select an affiliate…</option>
-              {affiliates.map((affiliate) => (
-                <option key={affiliate.id} value={affiliate.id}>
-                  {affiliate.fullName ?? affiliate.companyName ?? affiliate.email}
-                </option>
-              ))}
-            </Select>
+            <div className="mt-1">
+              {/* No `clearLabel` — an adjustment has to land on somebody. */}
+              <SelectCombobox
+                options={affiliateOptions(affiliates)}
+                value={affiliateId}
+                onChange={setAffiliateId}
+                placeholder="Select an affiliate…"
+              />
+            </div>
           </label>
 
           <label className="block">

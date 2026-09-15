@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Button,
+  ConfirmModal,
   DataTable,
   FilterBar,
   FilterField,
@@ -10,15 +11,18 @@ import {
   PageHeader,
   Pagination,
   Select,
+  SelectCombobox,
   StatCard,
   TableSkeleton,
   Tabs,
   Textarea,
   type DataTableColumn,
+  type SelectComboboxOption,
 } from '@fatexia/ui';
 import type { Affiliate, Invoice, InvoiceStatus, Paginated, PaymentMethod, PendingBalance } from '@fatexia/types';
 import {
   createManualInvoice,
+  deleteInvoice,
   generatePayoutBatch,
   getInvoices,
   getPendingBalances,
@@ -41,13 +45,51 @@ const METHOD_LABEL: Record<PaymentMethod, string> = {
 /** Which panel the invoice dialog is showing: its details, or one of the actions. */
 type InvoiceAction = 'details' | 'pay' | 'reject' | 'release';
 
-function affiliateLabel(affiliate: Affiliate): string {
-  const name = affiliate.fullName ?? affiliate.companyName ?? affiliate.email;
-  return affiliate.publicId ? `${name} (${affiliate.publicId})` : name;
+/**
+ * Affiliates as combobox rows.
+ *
+ * The public id (`AFF-1011`) is displayed, not just searchable: it is what support, the
+ * affiliate and an invoice conversation all quote, and two affiliates on a network
+ * genuinely can share a display name. An older row without one falls back to the email
+ * rather than showing a bare name with nothing to tell it apart.
+ */
+function affiliateOptions(affiliates: Affiliate[]): SelectComboboxOption[] {
+  return affiliates.map((affiliate) => ({
+    value: affiliate.id,
+    label: affiliate.fullName ?? affiliate.companyName ?? affiliate.email,
+    sublabel: affiliate.publicId ?? affiliate.email,
+    // Matched but not shown: the email behind a row labelled by name, and the uuid that
+    // turns up in URLs and logs when someone is chasing a specific record.
+    keywords: `${affiliate.email} ${affiliate.id}`,
+  }));
+}
+
+/**
+ * The same, for the payout-batch picker, which lists balances rather than affiliates.
+ *
+ * Here the unbilled figure takes the visible slot — it is the reason that list exists —
+ * and the id stays findable through `keywords`, joined from the affiliate list since a
+ * balance row carries only a name.
+ */
+function balanceOptions(balances: PendingBalance[], affiliates: Affiliate[]): SelectComboboxOption[] {
+  const byId = new Map(affiliates.map((affiliate) => [affiliate.id, affiliate]));
+  return balances.map((row) => {
+    const affiliate = byId.get(row.affiliateId);
+    return {
+      value: row.affiliateId,
+      label: row.affiliateName ?? row.affiliateId,
+      sublabel: `${money(row.eligibleAmount)} unbilled`,
+      keywords: `${affiliate?.publicId ?? ''} ${affiliate?.email ?? ''} ${row.affiliateId}`,
+    };
+  });
 }
 
 export function Invoices() {
-  const [tab, setTab] = useState('balances');
+  // Invoices, not balances: the page is called Invoices and this is what someone opening
+  // it came to see. Pending balances is the preview you check *before* a batch, which is
+  // a step behind — and on a network with no unbilled conversions it opens onto an empty
+  // table, making the whole page look broken.
+  const [tab, setTab] = useState('invoices');
   const [status, setStatus] = useState<InvoiceStatus | ''>('');
   const [affiliateFilter, setAffiliateFilter] = useState('');
   const [page, setPage] = useState(1);
@@ -97,7 +139,12 @@ export function Invoices() {
         actions={
           <div className="flex flex-wrap gap-2">
             <ManualInvoiceButton affiliates={affiliates.data ?? []} balances={balances.data ?? []} onDone={reloadAll} />
-            <BatchButton balances={balances.data ?? []} onDone={reloadAll} onGenerated={() => setTab('invoices')} />
+            <BatchButton
+              balances={balances.data ?? []}
+              affiliates={affiliates.data ?? []}
+              onDone={reloadAll}
+              onGenerated={() => setTab('invoices')}
+            />
           </div>
         }
       />
@@ -225,14 +272,14 @@ function InvoiceList({
           </Select>
         </FilterField>
         <FilterField label="Affiliate">
-          <Select value={affiliateFilter} onChange={(event) => onAffiliateChange(event.target.value)} className="w-64">
-            <option value="">All affiliates</option>
-            {affiliates.map((affiliate) => (
-              <option key={affiliate.id} value={affiliate.id}>
-                {affiliateLabel(affiliate)}
-              </option>
-            ))}
-          </Select>
+          <SelectCombobox
+            options={affiliateOptions(affiliates)}
+            value={affiliateFilter}
+            onChange={onAffiliateChange}
+            placeholder="All affiliates"
+            clearLabel="All affiliates"
+            className="w-64"
+          />
         </FilterField>
       </FilterBar>
 
@@ -285,12 +332,26 @@ function InvoiceDialog({
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   function close() {
     setAction('details');
     setReference('');
     setNotes('');
+    setConfirmingDelete(false);
     onClose();
+  }
+
+  async function confirmDelete() {
+    if (!invoice) return;
+    setDeleting(true);
+    const result = await runAction(() => deleteInvoice(invoice.id), { success: `${invoice.invoiceNumber} deleted` });
+    setDeleting(false);
+    if (result !== null) {
+      setConfirmingDelete(false);
+      onChanged();
+    }
   }
 
   async function run(work: () => Promise<unknown>, success: string) {
@@ -311,6 +372,9 @@ function InvoiceDialog({
 
   const released = !!invoice.releasedAt;
   const paid = invoice.status === 'PAID';
+  // The only status where no money moved — a paid invoice is real payout history and
+  // stays undeletable regardless of whether it was later released.
+  const canDelete = invoice.status === 'REJECTED';
 
   return (
     <Modal open onOpenChange={(next) => !next && close()} title={invoice.invoiceNumber}>
@@ -343,6 +407,11 @@ function InvoiceDialog({
 
         {action === 'details' ? (
           <div className="flex flex-wrap justify-end gap-2">
+            {canDelete && (
+              <Button variant="destructive" disabled={saving} onClick={() => setConfirmingDelete(true)}>
+                Delete
+              </Button>
+            )}
             {!paid && !released && invoice.status !== 'APPROVED' && (
               <Button
                 variant="outline"
@@ -447,6 +516,21 @@ function InvoiceDialog({
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        open={confirmingDelete}
+        onOpenChange={setConfirmingDelete}
+        title={`Delete ${invoice.invoiceNumber}?`}
+        description={`This permanently removes the invoice row. ${
+          released
+            ? 'Its conversions are already back in the payable pool.'
+            : 'Its conversions are still stamped with it and will be returned to the payable pool as part of this delete.'
+        } The ledger rows it produced stay on the Transactions page as history. This cannot be undone.`}
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={confirmDelete}
+      />
     </Modal>
   );
 }
@@ -464,10 +548,12 @@ function Field({ label, value }: { label: string; value: string }) {
 
 function BatchButton({
   balances,
+  affiliates,
   onDone,
   onGenerated,
 }: {
   balances: PendingBalance[];
+  affiliates: Affiliate[];
   onDone: () => void;
   onGenerated: () => void;
 }) {
@@ -525,14 +611,15 @@ function BatchButton({
 
           <label className="block">
             <span className="text-xs font-medium text-muted-foreground">Affiliate</span>
-            <Select value={affiliateId} onChange={(event) => setAffiliateId(event.target.value)} className="mt-1">
-              <option value="">Everyone with an eligible balance</option>
-              {balances.map((row) => (
-                <option key={row.affiliateId} value={row.affiliateId}>
-                  {row.affiliateName ?? row.affiliateId} — {money(row.eligibleAmount)} unbilled
-                </option>
-              ))}
-            </Select>
+            <div className="mt-1">
+              <SelectCombobox
+                options={balanceOptions(balances, affiliates)}
+                value={affiliateId}
+                onChange={setAffiliateId}
+                placeholder="Everyone with an eligible balance"
+                clearLabel="Everyone with an eligible balance"
+              />
+            </div>
             <span className="mt-1 block text-[11px] text-muted-foreground">
               The figure shown is the affiliate's whole unbilled balance. What actually gets invoiced is only the part of it
               inside the period.
@@ -675,14 +762,16 @@ function ManualInvoiceButton({
 
           <label className="block">
             <span className="text-xs font-medium text-muted-foreground">Affiliate</span>
-            <Select value={affiliateId} onChange={(event) => setAffiliateId(event.target.value)} className="mt-1">
-              <option value="">Select an affiliate…</option>
-              {affiliates.map((affiliate) => (
-                <option key={affiliate.id} value={affiliate.id}>
-                  {affiliateLabel(affiliate)}
-                </option>
-              ))}
-            </Select>
+            <div className="mt-1">
+              {/* No `clearLabel`: an invoice must belong to somebody, so there is no
+                  "none" state to offer here. */}
+              <SelectCombobox
+                options={affiliateOptions(affiliates)}
+                value={affiliateId}
+                onChange={setAffiliateId}
+                placeholder="Select an affiliate…"
+              />
+            </div>
             <span className="mt-1 block text-[11px] text-muted-foreground">
               {affiliateId
                 ? unbilled

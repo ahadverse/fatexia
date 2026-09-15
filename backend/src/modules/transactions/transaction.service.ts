@@ -1,4 +1,4 @@
-import { NotFoundError } from '../../common/errors';
+import { NotFoundError, ValidationError } from '../../common/errors';
 import { paginate, type Paginated } from '../../common/pagination';
 import { affiliateNames } from '../../common/entity-names';
 import { affiliateRepository } from '../affiliates/affiliate.repository';
@@ -84,5 +84,25 @@ export const transactionService = {
 
     const names = await affiliateNames([dto.affiliateId]);
     return toTransactionDto(row, names.get(dto.affiliateId) ?? null);
+  },
+
+  /**
+   * Removes one manual adjustment.
+   *
+   * Restricted to `MANUAL_ADJUSTMENT` — every other row is written by the invoice
+   * service inside the same transaction that moved the invoice, and deleting one of
+   * those would make the ledger disagree with an invoice that still says it happened.
+   * An adjustment is the one row an admin writes directly, so it is the one an admin
+   * can take back directly.
+   */
+  async deleteTransaction(id: string): Promise<void> {
+    const row = await transactionRepository.findById(id);
+    if (!row) {
+      throw new NotFoundError('Transaction not found');
+    }
+    if (row.type !== TransactionType.MANUAL_ADJUSTMENT) {
+      throw new ValidationError('Only a manual adjustment can be deleted — invoice-driven ledger rows are permanent history.');
+    }
+    await transactionRepository.delete(id);
   },
 };
