@@ -35,4 +35,13 @@ export const transactionController = {
       next(err);
     }
   },
+
+  async deleteTransaction(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      await transactionService.deleteTransaction(req.params.id!);
+      res.status(204).send();
+    } catch (err) {
+      next(err);
+    }
+  },
 };

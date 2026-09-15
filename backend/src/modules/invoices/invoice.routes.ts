@@ -47,3 +47,6 @@ invoiceRoutes.patch('/:id/status', validate(updateInvoiceStatusSchema), invoiceC
 // Cancels the invoice and returns its conversions to the payable pool. Separate from a
 // status change because it moves money-bearing rows, which rejecting alone does not.
 invoiceRoutes.post('/:id/release', validate(releaseInvoiceSchema), invoiceController.release);
+// Hard delete — restricted to REJECTED invoices in the service. A PAID one represents
+// money that actually moved and is never deletable.
+invoiceRoutes.delete('/:id', invoiceController.deleteInvoice);

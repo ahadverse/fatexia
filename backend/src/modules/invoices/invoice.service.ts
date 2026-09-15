@@ -575,4 +575,39 @@ export const invoiceService = {
 
     return this.getInvoice(id);
   },
+
+  /**
+   * Permanently removes a rejected invoice.
+   *
+   * Restricted to REJECTED — the only terminal state where no money moved. A PAID
+   * invoice represents a real payout and is never deletable; `releaseInvoice` is the
+   * non-destructive path for one that still needs to come off the books.
+   *
+   * A rejection that was never released still has its conversions stamped with it
+   * (`updateStatus` deliberately leaves them attached so the failed amount stays
+   * reconcilable) — so those are released in the same transaction as the delete,
+   * exactly as `releaseInvoice` does, rather than leaving them pointing at a row that
+   * no longer exists. `releaseFromInvoice` is a no-op if this invoice was released
+   * already, so calling it unconditionally here is safe either way.
+   *
+   * The ledger rows this invoice ever produced are left alone: `invoiceNumber` is
+   * stored on each one precisely so it still reads correctly once the invoice itself
+   * is gone, and `transactions` is append-only by design.
+   */
+  async deleteInvoice(id: string): Promise<void> {
+    const invoice = await invoiceRepository.findById(id);
+    if (!invoice) {
+      throw new NotFoundError('Invoice not found');
+    }
+    if (invoice.status !== InvoiceStatus.REJECTED) {
+      throw new ValidationError(
+        'Only a rejected invoice can be deleted. Reject or release it first.',
+      );
+    }
+
+    await AppDataSource.transaction(async (manager) => {
+      await conversionRepository.releaseFromInvoice(id, manager);
+      await invoiceRepository.delete(id, manager);
+    });
+  },
 };

@@ -81,4 +81,13 @@ export const invoiceController = {
       next(err);
     }
   },
+
+  async deleteInvoice(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      await invoiceService.deleteInvoice(req.params.id!);
+      res.status(204).send();
+    } catch (err) {
+      next(err);
+    }
+  },
 };

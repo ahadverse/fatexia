@@ -69,6 +69,10 @@ export const invoiceRepository = {
     await repo(manager).update({ id }, fields);
   },
 
+  async delete(id: string, manager?: EntityManager): Promise<void> {
+    await repo(manager).delete({ id });
+  },
+
   // Payout-eligible balance per affiliate: APPROVED, not already on an invoice, and
   // past the hold window. Grouped in SQL so this scales with conversion volume.
   eligibleBalances(eligibleBefore: Date): Promise<EligibleBalanceRow[]> {

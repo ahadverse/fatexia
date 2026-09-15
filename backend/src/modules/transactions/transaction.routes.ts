@@ -37,3 +37,6 @@ transactionRoutes.get(
 transactionRoutes.use(requireAuth, requireRole(UserRole.ADMIN));
 
 transactionRoutes.post('/adjustment', validate(recordAdjustmentSchema), transactionController.recordAdjustment);
+// Restricted to MANUAL_ADJUSTMENT rows in the service — every other type is written
+// alongside the invoice event it describes and stays permanent history.
+transactionRoutes.delete('/:id', transactionController.deleteTransaction);
