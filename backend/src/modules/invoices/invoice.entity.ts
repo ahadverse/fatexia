@@ -65,6 +65,17 @@ export class Invoice {
   @Column({ type: 'timestamp', nullable: true })
   paidAt!: Date | null;
 
+  /**
+   * When this invoice was cancelled and its conversions handed back to the payable pool.
+   *
+   * Separate from `status` because releasing is about the conversions, not the decision:
+   * a REJECTED invoice whose earnings are still locked to it and one whose earnings are
+   * back in the pool are different situations, and only this column tells them apart.
+   * Set once and never cleared — a released invoice is terminal.
+   */
+  @Column({ type: 'timestamp', nullable: true })
+  releasedAt!: Date | null;
+
   @CreateDateColumn({ type: 'timestamp' })
   createdAt!: Date;
 

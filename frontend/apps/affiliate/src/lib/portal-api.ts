@@ -19,6 +19,7 @@ import type {
   OwnReferral,
   Paginated,
   SmartLink,
+  Transaction,
 } from '@fatexia/types';
 import { apiFetch } from './api';
 import { toQuery } from './query';
@@ -122,6 +123,17 @@ export function getOwnInvoices(params: { page?: number; pageSize?: number } = {}
 
 export function getOwnBalance(): Promise<OwnBalance> {
   return apiFetch<OwnBalance>('/invoices/mine/balance');
+}
+
+/**
+ * The affiliate's own money ledger — invoices raised, payouts sent or refused, and any
+ * adjustment the network recorded against them.
+ *
+ * Read-only: every row here is written by the network side, so the portal shows the
+ * same history the admin sees rather than a summary of it.
+ */
+export function getOwnTransactions(params: { page?: number; pageSize?: number } = {}): Promise<Paginated<Transaction>> {
+  return apiFetch<Paginated<Transaction>>(`/transactions/mine${toQuery({ ...params })}`);
 }
 
 export interface OwnPointsResult extends Paginated<AffiliatePoint> {

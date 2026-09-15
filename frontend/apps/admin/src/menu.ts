@@ -131,7 +131,16 @@ const MENU: GuardedGroup[] = [
     items: [
       { label: 'Notifications', path: '/notifications', icon: 'notifications' },
       { label: 'Settings', path: '/settings', icon: 'settings', adminOnly: true },
-      { label: 'Billing', path: '/billing', icon: 'billing', adminOnly: true },
+      {
+        label: 'Billing',
+        path: '/billing',
+        icon: 'billing',
+        adminOnly: true,
+        children: [
+          { label: 'Invoices', path: '/billing/invoices' },
+          { label: 'Transactions', path: '/billing/transactions' },
+        ],
+      },
       // Subscriptions is hidden for now — the page, its route and the /subscriptions
       // API are all untouched, so restoring it is uncommenting this line and the
       // matching route in App.tsx.

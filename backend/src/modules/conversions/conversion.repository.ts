@@ -1,4 +1,4 @@
-import type { SelectQueryBuilder } from 'typeorm';
+import type { EntityManager, SelectQueryBuilder } from 'typeorm';
 import { AppDataSource } from '../../infra/database/data-source';
 import { offsetOf } from '../../common/pagination';
 import { applyManagerScope } from '../../common/manager-scope-sql';
@@ -6,6 +6,12 @@ import { Conversion, ConversionStatus } from './conversion.entity';
 import type { ConversionFiltersDto } from './conversion.dto';
 
 const repository = AppDataSource.getRepository(Conversion);
+
+// Lets the billing paths run their reads and writes inside one database transaction —
+// an invoice and the stamp that binds its conversions to it must commit together.
+function repo(manager?: EntityManager) {
+  return manager ? manager.getRepository(Conversion) : repository;
+}
 
 function applyFilters(qb: SelectQueryBuilder<Conversion>, filters: ConversionFiltersDto): SelectQueryBuilder<Conversion> {
   if (filters.offerId) {
@@ -100,8 +106,9 @@ export const conversionRepository = {
     affiliateId: string,
     eligibleBefore: Date,
     period?: { from: Date; to: Date },
+    manager?: EntityManager,
   ): Promise<Conversion[]> {
-    const qb = repository
+    const qb = repo(manager)
       .createQueryBuilder('conversion')
       .where('conversion."affiliateId" = :affiliateId', { affiliateId })
       .andWhere('conversion.status = :status', { status: ConversionStatus.APPROVED })
@@ -119,9 +126,9 @@ export const conversionRepository = {
     return qb.getMany();
   },
 
-  async markInvoiced(ids: string[], invoiceId: string): Promise<void> {
+  async markInvoiced(ids: string[], invoiceId: string, manager?: EntityManager): Promise<void> {
     if (ids.length === 0) return;
-    await repository
+    await repo(manager)
       .createQueryBuilder()
       .update(Conversion)
       .set({ invoiceId })
@@ -129,12 +136,31 @@ export const conversionRepository = {
       .execute();
   },
 
-  async markPaid(invoiceId: string, paidAt: Date): Promise<void> {
-    await repository
+  async markPaid(invoiceId: string, paidAt: Date, manager?: EntityManager): Promise<void> {
+    await repo(manager)
       .createQueryBuilder()
       .update(Conversion)
       .set({ status: ConversionStatus.PAID, paidAt })
       .where('"invoiceId" = :invoiceId', { invoiceId })
       .execute();
+  },
+
+  /**
+   * Un-stamps an invoice's conversions so they return to the payable pool.
+   *
+   * Both payable queries filter on `invoiceId IS NULL`, so clearing the stamp is the
+   * whole mechanism — the rows are picked up by the next batch on their own. Guarded on
+   * status: a PAID conversion is never released, or the same money could be invoiced
+   * and paid twice.
+   */
+  async releaseFromInvoice(invoiceId: string, manager?: EntityManager): Promise<number> {
+    const result = await repo(manager)
+      .createQueryBuilder()
+      .update(Conversion)
+      .set({ invoiceId: null })
+      .where('"invoiceId" = :invoiceId', { invoiceId })
+      .andWhere('status != :paid', { paid: ConversionStatus.PAID })
+      .execute();
+    return result.affected ?? 0;
   },
 };

@@ -19,6 +19,7 @@ import { Click } from '../../modules/clicks/click.entity';
 import { Conversion } from '../../modules/conversions/conversion.entity';
 import { PostbackLog } from '../../modules/postback-logs/postback-log.entity';
 import { Invoice } from '../../modules/invoices/invoice.entity';
+import { Transaction } from '../../modules/transactions/transaction.entity';
 import { Subscription } from '../../modules/subscriptions/subscription.entity';
 import { Message } from '../../modules/messages/message.entity';
 import { Notification } from '../../modules/notifications/notification.entity';
@@ -68,6 +69,7 @@ export const AppDataSource = new DataSource({
     Conversion,
     PostbackLog,
     Invoice,
+    Transaction,
     Subscription,
     Message,
     Notification,

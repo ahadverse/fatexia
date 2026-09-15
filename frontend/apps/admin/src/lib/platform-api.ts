@@ -8,8 +8,6 @@ import type {
   EmailTemplate,
   Integration,
   IntegrationProvider,
-  Invoice,
-  InvoiceStatus,
   Message,
   MessageThread,
   MessageThreadDetail,
@@ -17,8 +15,6 @@ import type {
   NewsPost,
   Notification,
   Paginated,
-  PaymentMethod,
-  PendingBalance,
   SmartLink,
   Subscription,
 } from '@fatexia/types';
@@ -60,33 +56,7 @@ export function deleteSmartLink(id: string): Promise<void> {
   return apiFetch<void>(`/smart-links/${id}`, { method: 'DELETE' });
 }
 
-// Billing
-
-export function getInvoices(filters: { status?: InvoiceStatus | ''; affiliateId?: string; page?: number; pageSize?: number } = {}): Promise<Paginated<Invoice>> {
-  return apiFetch<Paginated<Invoice>>(`/invoices${toQuery({ ...filters })}`);
-}
-
-export function getPendingBalances(): Promise<PendingBalance[]> {
-  return apiFetch<PendingBalance[]>('/invoices/pending-balances');
-}
-
-export function generatePayoutBatch(input: {
-  affiliateIds?: string[];
-  periodFrom: string;
-  periodTo: string;
-  paymentMethod?: PaymentMethod;
-  /** Invoice affiliates whose period total is under the network minimum. */
-  ignoreThreshold?: boolean;
-}): Promise<Invoice[]> {
-  return apiFetch<Invoice[]>('/invoices/batch', { method: 'POST', body: JSON.stringify(input) });
-}
-
-export function updateInvoiceStatus(
-  id: string,
-  input: { status: InvoiceStatus; paymentReference?: string; notes?: string },
-): Promise<Invoice> {
-  return apiFetch<Invoice>(`/invoices/${id}/status`, { method: 'PATCH', body: JSON.stringify(input) });
-}
+// Billing (invoices, payout batches and the money ledger) lives in ./billing-api.
 
 // Subscriptions
 

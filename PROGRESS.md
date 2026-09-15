@@ -39,7 +39,8 @@ Every module the Admin portal needs now exists with the standard entity/reposito
 - [x] `conversions` — entity + list/detail/status. `PAID` is deliberately **not** settable from the row action; only a payout batch moves money. Profit is derived on read, never stored.
 - [x] `postback-logs` — entity + read-only list (inbound and outbound, with failures).
 - [x] `clicks` — gained `subId1/2/3` and `referer` (captured by the Tracker from the link); admin read side added as `click-log.service/controller/routes`, kept separate from the Tracker's hot write path.
-- [x] `invoices`/billing — payout batches. Amounts are summed from the conversions themselves and each row is stamped with the invoice id in the same pass, so a conversion can't land on two batches; marking an invoice PAID is what moves its conversions to PAID.
+- [x] `invoices`/billing — payout batches. Amounts are summed from the conversions themselves and each row is stamped with the invoice id in the same pass, so a conversion can't land on two batches; marking an invoice PAID is what moves its conversions to PAID. **Reworked 2026-09-15 — see the Billing section below.**
+- [x] `transactions` — the money ledger behind billing (2026-09-15). Append-only rows for every payout event plus manual adjustments; written inside the same DB transaction as the invoice they describe.
 - [x] `subscriptions` — advertiser plan records (portal still deferred).
 - [x] `notifications`, `news`, `email-templates` — full CRUD. Email templates reject any macro the template doesn't declare, so an unknown token can't reach a real inbox.
 - [x] `messages` — **rebuilt 2026-07-26**, see the dedicated section below.
@@ -200,7 +201,7 @@ Not started yet:
 - [x] **Advertisers** — All (filters, inline edit, activate/suspend), Create, Pending.
 - [x] **Managers** — All plus one page per role (affiliate/account/general), Create. Edit excludes self-reporting.
 - [x] **Reports** — all 11. Eight of them render through one shared `ReportView` (filters, totals, CSV export of exactly what is on screen) differing only by `groupBy`, per PLAN-admin.md's "one reporting module, not thirteen pages". The three row-level ones are their own pages: Click Logs, Conversions (with the review actions), Postback Logs (with a payload inspector).
-- [x] **Others** — Notifications, Settings, Billing (pending balances + invoices + batch generation + mark-paid), Subscriptions, Email Templates (with macro validation), News, Integrations, Profile.
+- [x] **Others** — Notifications, Settings, Billing (split into Invoices + Transactions 2026-09-15, see the Billing section), Subscriptions, Email Templates (with macro validation), News, Integrations, Profile.
 - [x] End-to-end verified 2026-07-25 with a real headless-browser pass (Playwright): logged in as the seeded admin and visited **all 44 routes** — every one renders its heading with real seeded content, **zero console errors and zero failed requests**. A second pass asserted specific seeded data on 26 pages and exercised four write paths (create affiliate group, save network settings and confirm the value round-trips after a reload, approve an access request, change a conversion's status). Screenshots confirm layout on dashboard, click logs, billing, integrations and affiliates.
 
 Two real bugs were found by that verification and fixed, not worked around:
@@ -234,6 +235,27 @@ Not started yet: Offer Detail/Edit pages, Socket.IO realtime wiring (Notificatio
 - [x] Verified 2026-07-26 two ways. `node scripts/dev/audit-affiliate-visibility.js` walks all 18 affiliate-reachable endpoints and fails on a forbidden key at *any* JSON depth — all clean — and confirms all 12 admin-only endpoints return 403 for an affiliate token. A Playwright pass then visited all 14 routes as the seeded affiliate: every one renders with real data, **zero console errors, zero failed requests**, and a response-body check across every API call the browser received found no revenue/profit field anywhere.
 
 Not started yet: Socket.IO realtime wiring (Messages and News load on navigation rather than pushing), and a notifications feed in the affiliate shell.
+
+## Billing — invoices, the ledger, and the integrity fixes (2026-09-15)
+
+Migration `BillingLedgerAndInvoiceIntegrity1788900000000` (transactions table, `invoice_number_seq`, `invoices.releasedAt`, plus a backfill of the ledger from every invoice that already existed).
+
+**Three real defects fixed:**
+
+- [x] **Double-pay window closed.** `generateBatch` created an invoice and stamped its conversions as two unrelated writes. A failure between them left the invoice standing with its conversions still unbilled — so the next batch invoiced and paid the same money again. Invoice creation, the conversion stamp and the ledger row now commit as one transaction; the whole batch run is a single transaction, so "generate batch" either produced all of it or none of it.
+- [x] **Invoice numbers no longer collide.** They were `COUNT(*) + 1`, which repeats as soon as an invoice is deleted or two batches overlap — the unique index then kills a batch partway through. Replaced with the atomic `invoice_number_seq`, seeded from the highest number already issued so existing invoices keep theirs.
+- [x] **A rejected payout is no longer a dead end.** Its conversions stayed stamped to the failed invoice forever, so that money could never be invoiced again — while the notification told the affiliate it would return "on the next run". `POST /invoices/:id/release` now cancels the invoice and clears the stamp, which is the whole mechanism (both payable queries filter `invoiceId IS NULL`). Refused on a PAID invoice, and a released invoice can no longer be marked paid. Rejection on its own still leaves the conversions attached — deliberately, so a failed amount stays reconcilable — and the two states are told apart by `releasedAt`.
+- [x] Minor: the stored `periodTo` now matches the window actually queried (a bare `YYYY-MM-DD` parses to midnight, so the last day was recorded as excluded while being included).
+
+**Per-affiliate invoicing with no restrictions** — `POST /invoices/manual`. The batch is the safe bulk path and keeps its rules; this is the deliberate exception for the cases it skips. No minimum threshold, hold window waivable, no requirement that any conversion be found, and no requirement that the amount be above zero. Conversions it does attach are still summed and stamped exactly as in a batch; a typed-in `amount` overrides the total and is written onto the invoice's notes and its ledger row as an override, so it can never be mistaken for a computed figure.
+
+**Transactions** — `/transactions` (admin + manager read, admin write), `/transactions/summary`, `/transactions/mine`, `POST /transactions/adjustment`. Five event types: `INVOICE_GENERATED`, `PAYOUT_SENT`, `PAYOUT_REJECTED`, `INVOICE_RELEASED`, `MANUAL_ADJUSTMENT`. Append-only; nothing derives a balance from it (balances are still recomputed from conversions). Manual adjustments are signed, non-zero, require a reason, and deliberately touch no invoice or conversion — that separation is what keeps every computed figure reconcilable against its source rows.
+
+**Admin UI** — Billing split into `/billing/invoices` and `/billing/transactions` (`/billing` redirects); nav entry became a parent with both children. Invoices gained a Create-invoice dialog, an affiliate filter, and a per-invoice dialog carrying Approve / Reject / Release / Mark paid — the row previously had room for one action, so the rest did not exist. Transactions has type/affiliate/date filters, per-type totals computed in SQL over the whole filtered set, and an invoice-scoped view linked from the invoice dialog. Billing's API client moved out of `platform-api.ts` into its own `lib/billing-api.ts`.
+
+**Affiliate portal** — Payments gained a Transactions tab showing the same ledger, narrowed to them by JWT.
+
+Verified: `tsc --noEmit` clean on the backend and all six frontend workspaces, `vitest run` 145/145, eslint clean on every touched file. The migration has not been run against a database yet.
 
 ## Public site (Frontend)
 

@@ -1,7 +1,13 @@
 import type { NextFunction, Response } from 'express';
 import type { AuthenticatedRequest } from '../../common/guards/auth.guard';
 import { invoiceService } from './invoice.service';
-import type { GeneratePayoutBatchDto, InvoiceFiltersDto, UpdateInvoiceStatusDto } from './invoice.dto';
+import type {
+  CreateManualInvoiceDto,
+  GeneratePayoutBatchDto,
+  InvoiceFiltersDto,
+  ReleaseInvoiceDto,
+  UpdateInvoiceStatusDto,
+} from './invoice.dto';
 
 export const invoiceController = {
   async getInvoices(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
@@ -46,7 +52,15 @@ export const invoiceController = {
 
   async generateBatch(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      res.status(201).json(await invoiceService.generateBatch(req.body as GeneratePayoutBatchDto));
+      res.status(201).json(await invoiceService.generateBatch(req.body as GeneratePayoutBatchDto, req.user!.id));
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async createManual(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      res.status(201).json(await invoiceService.createManual(req.body as CreateManualInvoiceDto, req.user!.id));
     } catch (err) {
       next(err);
     }
@@ -54,7 +68,15 @@ export const invoiceController = {
 
   async updateStatus(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      res.json(await invoiceService.updateStatus(req.params.id!, req.body as UpdateInvoiceStatusDto));
+      res.json(await invoiceService.updateStatus(req.params.id!, req.body as UpdateInvoiceStatusDto, req.user!.id));
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async release(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      res.json(await invoiceService.releaseInvoice(req.params.id!, req.body as ReleaseInvoiceDto, req.user!.id));
     } catch (err) {
       next(err);
     }

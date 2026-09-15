@@ -54,7 +54,8 @@ import { PostbackLogs } from './pages/reports/PostbackLogs';
 
 import { Notifications } from './pages/others/Notifications';
 import { Settings } from './pages/others/Settings';
-import { Billing } from './pages/others/Billing';
+import { Invoices } from './pages/billing/Invoices';
+import { Transactions } from './pages/billing/Transactions';
 // Subscriptions is hidden from the nav for now (see menu.ts) — page kept on disk,
 // import and route commented out together so it comes back in one edit.
 // import { Subscriptions } from './pages/others/Subscriptions';
@@ -168,7 +169,11 @@ function App() {
 
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/settings" element={<Guarded adminOnly element={<Settings />} />} />
-          <Route path="/billing" element={<Guarded adminOnly element={<Billing />} />} />
+          {/* Billing split into the invoice workspace and the money ledger. `/billing`
+              itself was the old single page, so it redirects rather than 404s. */}
+          <Route path="/billing" element={<Navigate to="/billing/invoices" replace />} />
+          <Route path="/billing/invoices" element={<Guarded adminOnly element={<Invoices />} />} />
+          <Route path="/billing/transactions" element={<Guarded adminOnly element={<Transactions />} />} />
           {/* Subscriptions route hidden alongside its nav entry; /subscriptions falls
               through to the catch-all below and lands on the dashboard. */}
           {/* <Route path="/subscriptions" element={<Subscriptions />} /> */}

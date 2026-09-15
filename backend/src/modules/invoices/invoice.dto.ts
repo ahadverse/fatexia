@@ -32,6 +32,49 @@ export const generatePayoutBatchSchema = z.object({
 
 export type GeneratePayoutBatchDto = z.infer<typeof generatePayoutBatchSchema>;
 
+/**
+ * One invoice for one affiliate, raised by hand.
+ *
+ * Unlike the batch, this path applies no eligibility rules at all: no minimum payout
+ * threshold, no hold window, no requirement that any conversion be found, and no
+ * requirement that the amount be more than zero. It exists precisely for the cases the
+ * batch is designed to skip — a bonus invoice, a placeholder an affiliate asked for, a
+ * correction, a zero-value record closing a period off.
+ *
+ * The one rule that still holds is the money integrity rule, and it holds in a narrower
+ * form: when the amount is *computed* it is summed from real conversions and those rows
+ * are stamped, exactly as in a batch. `amount` overrides that total only when an admin
+ * types one, and the override is recorded on the invoice's notes and its ledger row so
+ * it is never mistaken for a computed figure.
+ */
+export const createManualInvoiceSchema = z.object({
+  affiliateId: z.string().uuid(),
+  periodFrom: z.string(),
+  periodTo: z.string(),
+  paymentMethod: z.nativeEnum(PaymentMethod).default(PaymentMethod.BANK_TRANSFER),
+  /**
+   * Pull the affiliate's payable conversions for the period onto this invoice. Off
+   * gives a standalone invoice that touches no conversion at all — which is the only
+   * way to raise one for an affiliate who has none.
+   */
+  includeConversions: z.boolean().default(true),
+  /** Waives the hold window as well, so conversions approved minutes ago can be billed. */
+  ignoreHoldWindow: z.boolean().default(false),
+  /** Overrides the computed total. Zero is allowed and negative is not — a clawback is a transaction adjustment, not an invoice. */
+  amount: z.number().min(0).optional(),
+  currency: z.string().trim().length(3).optional(),
+  status: z.nativeEnum(InvoiceStatus).default(InvoiceStatus.PENDING),
+  notes: z.string().trim().max(1000).optional(),
+});
+
+export type CreateManualInvoiceDto = z.infer<typeof createManualInvoiceSchema>;
+
+export const releaseInvoiceSchema = z.object({
+  notes: z.string().trim().max(1000).optional(),
+});
+
+export type ReleaseInvoiceDto = z.infer<typeof releaseInvoiceSchema>;
+
 export const updateInvoiceStatusSchema = z.object({
   status: z.nativeEnum(InvoiceStatus),
   paymentReference: z.string().trim().max(160).optional(),
@@ -55,6 +98,8 @@ export interface InvoiceDto {
   paymentReference: string | null;
   notes: string | null;
   paidAt: string | null;
+  /** Set once the invoice's conversions were handed back to the payable pool. */
+  releasedAt: string | null;
   createdAt: string;
 }
 
@@ -71,9 +116,14 @@ export function toInvoiceDto(invoice: Invoice, affiliateName: string | null = nu
     conversionCount: invoice.conversionCount,
     status: invoice.status,
     paymentMethod: invoice.paymentMethod,
-    paymentReference: invoice.paymentReference,
-    notes: invoice.notes,
+    // `?? null` rather than passed straight through: the generation paths now build
+    // this from the entity `save()` returned instead of re-reading the row, and a
+    // nullable column that was never written comes back undefined — which JSON drops
+    // from the response entirely rather than sending as null.
+    paymentReference: invoice.paymentReference ?? null,
+    notes: invoice.notes ?? null,
     paidAt: invoice.paidAt?.toISOString() ?? null,
+    releasedAt: invoice.releasedAt?.toISOString() ?? null,
     createdAt: invoice.createdAt.toISOString(),
   };
 }

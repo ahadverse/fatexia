@@ -420,4 +420,23 @@ export async function seedTraffic(dataSource: DataSource, core: CoreSeedResult):
       { invoiceId },
     );
   }
+
+  // The seed writes its invoice numbers directly, so it has to push the sequence the
+  // application issues from past them. Without this, the first payout batch generated
+  // on a freshly seeded database asks for INV-000001 and collides with a seeded row.
+  // Never lowers the sequence — `GREATEST` keeps whatever a real batch already reached.
+  await dataSource.query(`
+    WITH highest AS (
+      SELECT COALESCE(MAX((substring("invoiceNumber" from '[0-9]+$'))::bigint), 0) AS value FROM "invoices"
+    ),
+    issued AS (
+      -- is_called is false on a sequence nothing has drawn from yet, where last_value
+      -- is the start value rather than a number that was handed out.
+      SELECT CASE WHEN is_called THEN last_value ELSE 0 END AS value FROM "invoice_number_seq"
+    ),
+    target AS (
+      SELECT GREATEST(highest.value, issued.value) AS value FROM highest, issued
+    )
+    SELECT setval('invoice_number_seq', GREATEST(target.value, 1), target.value > 0) FROM target
+  `);
 }

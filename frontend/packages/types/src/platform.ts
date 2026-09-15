@@ -76,6 +76,11 @@ export interface Invoice {
   paymentReference: string | null;
   notes: string | null;
   paidAt: string | null;
+  /**
+   * Set once the invoice was cancelled and its conversions returned to the payable
+   * pool. Distinct from REJECTED, which leaves them stamped to the failed invoice.
+   */
+  releasedAt: string | null;
   createdAt: string;
 }
 
@@ -86,6 +91,44 @@ export interface PendingBalance {
   eligibleAmount: number;
   eligibleConversions: number;
   meetsThreshold: boolean;
+}
+
+/**
+ * A row in the money ledger.
+ *
+ * Invoice lifecycle events are written by the server alongside the invoice they
+ * describe; MANUAL_ADJUSTMENT is the only one an admin writes directly, and the only
+ * one whose `amount` can be negative.
+ */
+export type TransactionType =
+  | 'INVOICE_GENERATED'
+  | 'PAYOUT_SENT'
+  | 'PAYOUT_REJECTED'
+  | 'INVOICE_RELEASED'
+  | 'MANUAL_ADJUSTMENT';
+
+export interface Transaction {
+  id: string;
+  affiliateId: string;
+  affiliateName: string | null;
+  invoiceId: string | null;
+  /** Kept on the row rather than joined — a ledger entry is a historical record. */
+  invoiceNumber: string | null;
+  type: TransactionType;
+  amount: number;
+  currency: string;
+  reference: string | null;
+  description: string | null;
+  createdAt: string;
+}
+
+// Totals per event type over the whole filtered set. Per type because the types
+// measure different things — summing across them would count an invoice twice, once
+// when it was raised and again when it was paid.
+export interface TransactionSummary {
+  type: TransactionType;
+  amount: number;
+  count: number;
 }
 
 export type SubscriptionPlan = 'STARTER' | 'GROWTH' | 'ENTERPRISE';

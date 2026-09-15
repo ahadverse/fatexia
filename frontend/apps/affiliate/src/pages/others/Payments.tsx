@@ -12,8 +12,8 @@ import {
   type DataTableColumn,
 } from '@fatexia/ui';
 import { describePayout, readCryptoDetails } from '@fatexia/types';
-import type { Affiliate, AffiliatePoint, Invoice } from '@fatexia/types';
-import { getOwnBalance, getOwnInvoices, getOwnPoints, getOwnProfile } from '../../lib/portal-api';
+import type { Affiliate, AffiliatePoint, Invoice, Transaction, TransactionType } from '@fatexia/types';
+import { getOwnBalance, getOwnInvoices, getOwnPoints, getOwnProfile, getOwnTransactions } from '../../lib/portal-api';
 import { useAsync } from '../../hooks/useAsync';
 import { date, dateTime, money, number } from '../../lib/format';
 import { StatusPill } from '../../components/StatusPill';
@@ -24,6 +24,24 @@ const METHOD_LABEL: Record<Invoice['paymentMethod'], string> = {
   BANK_TRANSFER: 'Bank transfer',
   PAYPAL: 'PayPal',
   CRYPTO: 'Crypto',
+};
+
+// Worded from the affiliate's side: they care that an invoice was raised for them and
+// that money was sent, not about the network's internal name for the event.
+const EVENT_LABEL: Record<TransactionType, string> = {
+  INVOICE_GENERATED: 'Invoice raised',
+  PAYOUT_SENT: 'Payment sent',
+  PAYOUT_REJECTED: 'Payment failed',
+  INVOICE_RELEASED: 'Invoice cancelled — earnings returned',
+  MANUAL_ADJUSTMENT: 'Adjustment',
+};
+
+const EVENT_STATUS: Record<TransactionType, string> = {
+  INVOICE_GENERATED: 'PENDING',
+  PAYOUT_SENT: 'PAID',
+  PAYOUT_REJECTED: 'REJECTED',
+  INVOICE_RELEASED: 'DUPLICATE',
+  MANUAL_ADJUSTMENT: 'INFO',
 };
 
 /**
@@ -37,11 +55,13 @@ export function Payments() {
   const [tab, setTab] = useState('invoices');
   const [invoicePage, setInvoicePage] = useState(1);
   const [pointsPage, setPointsPage] = useState(1);
+  const [ledgerPage, setLedgerPage] = useState(1);
 
   const balance = useAsync(() => getOwnBalance(), []);
   const profile = useAsync<Affiliate>(() => getOwnProfile(), []);
   const invoices = useAsync(() => getOwnInvoices({ page: invoicePage, pageSize: PAGE_SIZE }), [invoicePage]);
   const points = useAsync(() => getOwnPoints({ page: pointsPage, pageSize: PAGE_SIZE }), [pointsPage]);
+  const ledger = useAsync(() => getOwnTransactions({ page: ledgerPage, pageSize: PAGE_SIZE }), [ledgerPage]);
 
   const paidTotal = (invoices.data?.rows ?? [])
     .filter((invoice) => invoice.status === 'PAID')
@@ -59,6 +79,31 @@ export function Payments() {
       key: 'reference',
       header: 'Reference',
       render: (row) => <span className="text-xs text-muted-foreground">{row.paymentReference ?? '—'}</span>,
+    },
+  ];
+
+  const ledgerColumns: DataTableColumn<Transaction>[] = [
+    { key: 'createdAt', header: 'When', render: (row) => dateTime(row.createdAt) },
+    { key: 'type', header: 'Event', render: (row) => <StatusPill status={EVENT_STATUS[row.type]} label={EVENT_LABEL[row.type]} /> },
+    {
+      key: 'invoice',
+      header: 'Invoice',
+      render: (row) => <span className="text-xs text-muted-foreground">{row.invoiceNumber ?? '—'}</span>,
+    },
+    {
+      key: 'amount',
+      header: 'Amount',
+      render: (row) => (
+        <span className={row.amount < 0 ? 'text-destructive' : undefined}>
+          {row.amount > 0 && row.type === 'MANUAL_ADJUSTMENT' ? '+' : ''}
+          {money(row.amount, row.currency)}
+        </span>
+      ),
+    },
+    {
+      key: 'description',
+      header: 'Detail',
+      render: (row) => <span className="text-xs text-muted-foreground">{row.description ?? '—'}</span>,
     },
   ];
 
@@ -141,13 +186,14 @@ export function Payments() {
       <Tabs
         items={[
           { key: 'invoices', label: 'Payout history' },
+          { key: 'transactions', label: 'Transactions' },
           { key: 'points', label: 'Points' },
         ]}
         active={tab}
         onChange={setTab}
       />
 
-      {tab === 'invoices' ? (
+      {tab === 'invoices' && (
         invoices.loading ? (
           <TableSkeleton columns={8} />
         ) : (invoices.data?.rows ?? []).length === 0 ? (
@@ -161,7 +207,34 @@ export function Payments() {
             <Pagination page={invoicePage} pageSize={PAGE_SIZE} total={invoices.data?.total ?? 0} onPageChange={setInvoicePage} />
           </>
         )
-      ) : (
+      )}
+
+      {/* The same ledger the network side sees, narrowed to this affiliate — including
+          the events an invoice row alone does not show, such as a cancelled invoice
+          whose earnings went back into the balance, or a bonus the network recorded. */}
+      {tab === 'transactions' && (
+        <>
+          <p className="text-xs text-muted-foreground">
+            Every money event on your account, newest first — invoices raised for you, payments sent, and any adjustment your
+            manager recorded.
+          </p>
+          {ledger.loading ? (
+            <TableSkeleton columns={5} />
+          ) : (
+            <>
+              <DataTable
+                columns={ledgerColumns}
+                rows={ledger.data?.rows ?? []}
+                getRowKey={(row) => row.id}
+                emptyMessage="Nothing here yet — your first invoice will appear as soon as one is raised."
+              />
+              <Pagination page={ledgerPage} pageSize={PAGE_SIZE} total={ledger.data?.total ?? 0} onPageChange={setLedgerPage} />
+            </>
+          )}
+        </>
+      )}
+
+      {tab === 'points' && (
         <>
           <p className="text-xs text-muted-foreground">
             Points are a loyalty score, not a currency — they are informational only and cannot be redeemed for cash.

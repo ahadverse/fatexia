@@ -14,6 +14,7 @@ import { clickLogRoutes } from './modules/clicks/click-log.routes';
 import { conversionRoutes } from './modules/conversions/conversion.routes';
 import { postbackLogRoutes } from './modules/postback-logs/postback-log.routes';
 import { invoiceRoutes } from './modules/invoices/invoice.routes';
+import { transactionRoutes } from './modules/transactions/transaction.routes';
 import { subscriptionRoutes } from './modules/subscriptions/subscription.routes';
 import { messageRoutes } from './modules/messages/message.routes';
 import { notificationRoutes } from './modules/notifications/notification.routes';
@@ -51,6 +52,8 @@ export function mountMainRoutes(app: Express): void {
   app.use('/postback-logs', postbackLogRoutes);
 
   app.use('/invoices', invoiceRoutes);
+  // The money ledger behind the invoices — every payout event, plus manual adjustments.
+  app.use('/transactions', transactionRoutes);
   app.use('/subscriptions', subscriptionRoutes);
 
   app.use('/messages', messageRoutes);
