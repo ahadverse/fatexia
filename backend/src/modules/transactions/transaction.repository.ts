@@ -65,4 +65,12 @@ export const transactionRepository = {
     const target = repo(manager);
     return target.save(target.create(data));
   },
+
+  findById(id: string, manager?: EntityManager): Promise<Transaction | null> {
+    return repo(manager).findOne({ where: { id } });
+  },
+
+  async delete(id: string, manager?: EntityManager): Promise<void> {
+    await repo(manager).delete({ id });
+  },
 };
