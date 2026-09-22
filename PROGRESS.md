@@ -181,6 +181,37 @@ Local DB **361MB → 53MB**; the chunk table is 39MB for 37.2MB live. Verified w
 
 Verified live with the extended `verify-click-capture.js` (29 assertions, all green) against a running Tracker and API: a real click from `24.60.1.25` wrote `Somerville, MA, US`, postal `02145`, `42.3912, -71.0882`, `± 50 km`, `America/New_York`, metro `506`, geoname `4951257`, `AS7922 Comcast Cable Communications, LLC`. The private-IP path is asserted to degrade to null across every new field rather than half-filling a row.
 
+### Full proxy-provider response captured on every click (2026-09-22)
+
+The same narrowing as the GeoLite2 one above, one layer down, and this time the discarded data was **metered**. A metered IPHub lookup answers with seven fields — `block`, `isp`, `hostname`, `asn`, `countryCode`, `countryName`, `ip` — and `proxy-detection.ts` kept `block === 1` as a boolean and dropped the rest. Each of those calls spends one slot from a 1000/day free tier, so the six fields were not merely available, they were already paid for.
+
+`probeProvider`/`checkResidentialProxy` now return a `ProxyVerdict` instead of `boolean | null`, and `ClickProxyProviderDetail1789000000000` adds six nullable columns — `proxyProvider`, `proxyBlock`, `proxyHostname`, `proxyIsp`, `proxyAsnNumber`, `proxyCountryCode` — indexed on `proxyBlock` and `proxyHostname` (the two a fraud review filters a large table by; rDNS is how one abusive host is found across many addresses).
+
+- **`proxyBlock` closes a real gap rather than adding reach.** IPHub's `block` has three states and the verdict was `block === 1`, so 2 — "non-residential", its hedge — was stored identically to 0 and read as confidently clean. The distinction existed in the provider's answer and nowhere in the database. It is now stored and distinguishable; see the open decision below.
+- **Stored as the provider's own reading, never merged into the MaxMind columns beside it.** `proxyAsnNumber`/`asnNumber` are two independent sources for one address and the whole point of holding both is that they can disagree. Nothing here feeds `riskScore`: a disagreement is far more often a stale local `.mmdb` than a click worth punishing, so it belongs on an operational "GeoIP looks old" check, not on a payout decision. The admin drawer therefore shows the two mismatch rows only when they *do* disagree, labelled as a disagreement rather than as a flag.
+- **Every field but the verdict is parsed defensively.** A provider renaming or dropping one costs that single column, never the classification the click path is waiting on. An ASN arriving as `"AS7922"` is read; an empty-string hostname is stored as null rather than as `''`.
+- **The Redis cache now holds the whole verdict**, under a bumped `proxy-detect:cache:v2:` prefix so the old `'1'`/`'0'` entries retire on their own TTL. Without this, the first click from an address recorded a hostname and every click after it recorded null.
+- **A shape check guards the cache read, which is not the same as a `try`/`catch`.** `JSON.parse('1')` does not throw — it returns the number `1` — so a bare `as ProxyVerdict` put a number on the click path where `flagged` reads `undefined` and all six columns write empty, for the full 24h TTL, with nothing logged. `isProxyVerdict` rejects it and falls through to a live lookup, which also replaces the bad entry.
+- **The affiliate boundary held.** `OwnClickLogRow` is built field-by-field and has no home for any of the six; `audit-affiliate-visibility.js` gained all six as forbidden keys. `proxyHostname` is the one worth naming: it is the affiliate's own rDNS and reads as harmless, but returning it says which lookup ran and what it saw, and `proxyProvider` names the vendor to test against directly.
+
+Admin drawer shows the group only when a provider actually answered — six `—` rows would say only that the cascade was unconfigured or spent, which the existing "Proxy / VPN: Not checked" row already says. `block` renders as words (`Non-residential (2)`), with an unrecognised value rendered rather than hidden so a fourth IPHub state surfaces as a question instead of a blank.
+
+**Verified:** `tsc --noEmit` clean across backend, admin and affiliate; `vitest run` 154/154, including a new 17-test `provider response capture` block that asserts on the whole verdict rather than on `flagged`, since the regression being guarded against is one where `flagged` stays perfectly correct.
+
+**Not verified — read before deploying:** the migration has **never been run against any database**, and there is no live-click check equivalent to `verify-click-capture.js` for these columns. Both Render services run `npm run migrate` at boot, so committing the migration means the next deploy applies it to production.
+
+**Decided 2026-09-22 — `block: 2` scores nothing, for now.** It is stored and distinguishable from `0`, and a click carrying only a `block: 2` stays GOOD. This was a decision, not an oversight: the column had never been populated when the question came up, so nobody knew how much of the network's real traffic IPHub calls non-residential — and it hands that label out generously, to corporate NAT, mobile carrier gateways and much of CGNAT. Weighting it blind would have moved payout bands for legitimate affiliates on a guess.
+
+Revisit once the column has a few weeks of real rows behind it. The weight that matters is 30: with `suspect` at 30, anything ≥30 makes a `block: 2`-only click SUSPECT, and anything below it changes no band at all, because the only other signals weigh 70 (datacenter) and 50 (flagged proxy) and each already crosses a threshold alone. So the question is not "how many points" but "should a non-residential address, on its own, be suspect" — and the way to answer it is the share of `proxyBlock = 2` rows among clicks that went on to convert cleanly:
+
+```sql
+SELECT "proxyBlock", COUNT(*) AS clicks, COUNT(c.id) AS conversions
+FROM clicks k LEFT JOIN conversions c ON c."clickId" = k.id
+WHERE k."proxyBlock" IS NOT NULL GROUP BY 1 ORDER BY 1;
+```
+
+If `block: 2` converts at roughly the rate `block: 0` does, it is a hedge and should keep scoring nothing.
+
 Not started yet:
 - [ ] JS fingerprint client-side signal (Step 2 in PLAN-tracker.md) — doesn't fit the current pure-redirect flow (no interstitial page); would need a landing page to run in
 - [ ] CTIT scoring (applies at conversion time — waits on the `conversions` module)

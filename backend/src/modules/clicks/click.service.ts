@@ -11,7 +11,7 @@ import { SmartLinkStatus, type SmartLink } from '../smart-links/smart-link.entit
 import { buildCandidates, linkAcceptsVisitor, pickCandidate } from '../smart-links/smart-link-resolution';
 import { geoSource } from '../geo-source/geo-source';
 import { isLikelyDatacenter } from '../fraud/datacenter-filter';
-import { checkResidentialProxy } from '../fraud/proxy-detection';
+import { checkResidentialProxy, type ProxyVerdict } from '../fraud/proxy-detection';
 import { getTrackerSettings } from '../network-settings/tracker-settings';
 import { findMatchingRuleForClick, computeAmounts } from '../offers/payout-resolution';
 import { clickRepository } from './click.repository';
@@ -59,19 +59,25 @@ export interface ClickResult {
 // editable and inert.
 function scoreClick(
   isDatacenter: boolean,
-  isProxyOrVpn: boolean | null,
+  verdict: ProxyVerdict | null,
   thresholds: { suspectThreshold: number; blockThreshold: number },
 ): { riskScore: number; qualityStatus: ClickQualityStatus } {
   let riskScore = 0;
   if (isDatacenter) riskScore += 70;
-  if (isProxyOrVpn === true) riskScore += 50;
+  if (verdict?.flagged === true) riskScore += 50;
+
+  // Nothing is added for the provider's ISP/ASN/country disagreeing with MaxMind's,
+  // although both readings are now stored. A disagreement is usually the local .mmdb
+  // being months old rather than the visitor hiding anything, and a risk weight would
+  // charge the affiliate for our refresh schedule. It belongs on a "GeoIP looks stale"
+  // operational check, not on the click.
 
   let qualityStatus: ClickQualityStatus;
   if (riskScore >= thresholds.blockThreshold) {
     qualityStatus = ClickQualityStatus.BLOCKED;
   } else if (riskScore >= thresholds.suspectThreshold) {
     qualityStatus = ClickQualityStatus.SUSPECT;
-  } else if (isProxyOrVpn === null) {
+  } else if (verdict === null) {
     // Datacenter check ran and said no, but the proxy-detection layer never resolved
     // (unconfigured/exhausted/failed) — genuinely unscored, not confidently clean.
     qualityStatus = ClickQualityStatus.UNSCORED;
@@ -132,8 +138,9 @@ export const clickService = {
     const geo = await geoSource.lookup(req.ip);
     const { asn, countryCode } = geo;
     const isDatacenter = isLikelyDatacenter(asn);
-    const isProxyOrVpn = await checkResidentialProxy(req.ip);
-    const { riskScore, qualityStatus } = scoreClick(isDatacenter, isProxyOrVpn, settings);
+    const proxyVerdict = await checkResidentialProxy(req.ip);
+    const isProxyOrVpn = proxyVerdict === null ? null : proxyVerdict.flagged;
+    const { riskScore, qualityStatus } = scoreClick(isDatacenter, proxyVerdict, settings);
 
     const ua = req.userAgent ? UAParser(req.userAgent) : null;
     // ua-parser-js only sets device.type for mobile/tablet/console/smarttv/wearable/
@@ -232,6 +239,14 @@ export const clickService = {
         asn,
         isDatacenter,
         isProxyOrVpn,
+        // The rest of the same provider answer. Kept separate from the MaxMind columns
+        // above on purpose — these are a second opinion, not a better one.
+        proxyProvider: proxyVerdict?.provider ?? null,
+        proxyBlock: proxyVerdict?.block ?? null,
+        proxyHostname: proxyVerdict?.hostname ?? null,
+        proxyIsp: proxyVerdict?.isp ?? null,
+        proxyAsnNumber: proxyVerdict?.asnNumber ?? null,
+        proxyCountryCode: proxyVerdict?.countryCode ?? null,
         isUnique,
         subId1: req.subId1,
         subId2: req.subId2,

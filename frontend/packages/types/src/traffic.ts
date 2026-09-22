@@ -66,6 +66,33 @@ export interface ClickLog extends ClickGeo {
   isDatacenter: boolean;
   // null = the proxy check never resolved, which is not the same as a confirmed false.
   isProxyOrVpn: boolean | null;
+  /**
+   * The rest of what the proxy-detection provider answered, beside its verdict.
+   *
+   * Admin-only — the affiliate portal's `OwnClickLog` deliberately omits all six, for the
+   * same reason it omits `asn` and `riskScore`: naming the signal that caught bad traffic
+   * teaches the sender how to dodge it.
+   *
+   * Read these as the *provider's* answer, never as a correction to the MaxMind fields
+   * above. `proxyAsnNumber` and `asnNumber` are two independent readings of one address,
+   * and a disagreement between them is far more often a stale local .mmdb than fraud —
+   * which is why none of this is scored.
+   */
+  /** Which vendor in the cascade answered; the fallbacks return thinner data. */
+  proxyProvider: string | null;
+  /**
+   * IPHub's raw three-state `block`: 0 residential, 1 confirmed proxy/hosting,
+   * 2 non-residential. null when IPHub was not the provider that answered.
+   *
+   * `isProxyOrVpn` is `block === 1` alone, so 2 lives only here — it is IPHub hedging
+   * ("not a home connection") rather than accusing, and it used to read as a clean 0.
+   */
+  proxyBlock: number | null;
+  /** rDNS — the one field here that is a fact rather than an inference. */
+  proxyHostname: string | null;
+  proxyIsp: string | null;
+  proxyAsnNumber: number | null;
+  proxyCountryCode: string | null;
   riskScore: number;
   /** First click for this offer from this IP within 24h — decided at write time so
    *  this and the aggregate `uniqueClicks` metric share one definition. */

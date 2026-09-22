@@ -125,7 +125,9 @@ an admin typed into the Integrations page or revert their edited email copy.
 
 ### Two constraints worth knowing now
 
-**Never put the tracker on the free plan.** Free services sleep after ~15 minutes idle and take up to a minute to wake. A click redirect that stalls that long is a lost conversion, and at volume a lost advertiser.
+**Never put the tracker on the free plan.** Free services sleep after ~15 minutes idle and take up to a minute to wake. A click redirect that stalls that long is a lost conversion, and at volume a lost advertiser. It also wakes into a fresh ephemeral filesystem, so every sleep cycle wipes the `.mmdb` files and quietly turns the datacenter fraud filter off until someone re-triggers the fetch. `fatexia-tracker` is on `starter` for this reason; `fatexia-api` is still free, so the first admin request after a quiet spell is slow — annoying on a panel, not costly like a redirect.
+
+**Do not try to keep a free service awake by pinging it.** The usual UptimeRobot/cron trick backfires here: Render's free instance-hours are a monthly budget shared across the whole account (~750 hours — confirm on the billing page), and holding one service up 24/7 burns roughly all of it, which then suspends the *other* free service too. Pinging also does nothing about the filesystem wipe. The plan is the fix.
 
 **Realtime is single-instance today.** Socket.IO rooms live in the process memory of one instance. Scaling `fatexia-api` past one instance means two admins can land on different instances and miss each other's message events. The fix is the Redis adapter — Redis is already provisioned:
 

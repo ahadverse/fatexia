@@ -155,6 +155,20 @@ export interface ClickLogDto extends ClickGeoDto {
   isSatelliteProvider: boolean | null;
   isDatacenter: boolean;
   isProxyOrVpn: boolean | null;
+  /**
+   * The rest of the proxy-detection provider's answer, beside its verdict.
+   *
+   * Network-side only, like the group above. `proxyAsnNumber`/`proxyCountryCode` are a
+   * second, independent reading of what `asnNumber`/`countryCode` already say, and
+   * showing an affiliate which of the two caught them is how they learn to dodge it.
+   */
+  proxyProvider: string | null;
+  /** IPHub's raw three-state `block`: 0 residential, 1 confirmed proxy/hosting, 2 non-residential. */
+  proxyBlock: number | null;
+  proxyHostname: string | null;
+  proxyIsp: string | null;
+  proxyAsnNumber: number | null;
+  proxyCountryCode: string | null;
   isUnique: boolean;
   riskScore: number;
   qualityStatus: ClickQualityStatus;

@@ -125,18 +125,21 @@ services:
   # ---------------------------------------------------------------------------
   # Tracker — the public /click redirect path.
   #
-  # >>> MUST BE MOVED TO `starter` BEFORE ANY REAL CLICK TRAFFIC. <<<
+  # `starter`, and it must never go back to `free`. Free services sleep after ~15
+  # minutes of inactivity and take up to a minute to wake; a click redirect that stalls
+  # that long is a lost conversion and, at volume, a lost advertiser relationship. Free
+  # was tolerable only while nothing could convert yet — /sl and /postback now exist and
+  # affiliates are sending traffic, so the condition that made it acceptable is gone.
   #
-  # Free services sleep after ~15 minutes of inactivity and take up to a minute to
-  # wake. A click redirect that stalls that long is a lost conversion and, at volume,
-  # a lost advertiser relationship. Free is only tolerable right now because nothing
-  # can convert yet — /sl and /postback are not built, so no affiliate is sending
-  # traffic. The day that changes, this line has to change with it.
+  # Sleeping was never only a latency problem. Waking rebuilds the container against a
+  # fresh ephemeral filesystem, so every sleep cycle also wiped GEOIP_DB_DIR — geo and
+  # ASN lookups degraded to unknown, silently disabling the datacenter fraud filter,
+  # until an admin happened to re-trigger the fetch. See the GEOIP_DB_DIR note below.
   # ---------------------------------------------------------------------------
   - type: web
     name: fatexia-tracker
     runtime: node
-    plan: free
+    plan: starter
     rootDir: backend
     # `--include=dev` is required, not optional. NODE_ENV=production is set below and
     # Render exposes env vars during the build, so a plain `npm ci` would omit
@@ -217,10 +220,15 @@ services:
       # to re-download on every single deploy/restart against Render's ephemeral
       # filesystem and eventually hit MaxMind's rate limit. Instead an admin triggers
       # POST /geoip/fetch from the Admin panel on demand, which lands here at
-      # /internal/geoip/fetch. Without a persistent Disk mounted at this path (not yet
-      # attached — requires a paid plan), a restart still wipes the files and geo/ASN
-      # degrade to unknown until the next manual trigger — same graceful degradation
-      # as a missing file always had.
+      # /internal/geoip/fetch. Without a persistent Disk mounted at this path, a restart
+      # still wipes the files and geo/ASN degrade to unknown until the next manual
+      # trigger — same graceful degradation as a missing file always had.
+      #
+      # A Disk is now possible on `starter` but is still not attached, deliberately: a
+      # Render service with a Disk is pinned to a single instance and loses zero-downtime
+      # deploys. On `starter` restarts are deploys rather than idle-sleep wakeups, so the
+      # wipe went from "several times a day" to "when you deploy" — attach a Disk when
+      # that stops being acceptable, not before.
       - key: GEOIP_DB_DIR
         value: data/geoip
       - key: MAXMIND_LICENSE_KEY

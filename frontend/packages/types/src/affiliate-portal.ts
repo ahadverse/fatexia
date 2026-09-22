@@ -105,9 +105,14 @@ export interface OwnConversion {
  * traffic and they need it to debug a source, so it carries the whole `ClickGeo` shape
  * down to the postcode and coordinates. What stays out is the network's fraud
  * *reasoning*: `asn`, `registeredCountryCode`, `isDatacenter`, `isProxyOrVpn`, the
- * MaxMind proxy traits, `riskScore` and `referer`. There is no field here for any of
- * them, so a future edit to the admin row cannot leak one. The quality band is kept —
- * an affiliate must know traffic was rejected, just not precisely which signal caught it.
+ * MaxMind proxy traits, the whole `proxy*` group carrying the detection provider's own
+ * answer, `riskScore` and `referer`. There is no field here for any of them, so a future
+ * edit to the admin row cannot leak one. The quality band is kept — an affiliate must
+ * know traffic was rejected, just not precisely which signal caught it.
+ *
+ * The `proxy*` group is the one worth being explicit about: `proxyHostname` is the
+ * affiliate's own rDNS and reads as harmless, but handing it back says which lookup ran
+ * and what it saw — and `proxyProvider` names the vendor to test against directly.
  */
 export interface OwnClickLog extends ClickGeo {
   id: string;

@@ -67,6 +67,25 @@ function flag(value: boolean | null): string {
   return value ? 'Yes' : 'No';
 }
 
+/**
+ * IPHub's `block`, as words.
+ *
+ * The raw number is the right thing to store and the wrong thing to show: 2 is the state
+ * this whole group exists for — "not a home connection", a hedge rather than an
+ * accusation — and next to 0 it is just another single digit. The number is kept in the
+ * label because it is what IPHub's own documentation and support threads use.
+ *
+ * An unrecognised value is rendered rather than hidden: the parser stores whatever
+ * arrived, so a fourth state introduced by IPHub should show up here as a question, not
+ * disappear into a blank row.
+ */
+function proxyBlockLabel(value: number): string {
+  if (value === 0) return 'Residential (0)';
+  if (value === 1) return 'Proxy or hosting (1)';
+  if (value === 2) return 'Non-residential (2)';
+  return `Unrecognised (${value})`;
+}
+
 function UniqueBadge({ unique }: { unique: boolean }) {
   return (
     <span
@@ -334,6 +353,41 @@ function ClickDetailDrawer({ click, onClose }: { click: ClickLog | null; onClose
           <DrawerRow label="Risk score">{number(click.riskScore)}</DrawerRow>
           <DrawerRow label="Datacenter IP">{flag(click.isDatacenter)}</DrawerRow>
           <DrawerRow label="Proxy / VPN">{flag(click.isProxyOrVpn)}</DrawerRow>
+          {/* The rest of what the provider answered. The whole group is hidden when none
+              of them did: six empty rows would say only that the cascade was unconfigured
+              or spent, which the "Not checked" above already says more clearly. */}
+          {click.proxyProvider && (
+            <>
+              <DrawerRow label="Checked by">{click.proxyProvider}</DrawerRow>
+              {click.proxyBlock !== null && (
+                <DrawerRow label="IPHub block">{proxyBlockLabel(click.proxyBlock)}</DrawerRow>
+              )}
+              {click.proxyHostname && (
+                <DrawerRow label="Reverse DNS" mono>
+                  {click.proxyHostname}
+                </DrawerRow>
+              )}
+              {click.proxyIsp && <DrawerRow label="ISP (provider)">{click.proxyIsp}</DrawerRow>}
+              {/* ASN and country from the provider appear only where they contradict
+                  MaxMind's, exactly as "Registered in" below does — agreement is the
+                  ordinary case and would just repeat the rows around it.
+                  A contradiction is far more often a local .mmdb that has gone stale than
+                  anything the click did, which is why neither of these is scored. Read
+                  them as "the GeoIP database may need refreshing", not as fraud. */}
+              {click.proxyAsnNumber !== null && click.proxyAsnNumber !== click.asnNumber && (
+                <DrawerRow label="ASN disagreement">
+                  {`AS${click.proxyAsnNumber} per provider · ${
+                    click.asnNumber !== null ? `AS${click.asnNumber}` : 'unknown'
+                  } per MaxMind`}
+                </DrawerRow>
+              )}
+              {click.proxyCountryCode && click.proxyCountryCode !== click.countryCode && (
+                <DrawerRow label="Country disagreement">
+                  {`${click.proxyCountryCode} per provider · ${click.countryCode ?? 'unknown'} per MaxMind`}
+                </DrawerRow>
+              )}
+            </>
+          )}
           <DrawerRow label="ASN">{click.asnNumber !== null ? `AS${click.asnNumber}` : '—'}</DrawerRow>
           <DrawerRow label="ASN operator">{click.asnOrganization ?? '—'}</DrawerRow>
           {/* The country the block is registered in, shown only when it disagrees with

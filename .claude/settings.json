@@ -109,7 +109,10 @@
       "Bash(npx --yes prettier --single-quote --print-width 110 --trailing-comma all --write \"frontend/apps/affiliate/src/components/ManagerCard.tsx\")",
       "Bash(git show *)",
       "Bash(echo \"ADMIN_BUILD_EXIT=$?\")",
-      "Bash(echo \"PUBLIC_EXIT=$?\")"
+      "Bash(echo \"PUBLIC_EXIT=$?\")",
+      "PowerShell(git -C \"E:\\\\Ahad Hossain\\\\Arif vai\\\\Fatexia\" status --porcelain)",
+      "PowerShell(git -C \"E:\\\\Ahad Hossain\\\\Arif vai\\\\Fatexia\" diff --stat -- render.yaml DEPLOYMENT.md)",
+      "Bash(echo \"=== tsc exit: $? ===\")"
     ]
   }
 }

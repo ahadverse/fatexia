@@ -43,6 +43,9 @@ let exhausted: Set<string>;
 /** Keys whose request should fail outright, as a dead provider would. */
 let broken: Set<string>;
 
+/** The IPHub body the stub answers with; individual tests reshape it. */
+let iphubBody: Record<string, unknown>;
+
 function keyFrom(init: RequestInit | undefined): string {
   return String((init?.headers as Record<string, string> | undefined)?.['X-Key'] ?? '');
 }
@@ -52,6 +55,15 @@ beforeEach(() => {
   callsByKey = {};
   exhausted = new Set();
   broken = new Set();
+  iphubBody = {
+    ip: IP,
+    countryCode: 'US',
+    countryName: 'United States',
+    asn: 7922,
+    isp: 'Comcast Cable Communications, LLC',
+    hostname: 'c-24-60-1-25.hsd1.ma.comcast.net',
+    block: 1,
+  };
 
   // Quota available by default. Counted per credential id, so returning 1 every time
   // means "first call of the window for this key".
@@ -64,8 +76,9 @@ beforeEach(() => {
     if (broken.has(key)) throw new Error('network down');
     // IPHub answers 429 once the key's daily quota is spent.
     if (exhausted.has(key)) return { ok: false, status: 429 } as Response;
-    // block: 1 is IPHub's "confirmed proxy".
-    return { ok: true, json: async () => ({ block: 1 }) } as unknown as Response;
+    // A whole IPHub record, not just the verdict — the body shape is what the parsing
+    // tests below are about. block: 1 is its "confirmed proxy".
+    return { ok: true, json: async () => ({ ...iphubBody }) } as unknown as Response;
   });
 });
 
@@ -79,7 +92,7 @@ describe('credential cascade', () => {
   it('uses the first key and leaves the spares untouched', async () => {
     iphubKeys('key-a', 'key-b', 'key-c');
 
-    await expect(checkResidentialProxy(IP)).resolves.toBe(true);
+    await expect(checkResidentialProxy(IP)).resolves.toMatchObject({ flagged: true });
 
     expect(callsByKey['key-a']).toBe(1);
     expect(callsByKey['key-b']).toBeUndefined();
@@ -90,7 +103,7 @@ describe('credential cascade', () => {
     iphubKeys('key-a', 'key-b');
     exhausted.add('key-a');
 
-    await expect(checkResidentialProxy(IP)).resolves.toBe(true);
+    await expect(checkResidentialProxy(IP)).resolves.toMatchObject({ flagged: true });
 
     expect(callsByKey['key-a']).toBe(1);
     expect(callsByKey['key-b']).toBe(1);
@@ -100,7 +113,7 @@ describe('credential cascade', () => {
     iphubKeys('key-a', 'key-b');
     broken.add('key-a');
 
-    await expect(checkResidentialProxy(IP)).resolves.toBe(true);
+    await expect(checkResidentialProxy(IP)).resolves.toMatchObject({ flagged: true });
     expect(callsByKey['key-b']).toBe(1);
   });
 
@@ -109,7 +122,7 @@ describe('credential cascade', () => {
     // The first key's counter is past the daily limit; the second key's is not.
     redisIncr.mockImplementation(async (redisKey: string) => (redisKey.endsWith('iphub-0') ? 5000 : 1));
 
-    await expect(checkResidentialProxy(IP)).resolves.toBe(true);
+    await expect(checkResidentialProxy(IP)).resolves.toMatchObject({ flagged: true });
 
     // Never called: local quota is what protects the provider's rate limit, so an
     // exhausted key must not produce a request at all.
@@ -164,5 +177,134 @@ describe('credential cascade', () => {
     await expect(checkResidentialProxy('127.0.0.1')).resolves.toBeNull();
     expect(callsByKey['key-a']).toBeUndefined();
     expect(redisIncr).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * What the lookup keeps.
+ *
+ * The call is metered — a thousand a day per key — and for a long time six of IPHub's
+ * seven fields were parsed and dropped, so the tests here exist to stop that quietly
+ * happening again. They assert on the whole verdict rather than on `flagged`, because
+ * the failure being guarded against is one where `flagged` stays perfectly correct.
+ */
+describe('provider response capture', () => {
+  it('keeps every field IPHub answered with, not just the verdict', async () => {
+    iphubKeys('key-a');
+
+    await expect(checkResidentialProxy(IP)).resolves.toEqual({
+      provider: 'IPHUB',
+      flagged: true,
+      block: 1,
+      hostname: 'c-24-60-1-25.hsd1.ma.comcast.net',
+      isp: 'Comcast Cable Communications, LLC',
+      asnNumber: 7922,
+      countryCode: 'US',
+    });
+  });
+
+  it('records which provider in the cascade actually answered', async () => {
+    getCredentials.mockImplementation(async (provider: string) =>
+      provider === 'IPAPI_IS' ? [{ id: 'ipapi-0', apiKey: 'key-ipapi' }] : [],
+    );
+    vi.stubGlobal('fetch', async () => ({
+      ok: true,
+      json: async () => ({ is_datacenter: true, rdns: 'ec2-1-2-3-4.compute.amazonaws.com', asn: { asn: 16509, org: 'Amazon' } }),
+    }));
+
+    // Which vendor produced a verdict matters when reading a row back: the fallbacks
+    // answer with thinner data, so a null hostname means something different depending
+    // on who was asked.
+    await expect(checkResidentialProxy(IP)).resolves.toMatchObject({
+      provider: 'IPAPI_IS',
+      flagged: true,
+      block: null,
+      hostname: 'ec2-1-2-3-4.compute.amazonaws.com',
+      asnNumber: 16509,
+    });
+  });
+
+  describe("IPHub's three states", () => {
+    // The bug this replaces: `block === 1` was the only thing kept, so 2 and 0 were
+    // stored identically and a non-residential address read as confidently clean.
+    it('keeps block 2 distinguishable from block 0', async () => {
+      iphubKeys('key-a');
+      iphubBody.block = 2;
+
+      const nonResidential = await checkResidentialProxy(IP);
+      expect(nonResidential).toMatchObject({ block: 2, flagged: false });
+
+      redisGet.mockResolvedValue(null);
+      iphubBody.block = 0;
+      const residential = await checkResidentialProxy(IP);
+      expect(residential).toMatchObject({ block: 0, flagged: false });
+
+      // Same verdict, different answer — which is the entire point of storing `block`.
+      expect(nonResidential?.block).not.toBe(residential?.block);
+    });
+
+    it('still flags only block 1', async () => {
+      iphubKeys('key-a');
+      iphubBody.block = 0;
+
+      await expect(checkResidentialProxy(IP)).resolves.toMatchObject({ flagged: false, block: 0 });
+    });
+  });
+
+  describe('defensive parsing', () => {
+    it('costs one field, not the verdict, when the provider drops one', async () => {
+      iphubKeys('key-a');
+      delete iphubBody.hostname;
+      delete iphubBody.isp;
+
+      // The classification is what the click path is waiting on; a renamed field must
+      // never be able to take it down.
+      await expect(checkResidentialProxy(IP)).resolves.toMatchObject({
+        flagged: true,
+        hostname: null,
+        isp: null,
+        asnNumber: 7922,
+      });
+    });
+
+    it('reads an ASN that arrives as a string', async () => {
+      iphubKeys('key-a');
+      iphubBody.asn = 'AS7922';
+
+      await expect(checkResidentialProxy(IP)).resolves.toMatchObject({ asnNumber: 7922 });
+    });
+
+    it('treats an empty string as absent rather than storing one', async () => {
+      iphubKeys('key-a');
+      iphubBody.hostname = '   ';
+
+      await expect(checkResidentialProxy(IP)).resolves.toMatchObject({ hostname: null });
+    });
+  });
+
+  describe('cache', () => {
+    it('round-trips the whole verdict, so a cached click keeps the same columns', async () => {
+      iphubKeys('key-a');
+
+      const fresh = await checkResidentialProxy(IP);
+      const [, cached] = redisSet.mock.calls[0] as unknown as [string, string];
+
+      // The regression guarded against: when the cache held '1'/'0', the first click
+      // from an address recorded a hostname and every click after it recorded null.
+      redisGet.mockResolvedValue(cached);
+      await expect(checkResidentialProxy(IP)).resolves.toEqual(fresh);
+    });
+
+    it('does not answer from a pre-existing boolean entry', async () => {
+      iphubKeys('key-a');
+      // What the old cache held — and the reason this needs a test rather than a catch
+      // block: `JSON.parse('1')` does not throw, it returns the number 1. Nothing about
+      // reading it fails, so without a shape check it reaches the click path as a
+      // verdict whose every field is undefined.
+      redisGet.mockResolvedValue('1');
+
+      await expect(checkResidentialProxy(IP)).resolves.toMatchObject({ hostname: iphubBody.hostname });
+      expect(callsByKey['key-a']).toBe(1);
+    });
   });
 });

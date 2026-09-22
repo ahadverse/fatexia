@@ -180,6 +180,42 @@ export class Click {
   @Column({ type: 'boolean', nullable: true })
   isProxyOrVpn!: boolean | null;
 
+  // The rest of what the proxy-detection provider said, kept beside its verdict.
+  //
+  // These are the provider's own answer, deliberately NOT merged into the MaxMind
+  // columns above: `proxyAsnNumber` and `asnNumber` are two independent readings of the
+  // same address, and the point of storing both is that they can disagree. A
+  // disagreement is usually a stale local .mmdb rather than fraud, so nothing here is
+  // scored — it is stored so the question can be asked at all.
+
+  /** Which provider in the cascade answered; the later ones are fallbacks with thinner data. */
+  @Column({ type: 'varchar', nullable: true })
+  proxyProvider!: string | null;
+
+  /**
+   * IPHub's three-state `block`: 0 residential, 1 confirmed proxy/hosting, 2
+   * non-residential. null when IPHub was not the provider that answered.
+   *
+   * `isProxyOrVpn` is `block === 1` alone, so a 2 is stored here and nowhere else —
+   * without this column IPHub's "not a home connection" verdict is indistinguishable
+   * from its "this is a home connection" one.
+   */
+  @Column({ type: 'smallint', nullable: true })
+  proxyBlock!: number | null;
+
+  /** rDNS. The only field in this group that is a fact rather than an inference, and MaxMind has no equivalent. */
+  @Column({ type: 'varchar', nullable: true })
+  proxyHostname!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  proxyIsp!: string | null;
+
+  @Column({ type: 'integer', nullable: true })
+  proxyAsnNumber!: number | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  proxyCountryCode!: string | null;
+
   // Affiliate-supplied pass-through parameters carried on the tracking link. Kept on
   // the click (not just the conversion) so the Sub-ID report can show click volume
   // per sub-id, not only converted traffic.

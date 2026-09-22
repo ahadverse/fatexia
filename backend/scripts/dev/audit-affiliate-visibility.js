@@ -34,6 +34,17 @@ const FORBIDDEN_KEYS = [
   // MaxMind's own proxy/satellite traits, same reasoning.
   'isAnonymousProxy',
   'isSatelliteProvider',
+  // The proxy-detection provider's answer beside its verdict. Same rule as the ASN
+  // group: `proxyAsnNumber`/`proxyCountryCode` are a second, independent reading of what
+  // `asnNumber`/`countryCode` already say, and the gap between the two is precisely the
+  // signal — naming it to the traffic source is handing over the test. `proxyBlock` is
+  // IPHub's raw verdict and `proxyProvider` names which vendor we pay for it.
+  'proxyProvider',
+  'proxyBlock',
+  'proxyHostname',
+  'proxyIsp',
+  'proxyAsnNumber',
+  'proxyCountryCode',
 ];
 const ZEROED_KEYS = ['revenueAmount'];
 

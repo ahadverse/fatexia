@@ -174,7 +174,7 @@ export const integrationService = {
           config: { ...(integration.config ?? {}), lastTestAccount: account },
         });
       } else {
-        const isProxy = await probeProvider(integration.provider, integration.apiKey, PROBE_IP);
+        const verdict = await probeProvider(integration.provider, integration.apiKey, PROBE_IP);
         await integrationRepository.update(id, {
           status: IntegrationStatus.ACTIVE,
           lastCheckedAt: new Date(),
@@ -185,7 +185,12 @@ export const integrationService = {
             // not just a 200 — 8.8.8.8 is a datacenter IP, so `true` is the expected
             // answer and `false` hints the provider is answering but not scoring.
             lastTestIp: PROBE_IP,
-            lastTestFlagged: isProxy,
+            lastTestFlagged: verdict.flagged,
+            // The identifying fields from the same probe. A key that answers with
+            // Google's own ISP on 8.8.8.8 is answering about the address asked for,
+            // which a bare boolean cannot show.
+            lastTestIsp: verdict.isp,
+            lastTestHostname: verdict.hostname,
           },
         });
       }
