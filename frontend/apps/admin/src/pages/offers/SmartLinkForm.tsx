@@ -264,21 +264,14 @@ export function SmartLinkForm() {
         title="Revenue share"
         hint="Optional. When set, a conversion through this link pays the affiliate this percentage of the sale amount the advertiser reports, instead of the member offer's own payout. Needs at least one member offer — a link with no members carries no offer, so there is no sale to take a share of."
       >
-        {form.offerIds.length === 0 ? (
-          // Disabled rather than hidden: someone who came looking for this setting needs
-          // to be told why it is not available, or they will assume it is missing.
-          // A memberless link has no offer, so /postback rejects the hit before a payout
-          // rule is ever loaded — a percentage here could never be applied to anything.
-          <p className="text-xs text-muted-foreground">
-            Unavailable while this link has no member offers. Such a link is a plain redirect — it carries no offer, so it
-            cannot record a conversion or pay a share. Add a member offer to set a rate.
-          </p>
-        ) : (
-          <>
-        {/* No "method" select any more. It offered CPA or CPS, gated this input until
-            one was chosen, and was read by nothing — the rate applied to whatever the
-            link sent either way. A share of a sale is CPS by definition, so the choice
-            was never real. Leave the percentage blank for no share. */}
+        {/* Disabled when the link has no members, never hidden. A control that vanishes
+            reads as a missing feature — the operator scrolls to the section they came
+            for and finds a paragraph where the input should be. Greyed out with the
+            reason underneath says the same thing without making them wonder.
+
+            No "method" select any more either. It offered CPA or CPS, gated this input
+            until one was chosen, and was read by nothing — the rate applied to whatever
+            the link sent regardless. A share of a sale is CPS by definition. */}
         <Field
           label="Affiliate gets (%)"
           hint="Percent of the sale amount the advertiser reports. 80 means the affiliate keeps 80% and you keep 20%. Leave blank to use each member offer's own payout instead."
@@ -289,19 +282,24 @@ export function SmartLinkForm() {
             max={100}
             step="0.01"
             value={form.revSharePercent}
+            disabled={form.offerIds.length === 0}
             onChange={(event) => set('revSharePercent', event.target.value)}
             placeholder="80"
           />
         </Field>
-        {form.revSharePercent && (
+        {form.offerIds.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            Pick a member offer above to set a rate. A link with no members is a plain redirect — it carries no offer, so
+            it cannot record a conversion or pay a share.
+          </p>
+        )}
+        {form.offerIds.length > 0 && form.revSharePercent && (
           <p className="text-xs text-muted-foreground">
             On a sale the advertiser reports as 100.00, the affiliate would get{' '}
             {((Number(form.revSharePercent) / 100) * 100).toFixed(2)} and you would keep{' '}
             {(100 - (Number(form.revSharePercent) / 100) * 100).toFixed(2)}. The share replaces the member offer's own
             payout entirely, so a flat-rate offer pays this instead of its flat amount.
           </p>
-        )}
-          </>
         )}
       </Section>
 
