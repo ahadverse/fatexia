@@ -138,12 +138,14 @@ export function SmartLinkForm() {
       toast.error('Pick a member offer, or set a destination URL for the link to send traffic to');
       return;
     }
-    // Removing the last member offer clears the share along with it. The rate is a
-    // percentage of the sale a member offer earns, so without members it cannot be
-    // applied and the server refuses it — sending the stale value from before the
-    // members were removed would fail the save with an error about a field the form no
-    // longer shows.
-    const hasMembers = form.offerIds.length > 0;
+    // Said out loud rather than silently dropped. Sending null here would save cleanly
+    // and quietly discard a rate the operator had typed — the exact failure this whole
+    // section exists to avoid. The rate is a percentage of the sale a member offer
+    // earns, so without members there is nothing for it to apply to.
+    if (form.revSharePercent && form.offerIds.length === 0) {
+      toast.error('A revenue share needs at least one member offer — pick one, or clear the percentage');
+      return;
+    }
 
     const payload = {
       name: form.name,
@@ -157,7 +159,10 @@ export function SmartLinkForm() {
       destinationUrl: form.destinationUrl || null,
       // Null rather than undefined: clearing the share on an existing link has to
       // reach the server as "set this to nothing", and undefined means "unchanged".
-      revSharePercent: hasMembers && form.revSharePercent ? Number(form.revSharePercent) : null,
+      // Null rather than undefined when blank: clearing the share on an existing link
+      // has to reach the server as "set this to nothing", and undefined means
+      // "unchanged". The no-members case is refused above, not silently nulled here.
+      revSharePercent: form.revSharePercent ? Number(form.revSharePercent) : null,
     };
 
     setSaving(true);
@@ -282,15 +287,14 @@ export function SmartLinkForm() {
             max={100}
             step="0.01"
             value={form.revSharePercent}
-            disabled={form.offerIds.length === 0}
             onChange={(event) => set('revSharePercent', event.target.value)}
             placeholder="80"
           />
         </Field>
-        {form.offerIds.length === 0 && (
-          <p className="text-xs text-muted-foreground">
-            Pick a member offer above to set a rate. A link with no members is a plain redirect — it carries no offer, so
-            it cannot record a conversion or pay a share.
+        {form.offerIds.length === 0 && form.revSharePercent && (
+          <p className="text-xs text-warning">
+            This rate needs a member offer. A link with no members is a plain redirect — it carries no offer, so there is
+            no sale to take a share of, and the save will be refused until one is picked.
           </p>
         )}
         {form.offerIds.length > 0 && form.revSharePercent && (
