@@ -137,7 +137,7 @@ export function HeroVisual() {
           <div className="flex items-center gap-2 border-t border-border bg-background/40 px-4 py-3">
             <Wallet className="size-3.5 text-primary" />
             <span className="text-[11px] text-muted-foreground">
-              Payout <span className="font-semibold text-foreground">computed from the offer rule</span> — never trusted from the postback
+              Payout rate <span className="font-semibold text-foreground">from the offer rule</span> — never set by the postback
             </span>
           </div>
         </div>

@@ -4,6 +4,8 @@ import { NotFoundError, ValidationError } from '../../common/errors';
 import { Offer, OfferStatus } from '../offers/offer.entity';
 import { smartLinkRepository } from './smart-link.repository';
 import {
+  MISSING_DESTINATION_MESSAGE,
+  REV_SHARE_WITHOUT_MEMBERS_MESSAGE,
   toSmartLinkDto,
   type CreateSmartLinkDto,
   type SmartLinkDto,
@@ -56,7 +58,6 @@ export const smartLinkService = {
       status: dto.status,
       fallbackUrl: dto.fallbackUrl ?? null,
       destinationUrl: dto.destinationUrl ?? null,
-      revShareMode: dto.revShareMode ?? null,
       revSharePercent: dto.revSharePercent != null ? dto.revSharePercent.toFixed(2) : null,
     });
     return toSmartLinkDto(created);
@@ -73,6 +74,18 @@ export const smartLinkService = {
     if (dto.offerIds) {
       await assertOffersApproved(dto.offerIds);
     }
+    // Against the merged row, not the patch. Clearing the destination on a link that
+    // already has no members, or removing the last member from one that has no
+    // destination, each arrive here as a patch that looks harmless on its own.
+    const mergedOfferIds = dto.offerIds ?? link.offerIds ?? [];
+    const mergedDestination = dto.destinationUrl !== undefined ? dto.destinationUrl : link.destinationUrl;
+    if (mergedOfferIds.length === 0 && !mergedDestination) {
+      throw new ValidationError(MISSING_DESTINATION_MESSAGE);
+    }
+    const mergedRevSharePercent = dto.revSharePercent !== undefined ? dto.revSharePercent : link.revSharePercent;
+    if (mergedOfferIds.length === 0 && mergedRevSharePercent != null) {
+      throw new ValidationError(REV_SHARE_WITHOUT_MEMBERS_MESSAGE);
+    }
     await smartLinkRepository.update(id, {
       ...(dto.name !== undefined && { name: dto.name }),
       ...(dto.slug !== undefined && { slug: dto.slug }),
@@ -84,7 +97,6 @@ export const smartLinkService = {
       ...(dto.status !== undefined && { status: dto.status }),
       ...(dto.fallbackUrl !== undefined && { fallbackUrl: dto.fallbackUrl ?? null }),
       ...(dto.destinationUrl !== undefined && { destinationUrl: dto.destinationUrl ?? null }),
-      ...(dto.revShareMode !== undefined && { revShareMode: dto.revShareMode ?? null }),
       ...(dto.revSharePercent !== undefined && {
         revSharePercent: dto.revSharePercent != null ? dto.revSharePercent.toFixed(2) : null,
       }),

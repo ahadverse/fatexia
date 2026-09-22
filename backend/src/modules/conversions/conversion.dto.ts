@@ -40,11 +40,17 @@ export type UpdateConversionStatusDto = z.infer<typeof updateConversionStatusSch
 /**
  * An admin recording a conversion the advertiser never posted back.
  *
- * Deliberately only identifies the click: no amount, no status. Both are derived from
- * the offer's own payout rule exactly as the postback path derives them (money
- * integrity rule, PLAN-backend.md) — a hand-typed payout here would be the one number
- * in the system that cannot be re-derived from the rules, and it would be typed at
- * precisely the moment someone is already working around normal tracking.
+ * Carries the sale amount, and no status. The amount is required for the same reason it
+ * is required on `/postback`: it is the *base* the offer's rate is applied to, and a
+ * percentage rule or a smart-link revenue share priced without it falls back to the
+ * offer's one configured revenue figure — so a hand-added conversion would be priced
+ * differently from every posted-back sibling on the same offer, silently.
+ *
+ * The narrowed money-integrity rule (PLAN-backend.md) still holds: the admin supplies
+ * how large the sale was, never what the affiliate keeps. The rate stays the rule's, and
+ * `status` is still not accepted here — the offer's own hold and auto-approve settings
+ * decide it, because an admin adding a conversion is already working around normal
+ * tracking and should not also be choosing whether it is approved.
  */
 export const createConversionSchema = z.object({
   // The click's uuid or its short refId — whichever the caller has. The drawer sends
@@ -52,6 +58,15 @@ export const createConversionSchema = z.object({
   clickId: z.string().min(1).max(255),
   // The advertiser's own order/sale reference, when there is one to record.
   transactionId: z.string().max(255).optional(),
+  /**
+   * The sale's revenue — what the advertiser is paying for this conversion, in the
+   * offer's currency. Not the affiliate's payout.
+   *
+   * Positive, not merely non-negative: zero would be accepted by the pricing as "nothing
+   * reported" and quietly fall back to the rule, which is exactly the inconsistency this
+   * field exists to remove. Capped to what `numeric(12,2)` holds.
+   */
+  reportedRevenue: z.coerce.number().finite().positive().max(9_999_999_999.99),
 });
 
 export type CreateConversionDto = z.infer<typeof createConversionSchema>;
@@ -70,6 +85,16 @@ export interface ConversionDto {
   revenueAmount: number;
   payoutAmount: number;
   profitAmount: number;
+  /**
+   * What the advertiser reported on the postback, when they sent an amount at all.
+   *
+   * Null means nothing was reported, so this conversion was priced from the offer's
+   * configured revenue — not that a zero-value sale came in. Worth reading next to
+   * `revenueAmount`: when they differ, the report was not what priced the row.
+   *
+   * Admin-only, like `revenueAmount` and `profitAmount` around it.
+   */
+  reportedRevenue: number | null;
   currency: string;
   status: ConversionStatus;
   isDuplicate: boolean;
@@ -186,6 +211,9 @@ export function toConversionDto(
     revenueAmount,
     payoutAmount,
     profitAmount: Number((revenueAmount - payoutAmount).toFixed(2)),
+    // Null stays null rather than becoming 0 — "nothing reported" and "a sale reported
+    // as worth nothing" are different facts, and only one of them is worth a second look.
+    reportedRevenue: conversion.reportedRevenue != null ? Number(conversion.reportedRevenue) : null,
     currency: conversion.currency,
     status: conversion.status,
     isDuplicate: conversion.isDuplicate,

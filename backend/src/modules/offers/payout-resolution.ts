@@ -85,22 +85,51 @@ export async function findMatchingRuleForClick(rules: PayoutRule[], click: Match
   return rules.find((r) => ruleMatchesClick(r.targeting, click, affiliateGroupIds)) ?? null;
 }
 
-// Both amounts always come from the rule, never from the postback payload (money
-// integrity rule, PLAN-backend.md). PERCENTAGE payoutType applies the rule's own
-// percentage against the rule's own revenueAmount — no externally-reported sale value
-// is ever consulted, so there is nothing here an advertiser could inflate.
+/**
+ * What the conversion is worth, to the network and to the affiliate.
+ *
+ * The *rate* always comes from the rule — never from the postback. What an authenticated
+ * advertiser may now supply is the **base** it is applied to: the revenue they are
+ * actually paying for this particular sale. That is a deliberate narrowing of the old
+ * money-integrity rule (PLAN-backend.md), not an abandonment of it, and the distinction
+ * is the whole safeguard:
+ *
+ *  - A rule with a fixed payout stays fixed. Nothing an advertiser sends changes what
+ *    the affiliate is owed; the reported figure only makes the network's own margin
+ *    correct in reporting.
+ *  - A percentage — the rule's own, or a smart-link's revenue share — is still *our*
+ *    percentage. The advertiser can only say how large the sale was, never what slice
+ *    of it the affiliate keeps.
+ *
+ * Without this, `rule.revenueAmount` was a single configured number standing in for
+ * every sale on the offer, so a revenue share paid the same amount on a 5.00 order and
+ * a 500.00 one — which is what made the share unusable on any real CPS offer.
+ *
+ * The reported figure is authenticated (secret + source-IP allowlist on /postback) and
+ * stored alongside the computed amounts, so a conversion priced from a postback can
+ * always be told apart from one priced from the rule.
+ */
 export function computeAmounts(
   rule: PayoutRule,
   /**
    * A smart-link's revenue share, when the click came through one. Overrides the
    * rule's own payout with that percentage of the advertiser's revenue.
    *
-   * Revenue is untouched either way: the advertiser pays the offer what the offer
-   * says, and the share only decides how that amount is split with the affiliate.
+   * Revenue is untouched either way: the share only decides how the advertiser's amount
+   * is split with the affiliate.
    */
   revSharePercent?: number | null,
+  /**
+   * The sale value the advertiser reported on this conversion, when they sent one.
+   *
+   * Replaces the rule's configured revenue as the base for every percentage below.
+   * Ignored when absent or not positive: a zero or missing figure must fall back to the
+   * configured number rather than silently pricing the conversion at nothing.
+   */
+  reportedRevenue?: number | null,
 ): { revenueAmount: number; payoutAmount: number } {
-  const revenueAmount = Number(rule.revenueAmount);
+  const useReported = reportedRevenue != null && Number.isFinite(reportedRevenue) && reportedRevenue > 0;
+  const revenueAmount = useReported ? Number(reportedRevenue) : Number(rule.revenueAmount);
   const ruleAmount = Number(rule.amount);
 
   // A share of zero revenue is zero, which would silently pay nothing — so the

@@ -41,9 +41,9 @@ export const FEATURES: Feature[] = [
   },
   {
     icon: Wallet,
-    title: 'Payouts computed from the rule, every time',
+    title: 'Your rate is ours to honour, not theirs to set',
     description:
-      "What you're owed is always calculated from the offer's own payout rule — never taken on faith from an advertiser's postback. No surprises, no disputes over numbers nobody can reproduce.",
+      "What you're owed is always calculated from the offer's own payout rule. An advertiser reports how large a sale was; they never get to decide what share of it you keep. No surprises, no disputes over numbers nobody can reproduce.",
   },
   {
     icon: Link2,
@@ -212,7 +212,7 @@ export const FAQS: Faq[] = [
     category: 'Payments',
     question: 'How is my payout amount calculated?',
     answer:
-      "Always from the offer's own payout rule on our side — never taken on faith from the advertiser's postback payload. That means the number you see is a number you can reproduce.",
+      "The rate always comes from the offer's own payout rule on our side. On a flat-rate offer that is the whole calculation and nothing an advertiser sends can change it. On a percentage or revenue-share offer, the advertiser reports the sale's value and we apply our rate to it — so the size of the sale is theirs to report, and the share you keep is never theirs to set. Either way the number you see is a number you can reproduce.",
   },
   {
     category: 'Fraud & quality',
@@ -391,7 +391,7 @@ export interface Differentiator {
 
 export const DIFFERENTIATORS: Differentiator[] = [
   { point: 'Tracking', fatexia: 'In-house tracker we own end to end', typical: 'Rented third-party redirect chain' },
-  { point: 'Payout math', fatexia: 'Recomputed from the offer rule', typical: 'Trusted from the advertiser postback' },
+  { point: 'Payout math', fatexia: 'Our rate, applied to the reported sale', typical: 'Whatever the advertiser postback claims' },
   { point: 'Fraud', fatexia: '3 layers, explained in plain language', typical: 'A black box you can’t audit' },
   { point: 'Reporting', fatexia: 'Real-time, single source of truth', typical: 'Nightly batch, numbers that drift' },
   { point: 'Model', fatexia: 'One network, run well', typical: 'White-label juggling many tenants' },

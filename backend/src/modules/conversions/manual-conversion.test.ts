@@ -108,19 +108,43 @@ beforeEach(() => {
 });
 
 describe('pricing', () => {
-  it('takes both amounts from the offer’s payout rule, not from the caller', async () => {
-    await conversionService.createForClick({ clickId: 'click-1' });
+  it('takes the rate from the offer’s payout rule, not from the caller', async () => {
+    await conversionService.createForClick({ clickId: 'click-1', reportedRevenue: 60 });
 
+    // Flat rule: the admin sized the sale, the rule decided the payout.
     expect(written().payoutAmount).toBe('25.00');
     expect(written().revenueAmount).toBe('60.00');
     expect(written().currency).toBe('USD');
+  });
+
+  /**
+   * The inconsistency this closes: a hand-added conversion used to be priced from the
+   * offer's one configured revenue while every posted-back sibling on the same offer was
+   * priced from the real sale, so two conversions of different sizes booked identically
+   * and nothing on the row said why.
+   */
+  it('prices a percentage rule from the amount the admin entered', async () => {
+    findOffer.mockResolvedValue(
+      offer({ payoutRules: [rule({ payoutType: PayoutType.PERCENTAGE, amount: '20', revenueAmount: '60.00' })] }),
+    );
+
+    await conversionService.createForClick({ clickId: 'click-1', reportedRevenue: 400 });
+
+    expect(written().revenueAmount).toBe('400.00');
+    expect(written().payoutAmount).toBe('80.00');
+  });
+
+  it('records what was entered, so the row shows where the figure came from', async () => {
+    await conversionService.createForClick({ clickId: 'click-1', reportedRevenue: 60 });
+
+    expect(written().reportedRevenue).toBe('60.00');
   });
 
   it('prices a smart-link click against that link’s revenue share', async () => {
     findClick.mockResolvedValue(click({ smartLinkId: 'sl-1' }));
     findSmartLink.mockResolvedValue({ id: 'sl-1', revSharePercent: '50' });
 
-    await conversionService.createForClick({ clickId: 'click-1' });
+    await conversionService.createForClick({ clickId: 'click-1', reportedRevenue: 60 });
 
     // Half of the advertiser's 60, not the rule's own flat 25.
     expect(written().payoutAmount).toBe('30.00');
@@ -130,14 +154,14 @@ describe('pricing', () => {
   it('refuses an offer with no payout rule rather than booking a worthless conversion', async () => {
     findOffer.mockResolvedValue(offer({ payoutRules: [] }));
 
-    await expect(conversionService.createForClick({ clickId: 'click-1' })).rejects.toThrow(/no payout rule/i);
+    await expect(conversionService.createForClick({ clickId: 'click-1', reportedRevenue: 60 })).rejects.toThrow(/no payout rule/i);
     expect(createConversion).not.toHaveBeenCalled();
   });
 });
 
 describe('status', () => {
   it('approves when the offer auto-approves and the rule has no hold', async () => {
-    await conversionService.createForClick({ clickId: 'click-1' });
+    await conversionService.createForClick({ clickId: 'click-1', reportedRevenue: 60 });
 
     expect(written().status).toBe(ConversionStatus.APPROVED);
     expect(written().approvedAt).toBeInstanceOf(Date);
@@ -148,7 +172,7 @@ describe('status', () => {
   it('stays pending when the offer does not auto-approve', async () => {
     findOffer.mockResolvedValue(offer({ autoApproveConversions: false }));
 
-    await conversionService.createForClick({ clickId: 'click-1' });
+    await conversionService.createForClick({ clickId: 'click-1', reportedRevenue: 60 });
 
     expect(written().status).toBe(ConversionStatus.PENDING);
     expect(written().approvedAt).toBeNull();
@@ -158,7 +182,7 @@ describe('status', () => {
   it('stays pending when the rule holds, even on an auto-approve offer', async () => {
     findOffer.mockResolvedValue(offer({ payoutRules: [rule({ holdEnabled: true, holdDays: 7 })] }));
 
-    await conversionService.createForClick({ clickId: 'click-1' });
+    await conversionService.createForClick({ clickId: 'click-1', reportedRevenue: 60 });
 
     expect(written().status).toBe(ConversionStatus.PENDING);
   });
@@ -168,7 +192,7 @@ describe('what it refuses', () => {
   it('refuses a click that already has a conversion, naming it', async () => {
     findConversionByClickId.mockResolvedValue({ id: 'conv-0', refId: 300001, status: ConversionStatus.APPROVED });
 
-    await expect(conversionService.createForClick({ clickId: 'click-1' })).rejects.toThrow(/already has conversion #300001/);
+    await expect(conversionService.createForClick({ clickId: 'click-1', reportedRevenue: 60 })).rejects.toThrow(/already has conversion #300001/);
     expect(createConversion).not.toHaveBeenCalled();
   });
 
@@ -184,7 +208,7 @@ describe('announcement', () => {
   // The alert an admin hears is supposed to fire however a conversion got there, so the
   // manual path has to announce itself exactly as the postback path does.
   it('announces the conversion as manually added', async () => {
-    await conversionService.createForClick({ clickId: 'click-1' });
+    await conversionService.createForClick({ clickId: 'click-1', reportedRevenue: 60 });
 
     expect(announce).toHaveBeenCalledTimes(1);
     expect(announce.mock.calls[0]![1]).toBe('manual');
@@ -193,14 +217,14 @@ describe('announcement', () => {
   it('announces nothing when the add was refused', async () => {
     findConversionByClickId.mockResolvedValue({ id: 'conv-0', refId: 300001, status: ConversionStatus.APPROVED });
 
-    await expect(conversionService.createForClick({ clickId: 'click-1' })).rejects.toThrow();
+    await expect(conversionService.createForClick({ clickId: 'click-1', reportedRevenue: 60 })).rejects.toThrow();
     expect(announce).not.toHaveBeenCalled();
   });
 });
 
 describe('what it copies from the click', () => {
   it('carries the attribution and the click’s own context onto the conversion', async () => {
-    await conversionService.createForClick({ clickId: 'click-1', transactionId: 'txn-9' });
+    await conversionService.createForClick({ clickId: 'click-1', transactionId: 'txn-9', reportedRevenue: 60 });
 
     expect(written().clickId).toBe('click-1');
     expect(written().affiliateId).toBe('aff-1');

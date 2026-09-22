@@ -27,22 +27,49 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 export class ClickProxyProviderDetail1789000000000 implements MigrationInterface {
   name = 'ClickProxyProviderDetail1789000000000';
 
+  /**
+   * Runs outside a transaction, because `CREATE INDEX CONCURRENTLY` cannot run inside
+   * one — Postgres rejects it outright, and the data source's `migrationsTransactionMode`
+   * is 'each'.
+   *
+   * The cost of that is no rollback: a failure partway leaves the earlier statements
+   * applied. Every statement below is therefore written to be safe to re-run, so
+   * recovery is running the migration again rather than repairing the table by hand.
+   */
+  public transaction = false;
+
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // IF NOT EXISTS on each column: without the enclosing transaction, a failure on a
+    // later statement leaves the earlier ones in place, and a plain ADD would then fail
+    // on "column already exists" instead of carrying on.
     await queryRunner.query(`
       ALTER TABLE "clicks"
-        ADD "proxyProvider" character varying,
-        ADD "proxyBlock" smallint,
-        ADD "proxyHostname" character varying,
-        ADD "proxyIsp" character varying,
-        ADD "proxyAsnNumber" integer,
-        ADD "proxyCountryCode" character varying
+        ADD COLUMN IF NOT EXISTS "proxyProvider" character varying,
+        ADD COLUMN IF NOT EXISTS "proxyBlock" smallint,
+        ADD COLUMN IF NOT EXISTS "proxyHostname" character varying,
+        ADD COLUMN IF NOT EXISTS "proxyIsp" character varying,
+        ADD COLUMN IF NOT EXISTS "proxyAsnNumber" integer,
+        ADD COLUMN IF NOT EXISTS "proxyCountryCode" character varying
     `);
 
     // The two that a fraud review actually filters a large table by: "show me every
     // click IPHub called non-residential", and "show me everything on this hostname"
     // — rDNS is how a single abusive host is found across many addresses.
-    await queryRunner.query(`CREATE INDEX "IDX_clicks_proxyBlock" ON "clicks" ("proxyBlock")`);
-    await queryRunner.query(`CREATE INDEX "IDX_clicks_proxyHostname" ON "clicks" ("proxyHostname")`);
+    //
+    // CONCURRENTLY, because `clicks` takes a write on every redirect. A plain CREATE
+    // INDEX holds a SHARE lock for the whole build, which blocks INSERT — so on a live
+    // tracker it does not slow the click path, it stops it, for as long as the scan
+    // takes. The columns are new and entirely NULL, but Postgres still walks the table.
+    //
+    // IF NOT EXISTS is not decoration here: a CONCURRENTLY build that fails partway
+    // leaves an INVALID index behind, and a straight retry would then error on the name
+    // instead of completing. If either index reports as invalid afterwards, DROP it and
+    // re-run this statement by hand — a CONCURRENTLY build cannot be retried inside a
+    // migration that has already been recorded as applied.
+    await queryRunner.query(`CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_clicks_proxyBlock" ON "clicks" ("proxyBlock")`);
+    await queryRunner.query(
+      `CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_clicks_proxyHostname" ON "clicks" ("proxyHostname")`,
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

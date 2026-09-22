@@ -169,7 +169,48 @@ export const clickService = {
       offer = target.offer;
     } else {
       const { link, members } = target;
-      const candidates = linkAcceptsVisitor(link, matchable) ? await buildCandidates(members, matchable) : [];
+
+      // No member offers configured at all — the link is a plain redirect, and every
+      // visitor goes to its own destination.
+      //
+      // Deliberately keyed on `offerIds`, not on `members` being empty. A link whose
+      // members are all unapproved has members; that visitor belongs on fallbackUrl
+      // below, where "the link has offers and you were excluded from them" is the right
+      // answer. Collapsing the two would silently send an unapproved offer's traffic to
+      // the network's own page instead.
+      //
+      // The destination is guaranteed by createSmartLinkSchema and updateSmartLink, but
+      // a link written before that rule existed must still not 500 its visitors, so
+      // fallbackUrl is honoured as a second choice before giving up.
+      if ((link.offerIds ?? []).length === 0) {
+        const direct = link.destinationUrl?.trim() || link.fallbackUrl?.trim();
+        if (!direct) {
+          throw new NotFoundError('No offer available for this smart-link');
+        }
+        // Both macros resolve to empty, and `{click_id}` is the deliberate one.
+        //
+        // This path writes no click row — there is no offer to attribute one to — so a
+        // click id substituted here would name a click that does not exist. Anything
+        // receiving it and posting back would be rejected by /postback with "Offer not
+        // available", which reads as a broken integration rather than as the truth: a
+        // memberless link is a plain redirect and cannot convert. Sending nothing is
+        // the honest version of that. Both are still replaced rather than left in place,
+        // because the literal text `{click_id}` in a live URL is worse than an empty one.
+        return {
+          redirectUrl: direct.replace('{click_id}', '').replace('{payout_amount}', ''),
+          clickId,
+          clickRefId,
+        };
+      }
+
+      // The link's share is read here, before the rotation, because TOP_PAYOUT ranks on
+      // the payout it produces — see buildCandidates. Read again below for the redirect's
+      // own pricing; one read for both would be tidier but this value is also what
+      // decides which offer is chosen, so it has to exist before the choice is made.
+      const linkRevShare = link.revSharePercent != null ? Number(link.revSharePercent) : null;
+      const candidates = linkAcceptsVisitor(link, matchable)
+        ? await buildCandidates(members, matchable, linkRevShare)
+        : [];
       if (candidates.length === 0) {
         if (!link.fallbackUrl) {
           throw new NotFoundError('No offer available for this smart-link');

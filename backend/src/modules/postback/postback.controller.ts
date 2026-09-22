@@ -12,6 +12,10 @@ export const postbackController = {
         clickId: query.click_id,
         secret: query.secret,
         transactionId: query.transaction_id ?? null,
+        // Two spellings of one field, collapsed here so nothing downstream has to know
+        // there was ever a choice. `sum` wins when an integration sends both, because it
+        // is the name our own postback URLs document.
+        reportedRevenue: query.sum ?? query.revenue ?? null,
         sourceIp: clientIp(req),
         rawQuery: req.query as Record<string, unknown>,
       });

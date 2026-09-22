@@ -106,6 +106,9 @@ function request(overrides: Partial<Parameters<typeof postbackService.handlePost
     clickId: 'click-1',
     secret: SECRET,
     transactionId: 'txn-9',
+    // The sale amount is required on every postback, so the default request carries one.
+    // Its absence is a case in its own right — see the 'sale amount' block below.
+    reportedRevenue: 100 as number | null,
     sourceIp: IP,
     rawQuery: {},
     ...overrides,
@@ -198,23 +201,52 @@ describe('authentication', () => {
 
 describe('money integrity', () => {
   /**
-   * The heart of it: the advertiser controls the query string, so if anything in the
-   * payload could raise the payout, an advertiser (or anyone who learned the secret)
-   * could mint money. Both amounts must come from the offer's own rule.
+   * The rule narrowed; it did not go away.
+   *
+   * The advertiser controls the query string, so anything in the payload that could
+   * raise the *payout* would let them (or anyone who learned the secret) mint money.
+   * What they may now supply is the sale's revenue — the base — and nothing else. The
+   * rate applied to it is still the offer's.
    */
-  it('ignores payout and revenue claimed in the payload', async () => {
+  it('ignores any payout the payload claims', async () => {
+    // Only `sum`/`revenue`, parsed into reportedRevenue by the controller, reaches
+    // pricing. These raw keys are logged and nothing more, whatever they are named.
     await postbackService.handlePostback(
-      request({ rawQuery: { payout: '9999.00', revenue: '9999.00', payout_amount: '9999.00', amount: '9999' } }),
+      request({ rawQuery: { payout: '9999.00', payout_amount: '9999.00', amount: '9999' } }),
     );
-    expect(written()).toMatchObject({ payoutAmount: '25.00', revenueAmount: '60.00' });
+    // Flat rule: the reported 100.00 moves the network's revenue line and leaves what
+    // the affiliate is owed exactly where the rule put it.
+    expect(written()).toMatchObject({ payoutAmount: '25.00', revenueAmount: '100.00' });
   });
 
-  it('prices a percentage rule from the rule’s own revenue', async () => {
+  it('applies the rule’s own percentage to the reported sale', async () => {
     findOffer.mockResolvedValue(
       offer({ payoutRules: [rule({ payoutType: PayoutType.PERCENTAGE, amount: '20', revenueAmount: '150.00' })] }),
     );
-    await postbackService.handlePostback(request({ rawQuery: { sale_amount: '100000' } }));
+    // 20% of the reported 400, not of the configured 150 — and still 20%, however large
+    // the report is. The advertiser sized the sale; the rule kept the share.
+    await postbackService.handlePostback(request({ reportedRevenue: 400 }));
+    expect(written()).toMatchObject({ payoutAmount: '80.00', revenueAmount: '400.00' });
+  });
+
+  it('falls back to the rule’s revenue when the report is zero', async () => {
+    findOffer.mockResolvedValue(
+      offer({ payoutRules: [rule({ payoutType: PayoutType.PERCENTAGE, amount: '20', revenueAmount: '150.00' })] }),
+    );
+    // Zero is sent by integrations that have the macro wired but no value for it. Read
+    // literally it would price every such conversion at nothing.
+    await postbackService.handlePostback(request({ reportedRevenue: 0 }));
     expect(written()).toMatchObject({ payoutAmount: '30.00', revenueAmount: '150.00' });
+  });
+
+  it('refuses a postback that carries no sale amount, and logs why', async () => {
+    await expect(postbackService.handlePostback(request({ reportedRevenue: null }))).rejects.toThrow(/sum/);
+    // The rejection has to be attributable: an advertiser still posting the old URL
+    // would otherwise lose every conversion with nothing in the log to show for it.
+    expect(createConversion).not.toHaveBeenCalled();
+    expect(createLog).toHaveBeenCalledWith(
+      expect.objectContaining({ success: false, errorMessage: expect.stringContaining('sum') }),
+    );
   });
 
   it('records zero rather than guessing when the offer has no payout rule', async () => {

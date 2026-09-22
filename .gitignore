@@ -39,6 +39,7 @@ pnpm-debug.log*
 
 # Editor / OS
 .claude/*
+.claude
 .DS_Store
 Thumbs.db
 .idea/

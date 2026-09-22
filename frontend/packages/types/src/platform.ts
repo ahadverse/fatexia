@@ -31,11 +31,7 @@ export interface SmartLink {
   rotation: SmartLinkRotation;
   status: SmartLinkStatus;
   fallbackUrl: string | null;
-  /** Revenue share: the affiliate gets this percent of the advertiser amount, instead
-   *  of the member offer's own payout. Null on both means the offer rule applies. */
-  /** Optional override for where a matched click lands; null uses the chosen offer's own destination. */
   destinationUrl: string | null;
-  revShareMode: string | null;
   revSharePercent: number | null;
   smartLinkUrl: string;
   createdAt: string;
@@ -52,7 +48,6 @@ export interface CreateSmartLinkInput {
   status?: SmartLinkStatus;
   fallbackUrl?: string;
   destinationUrl?: string | null;
-  revShareMode?: string | null;
   revSharePercent?: number | null;
 }
 

@@ -1,5 +1,6 @@
 import { AppDataSource } from '../../infra/database/data-source';
 import { logger } from '../../common/logger';
+import { ConversionStatus } from '../conversions/conversion.entity';
 
 /**
  * Recent conversion rate per offer, for the BEST_CR rotation.
@@ -28,17 +29,41 @@ let expiresAt = 0;
 // rather than N identical ones.
 let inFlight: Promise<Map<string, number>> | null = null;
 
+/**
+ * What counts as a conversion here.
+ *
+ * The same pair the reports use (`report.repository.ts`, `approvedStates`), and for the
+ * same reason: PAID conversions were APPROVED first, so counting only APPROVED would
+ * make an offer look worse the moment it got paid out.
+ *
+ * The states left out are the point of the list. REJECTED, DUPLICATE and CHARGEBACK are
+ * all rows the network affirmatively judged bad, and DUPLICATE is not rare — the
+ * postback path *creates* one every time an advertiser double-fires (see
+ * `conversion.service.ts`). Counting them made this rotation reward the offers whose
+ * traffic was being rejected and whose advertisers were firing twice.
+ *
+ * PENDING is excluded too, which reads harsh for a new offer but is not: an offer with
+ * no approved conversions scores 0 here and `bestCrIndex` floors every candidate, so it
+ * still receives traffic while its first conversions are being reviewed.
+ */
+const CONVERTED_STATES = [ConversionStatus.APPROVED, ConversionStatus.PAID];
+
 async function query(): Promise<Map<string, number>> {
   const since = new Date(Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000);
   const rows = await AppDataSource.query<CrRow[]>(
+    // COUNT(DISTINCT c.id), never COUNT(*): this is a LEFT JOIN, so a click that carries
+    // two conversion rows arrives here as two rows and would otherwise be counted as two
+    // clicks. A click with a real conversion and its DUPLICATE twin is the ordinary way
+    // that happens, which made the denominator wrong on exactly the offers the numerator
+    // was already wrong about.
     `SELECT c."offerId" AS "offerId",
-            COUNT(*) AS clicks,
-            COUNT(cv.id) AS conversions
+            COUNT(DISTINCT c.id) AS clicks,
+            COUNT(*) FILTER (WHERE cv.status = ANY($2)) AS conversions
        FROM clicks c
        LEFT JOIN conversions cv ON cv."clickId" = c.id
       WHERE c."createdAt" >= $1
       GROUP BY c."offerId"`,
-    [since],
+    [since, CONVERTED_STATES],
   );
 
   const next = new Map<string, number>();

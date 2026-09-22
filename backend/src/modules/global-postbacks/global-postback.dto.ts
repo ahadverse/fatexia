@@ -86,9 +86,18 @@ export function toGlobalPostbackDto(row: GlobalPostback): GlobalPostbackDto {
     // No offerId: a global URL is one address for the whole catalogue, and the caller
     // cannot fill that in — an upstream tracker's offer-id macro is their id, not ours.
     // The click names the offer instead.
+    // `sum` carries the sale's revenue — what the advertiser is paying for this
+    // conversion. Included in the URL handed out because a parameter nobody is told to
+    // send is a parameter nobody sends: percentage payouts and smart-link revenue shares
+    // are priced off it, and without it they fall back to the offer's one configured
+    // revenue figure for every sale, large or small.
+    //
+    // Left in even for flat-rate offers, where it changes no payout: it still makes the
+    // network's own revenue and margin correct in reporting, and an advertiser who sends
+    // it on a flat offer costs nothing.
     postbackUrl:
       row.direction === PostbackDirectionKind.INBOUND
-        ? `${env.PUBLIC_TRACKING_URL}/postback?click_id={click_id}&secret=<secret>`
+        ? `${env.PUBLIC_TRACKING_URL}/postback?click_id={click_id}&secret=<secret>&sum={sum}`
         : null,
   };
 }

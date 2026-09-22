@@ -112,7 +112,22 @@
       "Bash(echo \"PUBLIC_EXIT=$?\")",
       "PowerShell(git -C \"E:\\\\Ahad Hossain\\\\Arif vai\\\\Fatexia\" status --porcelain)",
       "PowerShell(git -C \"E:\\\\Ahad Hossain\\\\Arif vai\\\\Fatexia\" diff --stat -- render.yaml DEPLOYMENT.md)",
-      "Bash(echo \"=== tsc exit: $? ===\")"
+      "Bash(echo \"=== tsc exit: $? ===\")",
+      "Bash(git log *)",
+      "Bash(grep -v \"^[0-9a-f]\\\\{7\\\\}$\")",
+      "Bash(grep -oE ''\\\\''[A-Za-z0-9_./:-]{4,60}'\\\\''' C:/Users/Ahad/AppData/Local/Temp/claude/e--Ahad-Hossain-Arif-vai-Fatexia/1e97c042-c195-4133-baf2-ba3095d12b32/scratchpad/payload.txt)",
+      "PowerShell(\"=== Run keys \\(HKCU\\) ===\"; Get-ItemProperty \"HKCU:\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\" -ErrorAction SilentlyContinue | Format-List; \"=== Run keys \\(HKLM\\) ===\"; Get-ItemProperty \"HKLM:\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\" -ErrorAction SilentlyContinue | Format-List; \"=== Startup folder ===\"; Get-ChildItem \"$env:APPDATA\\\\Microsoft\\\\Windows\\\\Start Menu\\\\Programs\\\\Startup\" -ErrorAction SilentlyContinue | Select-Object Name, LastWriteTime; \"=== node processes running now ===\"; Get-Process node,nodejs -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, StartTime, Path)",
+      "PowerShell($b=\"C:\\\\Users\\\\Ahad\\\\AppData\\\\Local\\\\Microsoft\\\\CLR_v4.0\\\\Optimization\\\\cache\"; \"=== RUNNING NOW? ===\"; Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'NativeImageGen|pythonw' } | Select-Object ProcessId, Name, CommandLine | Format-List; \"=== scheduled tasks ===\"; Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -match 'CLR|ngen|Native|connector' } | Select-Object TaskName, TaskPath, State | Format-Table -AutoSize; \"=== ngen.boot ===\"; Get-Content \"$b\\\\ngen.boot\" -ErrorAction SilentlyContinue; \"=== ngen_online.boot ===\"; Get-Content \"$b\\\\ngen_online.boot\" -ErrorAction SilentlyContinue; \"=== svc_boot.log ===\"; Get-Content \"$b\\\\svc_boot.log\" -ErrorAction SilentlyContinue; \"=== payload dir ===\"; Get-ChildItem \"C:\\\\Users\\\\Ahad\\\\AppData\\\\Local\\\\Microsoft\\\\Windows\\\\Caches\\\\cversions\" -ErrorAction SilentlyContinue | Select-Object Name, Length, LastWriteTime | Format-Table -AutoSize)",
+      "Bash(sed -i \"/revShareMode: z.enum\\(\\\\['CPA', 'CPS'\\\\]\\).nullish\\(\\),/d; /^  revShareMode: string | null;$/d; /^    revShareMode: link.revShareMode,$/d\" backend/src/modules/smart-links/smart-link.dto.ts)",
+      "Bash(sed -i \"s/if \\(value.offerIds.length === 0 \\\\&\\\\& \\(value.revShareMode || value.revSharePercent != null\\)\\) {/if \\(value.offerIds.length === 0 \\\\&\\\\& value.revSharePercent != null\\) {/\" backend/src/modules/smart-links/smart-link.dto.ts)",
+      "Bash(sed -i \"/revShareMode: dto.revShareMode ?? null,/d; /const mergedRevShareMode = dto.revShareMode/d; /\\\\.\\\\.\\\\.\\(dto.revShareMode !== undefined \\\\&\\\\& { revShareMode: dto.revShareMode ?? null }\\),/d\" backend/src/modules/smart-links/smart-link.service.ts)",
+      "Bash(sed -i \"s/if \\(mergedOfferIds.length === 0 \\\\&\\\\& \\(mergedRevShareMode || mergedRevSharePercent != null\\)\\) {/if \\(mergedOfferIds.length === 0 \\\\&\\\\& mergedRevSharePercent != null\\) {/\" backend/src/modules/smart-links/smart-link.service.ts)",
+      "Bash(sed -i \"/^ revShareMode: string | null;$/d; /^ revShareMode?: string | null;$/d\" packages/types/src/platform.ts)",
+      "Bash(sed -i \"/^const REV_SHARE_MODES = \\\\['CPA', 'CPS'\\\\] as const;$/d; /^ revShareMode: string;$/d; /^ revShareMode: '',$/d; /revShareMode: existing.revShareMode ?? '',/d; /revShareMode: hasMembers ? form.revShareMode || null : null,/d\" apps/admin/src/pages/offers/SmartLinkForm.tsx)",
+      "Bash(sed -i \"s|{ point: 'Payout math', fatexia: 'Recomputed from the offer rule', typical: 'Trusted from the advertiser postback' },|{ point: 'Payout math', fatexia: 'Our rate, applied to the reported sale', typical: 'Whatever the advertiser postback claims' },|\" apps/public/src/lib/content.ts)",
+      "Bash(sed -i \"s|Payout <span className=\\\\\"font-semibold text-foreground\\\\\">computed from the offer rule</span> — never trusted from the postback|Payout rate <span className=\\\\\"font-semibold text-foreground\\\\\">from the offer rule</span> — never set by the postback|\" apps/public/src/components/HeroVisual.tsx)",
+      "Bash(node -e \"console.log\\(require\\('typeorm/package.json'\\).version\\)\")",
+      "Bash(awk '/public async up/,/^  }/' src/infra/database/migrations/1789000000000-ClickProxyProviderDetail.ts)"
     ]
   }
 }

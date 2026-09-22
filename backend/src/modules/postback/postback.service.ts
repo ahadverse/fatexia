@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { NotFoundError } from '../../common/errors';
+import { NotFoundError, ValidationError } from '../../common/errors';
 import { offerRepository } from '../offers/offer.repository';
 import { clickRepository } from '../clicks/click.repository';
 import { conversionRepository } from '../conversions/conversion.repository';
@@ -19,6 +19,12 @@ export interface PostbackRequest {
   clickId: string;
   secret: string;
   transactionId: string | null;
+  /**
+   * The sale's revenue as the advertiser reported it, already normalised from whichever
+   * spelling they used (`sum` or `revenue`). Null when they sent no amount, which keeps
+   * meaning "price this from the rule's configured revenue".
+   */
+  reportedRevenue: number | null;
   sourceIp: string;
   rawQuery: Record<string, unknown>;
 }
@@ -138,7 +144,28 @@ export const postbackService = {
     const smartLink = matchedClick?.smartLinkId ? await smartLinkRepository.findById(matchedClick.smartLinkId) : null;
     const revSharePercent = smartLink?.revSharePercent != null ? Number(smartLink.revSharePercent) : null;
 
-    const amounts = rule ? computeAmounts(rule, revSharePercent) : { revenueAmount: 0, payoutAmount: 0 };
+    // Only the rate stays ours — this is the base it is applied to (see computeAmounts).
+    //
+    // Required, and enforced *here* rather than in the query schema on purpose. A schema
+    // rejection happens before this function runs, so it would never reach logAttempt:
+    // an advertiser still posting the old URL would have every conversion dropped with
+    // nothing in the postback log to show it. Checked after authorisation instead, so a
+    // missing amount is a visible, attributable failure the admin can chase — and so an
+    // unauthenticated caller still learns nothing about which parameters matter.
+    const reportedRevenue = req.reportedRevenue;
+    if (reportedRevenue == null) {
+      await logAttempt(req, {
+        offerId: offer.id,
+        affiliateId: matchedClick?.affiliateId ?? null,
+        success: false,
+        errorMessage: 'No sale amount sent — add &sum={sum} to the postback URL',
+      });
+      throw new ValidationError('This postback must carry the sale amount as `sum` (or `revenue`)');
+    }
+
+    const amounts = rule
+      ? computeAmounts(rule, revSharePercent, reportedRevenue)
+      : { revenueAmount: 0, payoutAmount: 0 };
     // Duplicates are recorded (visible in the Conversions report, filterable by
     // isDuplicate) but carry zero money so an accidental double-fire can never
     // inflate revenue/payout totals before someone reviews it.
@@ -160,6 +187,11 @@ export const postbackService = {
       affiliateId: matchedClick?.affiliateId ?? null,
       revenueAmount: revenueAmount.toFixed(2),
       payoutAmount: payoutAmount.toFixed(2),
+      // Stored whatever the pricing did with it — including on a duplicate, which is
+      // priced at zero. What the advertiser reported is a fact about the request, and
+      // the row is the only place it survives; the payload log is keyed to the attempt,
+      // not to the conversion someone is reviewing.
+      reportedRevenue: reportedRevenue != null ? reportedRevenue.toFixed(2) : null,
       currency: offer.currency,
       status,
       isDuplicate,

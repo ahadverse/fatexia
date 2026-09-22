@@ -126,6 +126,17 @@ export interface Conversion {
   revenueAmount: number;
   payoutAmount: number;
   profitAmount: number;
+  /**
+   * The sale value the advertiser reported on the postback (`sum`/`revenue`), when they
+   * sent one. Null means nothing was reported and this conversion was priced from the
+   * offer's configured revenue — not that a zero-value sale arrived.
+   *
+   * Read it next to `revenueAmount`: when the two differ, the report is not what priced
+   * the row (a duplicate carries no money, and a zero or absent figure falls back to the
+   * rule). Admin-only, like `revenueAmount` and `profitAmount` — the affiliate portal's
+   * own conversion type has no field for any of the three.
+   */
+  reportedRevenue: number | null;
   currency: string;
   status: ConversionStatus;
   isDuplicate: boolean;

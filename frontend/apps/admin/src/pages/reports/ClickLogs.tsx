@@ -146,6 +146,10 @@ function ClickConversionPanel({ click }: { click: ClickLog }) {
   const conversion: Conversion | null = existing.data?.rows[0] ?? null;
 
   const [transactionId, setTransactionId] = useState('');
+  // The sale's revenue, required — see createConversionForClick. Kept as a string so the
+  // field can be empty rather than defaulting to 0, which the server would reject anyway
+  // and which reads as "a sale worth nothing" instead of "not filled in yet".
+  const [saleAmount, setSaleAmount] = useState('');
   const [confirmAdd, setConfirmAdd] = useState(false);
   const [nextStatus, setNextStatus] = useState<ConversionStatus | null>(null);
   const [saving, setSaving] = useState(false);
@@ -156,11 +160,20 @@ function ClickConversionPanel({ click }: { click: ClickLog }) {
   // stack two messages about one conversion on the person who pressed the button. A
   // failure still has to be reported locally — no event is coming for one of those.
   async function addConversion() {
+    // Guarded here as well as by the input's own type, because the confirm dialog can be
+    // submitted by keyboard and the server's rejection would arrive as a bare 400 about
+    // a field name rather than as something an admin can act on.
+    const amount = Number(saleAmount);
+    if (!saleAmount.trim() || !Number.isFinite(amount) || amount <= 0) {
+      toast.error('Enter the sale amount the advertiser is paying for this conversion');
+      return;
+    }
     setSaving(true);
     try {
-      await createConversionForClick(click.id, transactionId.trim() || undefined);
+      await createConversionForClick(click.id, amount, transactionId.trim() || undefined);
       setConfirmAdd(false);
       setTransactionId('');
+      setSaleAmount('');
       existing.reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not add the conversion');
@@ -200,6 +213,20 @@ function ClickConversionPanel({ click }: { click: ClickLog }) {
           </DrawerRow>
           <DrawerRow label="Payout">{money(conversion.payoutAmount, conversion.currency)}</DrawerRow>
           <DrawerRow label="Revenue">{money(conversion.revenueAmount, conversion.currency)}</DrawerRow>
+          {/* Shown only when the advertiser actually reported a figure. A row with no
+              report was priced from the offer's configured revenue, which the Revenue
+              row above already states — repeating it as an empty line would suggest the
+              advertiser sent something and it was nothing. */}
+          {conversion.reportedRevenue !== null && (
+            <DrawerRow label="Advertiser reported">
+              {money(conversion.reportedRevenue, conversion.currency)}
+              {conversion.reportedRevenue !== conversion.revenueAmount && (
+                <span className="ml-2 text-xs text-muted-foreground">
+                  not used for pricing — a duplicate carries no money, and a zero report falls back to the offer's rule
+                </span>
+              )}
+            </DrawerRow>
+          )}
           <DrawerRow label="Recorded">{dateTime(conversion.createdAt)}</DrawerRow>
           {conversion.transactionId && <DrawerRow label="Transaction ID">{conversion.transactionId}</DrawerRow>}
           <DrawerRow label="Change status">
@@ -224,11 +251,33 @@ function ClickConversionPanel({ click }: { click: ClickLog }) {
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground">
             {isAdmin
-              ? 'No conversion recorded for this click. Adding one prices it from the offer’s payout rule — the same amount the advertiser’s postback would have produced.'
+              ? 'No conversion recorded for this click. Adding one applies the offer’s own payout rule to the sale amount you enter — the same way the advertiser’s postback would have priced it.'
               : 'No conversion recorded for this click.'}
           </p>
           {isAdmin && (
             <>
+              {/* Required, and first, because it is the number the payout is derived
+                  from. The rate stays the offer's; this only says how large the sale
+                  was — the same split as `sum` on an inbound postback. */}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="manual-sale-amount">
+                  Sale amount <span className="font-normal">(required)</span>
+                </label>
+                <Input
+                  id="manual-sale-amount"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={saleAmount}
+                  onChange={(event) => setSaleAmount(event.target.value)}
+                  placeholder="What the advertiser is paying for this conversion"
+                  className="mt-1"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  In {click.offerName ? 'the offer’s' : 'the offer’s'} currency, and it is the advertiser’s amount — not
+                  the affiliate’s payout. A percentage rule or a smart-link revenue share is calculated from it.
+                </p>
+              </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground" htmlFor="manual-transaction-id">
                   Transaction ID <span className="font-normal">(optional)</span>
@@ -255,7 +304,7 @@ function ClickConversionPanel({ click }: { click: ClickLog }) {
         title="Record a conversion for this click?"
         description={`Click ${click.refId} on ${click.offerName ?? 'this offer'} will be credited to ${
           click.affiliateName ?? 'no affiliate (this click is unattributed)'
-        }. The payout comes from the offer's payout rule, and the offer's own settings decide whether it starts approved or pending.`}
+        }. The payout is the offer's own rate applied to the ${saleAmount || '0'} sale amount you entered, and the offer's own settings decide whether it starts approved or pending.`}
         confirmLabel="Add conversion"
         loading={saving}
         onConfirm={addConversion}

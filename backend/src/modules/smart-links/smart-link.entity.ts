@@ -65,19 +65,17 @@ export class SmartLink {
 
   /**
    * Revenue share. When set, a conversion that came through this link pays the
-   * affiliate `revSharePercent` of what the advertiser pays, instead of the flat
+   * affiliate this percentage of what the advertiser pays for the sale, instead of the
    * payout on the member offer's own rule.
    *
-   * Both columns are nullable and move together — a link with no share configured
-   * falls back to the offer's rule, which is what every existing link does.
+   * Nullable — a link with no share falls back to the offer's rule.
    *
-   * `revShareMode` records which conversion type the share is meant for (CPA or CPS).
-   * It is descriptive rather than a filter: the percentage applies to whatever the
-   * link sends, and one link carries one rate (see the admin form's note).
+   * There is no companion "mode" column any more. It held CPA or CPS, was required by
+   * the form before a percentage could be typed, and was read by nothing: the rate was
+   * applied to whatever the link sent regardless. A share of a sale is CPS by
+   * definition, so the choice was never real, and the offer-level schema already refuses
+   * a PERCENTAGE payout outside CPS mode.
    */
-  @Column({ type: 'varchar', length: 10, nullable: true })
-  revShareMode!: string | null;
-
   @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
   revSharePercent!: string | null;
 

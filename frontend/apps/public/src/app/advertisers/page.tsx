@@ -9,13 +9,13 @@ import { breadcrumbSchema, pageMetadata } from '@/lib/seo';
 const ADVERTISER_STEPS = [
   { icon: ClipboardList, step: '01', title: 'Brief your offer', description: 'Send us the offer, payout rule, targeting and any caps. We set it up and generate the tracking and postback endpoints.' },
   { icon: ShieldCheck, step: '02', title: 'We protect the traffic', description: 'Every click runs the fraud pipeline before it counts — datacenter, proxy and timing checks — so only clean traffic reaches your funnel.' },
-  { icon: BadgeCheck, step: '03', title: 'Conversions are verified', description: 'Inbound postbacks are checked against per-offer secrets and IP allow-lists, then held for review if a signal looks off.' },
+  { icon: BadgeCheck, step: '03', title: 'Conversions are verified', description: 'Inbound postbacks are checked against per-offer secrets and IP allow-lists, then held for review if a signal looks off. Each one carries the sale amount, so percentage and revenue-share offers bill against the real order value.' },
   { icon: Wallet, step: '04', title: 'Pay for real actions', description: 'Payout value is computed from your rule — you pay for verified conversions, never for traffic that should never have counted.' },
 ];
 
 const ADVERTISER_GETS = [
   'A fraud pipeline that runs before a click ever counts toward your spend',
-  'Payouts computed from your own rule — no inflated numbers from the postback',
+  'Your rule sets the rate — your postback reports the sale it applies to',
   'Per-offer postback secrets and IP allow-lists on every conversion',
   'One in-house tracker as the single source of truth for you and your affiliates',
   'Manual affiliate approval — real people vetting the traffic, not a checkbox',
@@ -32,7 +32,7 @@ export const metadata: Metadata = pageMetadata({
 
 const ADVERTISER_VALUE = [
   { icon: ShieldCheck, title: 'Traffic quality you can audit', description: 'A layered fraud pipeline runs on infrastructure we own — and we can walk you through what every layer does, not point at a black box.' },
-  { icon: Wallet, title: 'Payouts from your rule, not guesswork', description: "Conversion value is computed from the offer's payout rule on our side — the postback confirms a conversion happened, it never dictates what it's worth." },
+  { icon: Wallet, title: 'Payouts from your rule, not guesswork', description: "The rate is always the offer's own payout rule on our side. On a percentage or revenue-share offer your postback reports the sale amount it applies to, so you are billed against the real order value rather than one fixed figure — and the rate itself is never something a payload can change." },
   { icon: LineChart, title: 'A single source of truth', description: 'Clicks and conversions run through one in-house tracker, so the numbers you see and the numbers your affiliates see come from the same place.' },
   { icon: Server, title: 'Secure server-to-server postback', description: 'Per-offer secrets and IP allow-lists on inbound postbacks — conversions are verified before they ever count.' },
 ];

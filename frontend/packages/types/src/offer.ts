@@ -67,7 +67,20 @@ export interface Offer {
   caps: OfferCap[];
   createdAt: string;
   defaultPayoutAmount: number;
+  /**
+   * What the offer's terms come to, from its representative payout rule.
+   *
+   * On a flat rule this is what a conversion pays. On a percentage rule it is the rule
+   * applied to the offer's *configured* revenue, while a real conversion is priced off
+   * the sale amount the advertiser reports on the postback — so never render it as a
+   * currency amount without checking `payoutRatePercent` first.
+   */
   displayPayoutAmount: number;
+  /**
+   * The rule's percentage when the payout is a share of the sale; null on a flat rule.
+   * Non-null means `displayPayoutAmount` is an example, not the amount — show this rate.
+   */
+  payoutRatePercent: number | null;
   destinationUrl: string | null;
   fallbackUrl: string | null;
   postbackSecret: string | null;

@@ -41,13 +41,32 @@ export function linkAcceptsVisitor(link: SmartLink, click: MatchableClick): bool
  * one's matched rule so the rotation and the redirect both price the click from the
  * same rule rather than resolving it twice.
  */
-export async function buildCandidates(offers: Offer[], click: MatchableClick): Promise<SmartLinkCandidate[]> {
+export async function buildCandidates(
+  offers: Offer[],
+  click: MatchableClick,
+  /**
+   * The link's revenue share, when it has one.
+   *
+   * Required for TOP_PAYOUT to rank on what the click will actually pay. Without it the
+   * ranking used each offer's own rule payout, which a revenue share overrides entirely:
+   * on an 80% link, a member paying a flat 5 against 10.00 revenue was ranked above one
+   * paying a flat 2 against 50.00 — while the real payouts are 8.00 and 40.00. The
+   * rotation picked the worse offer, every time, and nothing downstream disagreed
+   * because the redirect was then priced correctly from the same share.
+   */
+  revSharePercent?: number | null,
+): Promise<SmartLinkCandidate[]> {
   const candidates: SmartLinkCandidate[] = [];
   for (const offer of offers) {
     if (!offer.destinationUrl) continue;
     const rule = await findMatchingRuleForClick(offer.payoutRules ?? [], click);
     if (!rule) continue;
-    candidates.push({ offer, rule, payoutAmount: computeAmounts(rule).payoutAmount });
+    // No reported revenue here, and there cannot be: the sale has not happened yet. The
+    // rule's configured revenue is the only estimate available at click time, so a
+    // percentage member is ranked on its configured figure and then priced on the real
+    // one at conversion. Ranking and pricing can therefore differ — which is correct,
+    // not a drift to fix: a rotation cannot know a sale's size before the sale.
+    candidates.push({ offer, rule, payoutAmount: computeAmounts(rule, revSharePercent).payoutAmount });
   }
   return candidates;
 }
@@ -70,10 +89,14 @@ async function roundRobinIndex(linkId: string, count: number): Promise<number> {
 /**
  * Weighted pick by recent conversion rate.
  *
- * Every candidate gets a floor of the weakest non-zero rate (or an equal share when no
- * member has converted yet) so a new offer with no history still receives traffic —
- * without it, an offer that starts at 0% CR can never earn the clicks it would need to
- * prove otherwise.
+ * Every candidate is floored at a tenth of the best performer's rate (or at an equal
+ * share when no member has converted yet) so a new offer with no history still receives
+ * traffic — without it, an offer that starts at 0% CR can never earn the clicks it would
+ * need to prove otherwise.
+ *
+ * The floor is relative to the best rate rather than a fixed number so it keeps meaning
+ * the same thing across links: a tenth of the winner is an exploration budget, where
+ * "0.01" would be most of the traffic on one link and none of it on another.
  */
 async function bestCrIndex(candidates: SmartLinkCandidate[]): Promise<number> {
   const rates = await getOfferConversionRates();

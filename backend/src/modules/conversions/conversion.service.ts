@@ -167,7 +167,11 @@ export const conversionService = {
     const smartLink = click.smartLinkId ? await smartLinkRepository.findById(click.smartLinkId) : null;
     const revSharePercent = smartLink?.revSharePercent != null ? Number(smartLink.revSharePercent) : null;
 
-    const { revenueAmount, payoutAmount } = computeAmounts(rule, revSharePercent);
+    // Priced from the admin's reported sale amount, exactly as the postback path prices
+    // from the advertiser's. Without this a hand-added conversion on a percentage or
+    // revenue-share offer would be priced off the offer's configured revenue while every
+    // posted-back sibling was priced off the real sale.
+    const { revenueAmount, payoutAmount } = computeAmounts(rule, revSharePercent, dto.reportedRevenue);
 
     // The offer's own settings decide this, not the admin — a hold configured on the
     // rule exists precisely so conversions of this kind wait for review.
@@ -179,6 +183,9 @@ export const conversionService = {
       affiliateId: click.affiliateId,
       revenueAmount: revenueAmount.toFixed(2),
       payoutAmount: payoutAmount.toFixed(2),
+      // Recorded like a postback's, so the Conversions screen shows where the figure
+      // came from whether a machine or a person supplied it.
+      reportedRevenue: dto.reportedRevenue.toFixed(2),
       currency: offer.currency,
       status: approved ? ConversionStatus.APPROVED : ConversionStatus.PENDING,
       isDuplicate: false,

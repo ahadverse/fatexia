@@ -741,10 +741,27 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
             <p>
               <code className="text-foreground">{'{payout_amount}'}</code>{' '}
               <span className="text-muted-foreground">
-                — the payout for the rule matching this click&apos;s geo/device/OS, substituted at redirect time and
-                always computed from the offer&apos;s own payout rule, never trusted from an inbound call. Also added
-                automatically. Worth knowing: this puts your affiliate payout in the advertiser&apos;s query string,
-                so they can read what you pay per conversion.
+                — the payout for the rule matching this click&apos;s geo/device/OS, substituted at redirect time from
+                the offer&apos;s own payout rule. Also added automatically. Worth knowing: this puts your affiliate
+                payout in the advertiser&apos;s query string, so they can read what you pay per conversion.
+              </span>
+            </p>
+            {/* The macro is resolved at redirect time, before the sale exists. On a
+                percentage rule the conversion is then priced from the sale amount the
+                advertiser reports, so the two legitimately differ — said plainly here
+                because an advertiser querying the mismatch is otherwise a support
+                ticket nobody on this screen could answer. */}
+            <p className="text-muted-foreground">
+              On a percentage or revenue-share offer this is an estimate at the offer&apos;s configured revenue, not
+              the final payout: the click happens before the sale, so the real amount is calculated when the advertiser
+              posts back with <code className="text-foreground">{'{sum}'}</code>.
+            </p>
+            <p>
+              <code className="text-foreground">{'{sum}'}</code>{' '}
+              <span className="text-muted-foreground">
+                — not a Destination URL macro. It is the one the advertiser adds to their <em>postback</em> URL,
+                carrying the sale amount they are paying you. Required on every postback, and the base a percentage
+                payout or a smart-link revenue share is calculated from.
               </span>
             </p>
           </div>

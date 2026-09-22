@@ -38,13 +38,33 @@ export class Conversion {
   @Column({ type: 'uuid', nullable: true })
   affiliateId!: string | null;
 
-  // Always recomputed from the offer's PayoutRule at write time, never trusted from
-  // the postback payload (money integrity rule, PLAN-backend.md).
+  // The rate is always ours — taken from the offer's PayoutRule at write time, never
+  // from the postback (money integrity rule, PLAN-backend.md). What the advertiser may
+  // supply is the base it applies to; see `reportedRevenue` below.
   @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
   revenueAmount!: string;
 
   @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
   payoutAmount!: string;
+
+  /**
+   * The sale value the advertiser sent on the postback (`sum`/`revenue`), verbatim.
+   *
+   * Null on every conversion priced from the rule's configured revenue — which is every
+   * row written before this existed, every manually-added conversion, and every postback
+   * from an advertiser who does not send an amount.
+   *
+   * Kept beside `revenueAmount` rather than replacing it so the two questions stay
+   * separable: `revenueAmount` is what the conversion was priced at, this is what we
+   * were told. When they differ, the pricing ignored the report — because it was zero,
+   * absent, or the conversion is a duplicate carrying no money — and that difference is
+   * the only record of it.
+   *
+   * Network-side only. It is the advertiser's revenue, and the affiliate sees their own
+   * payout, never this (`audit-affiliate-visibility.js` enforces it).
+   */
+  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+  reportedRevenue!: string | null;
 
   @Column({ type: 'varchar', default: 'USD' })
   currency!: string;

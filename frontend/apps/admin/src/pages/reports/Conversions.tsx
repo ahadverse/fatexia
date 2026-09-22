@@ -94,7 +94,27 @@ export function Conversions() {
     { key: 'affiliate', header: 'Affiliate', render: (row) => row.affiliateName ?? '—' },
     { key: 'country', header: 'Geo', render: (row) => row.countryCode ?? '—' },
     { key: 'payout', header: 'Payout', render: (row) => money(row.payoutAmount, row.currency) },
-    { key: 'revenue', header: 'Revenue', render: (row) => money(row.revenueAmount, row.currency) },
+    {
+      key: 'revenue',
+      header: 'Revenue',
+      // Marked when the figure came from the advertiser's postback rather than from the
+      // offer's configured revenue, because the two are trusted differently: one is a
+      // number we set, the other is a number we were told. A row priced off a report is
+      // the one worth a second look when a margin looks wrong.
+      render: (row) => (
+        <span className="inline-flex items-center gap-1">
+          {money(row.revenueAmount, row.currency)}
+          {row.reportedRevenue !== null && (
+            <span
+              title={`Reported by the advertiser as ${money(row.reportedRevenue, row.currency)}`}
+              className="rounded bg-muted px-1 text-[10px] font-medium text-muted-foreground"
+            >
+              reported
+            </span>
+          )}
+        </span>
+      ),
+    },
     { key: 'profit', header: 'Profit', render: (row) => money(row.profitAmount, row.currency) },
     // Sub-second CTIT is the strongest single conversion-fraud signal, so it gets a column.
     { key: 'ctit', header: 'CTIT', render: (row) => duration(row.ctitMs) },

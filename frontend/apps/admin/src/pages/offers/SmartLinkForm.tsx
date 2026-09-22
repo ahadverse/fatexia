@@ -13,7 +13,6 @@ const ROTATIONS: { value: SmartLinkRotation; label: string; hint: string }[] = [
   { value: 'BEST_CR', label: 'Best converting', hint: 'Weights toward members with the strongest recent CR.' },
 ];
 
-const REV_SHARE_MODES = ['CPA', 'CPS'] as const;
 
 interface FormState {
   name: string;
@@ -25,7 +24,6 @@ interface FormState {
   rotation: SmartLinkRotation;
   fallbackUrl: string;
   destinationUrl: string;
-  revShareMode: string;
   revSharePercent: string;
 }
 
@@ -39,7 +37,6 @@ const EMPTY_FORM: FormState = {
   rotation: 'TOP_PAYOUT',
   fallbackUrl: '',
   destinationUrl: '',
-  revShareMode: '',
   revSharePercent: '',
 };
 
@@ -120,7 +117,6 @@ export function SmartLinkForm() {
       rotation: existing.rotation,
       fallbackUrl: existing.fallbackUrl ?? '',
       destinationUrl: existing.destinationUrl ?? '',
-      revShareMode: existing.revShareMode ?? '',
       revSharePercent: existing.revSharePercent != null ? String(existing.revSharePercent) : '',
     });
   }, [existing]);
@@ -134,16 +130,20 @@ export function SmartLinkForm() {
       toast.error('Give the smart-link a name');
       return;
     }
-    if (form.offerIds.length === 0) {
-      toast.error('Pick at least one member offer');
+    // Member offers are optional: a link with none is a plain redirect. What it cannot
+    // be is a link with neither members nor a destination, because that has nowhere to
+    // send a visitor and throws on every click. Mirrors the backend's own check so the
+    // admin is told before the request rather than by a 400.
+    if (form.offerIds.length === 0 && !form.destinationUrl.trim()) {
+      toast.error('Pick a member offer, or set a destination URL for the link to send traffic to');
       return;
     }
-    // A mode with no percentage would store an intent that never pays anything
-    // differently — the share silently does nothing until a number is set.
-    if (form.revShareMode && !form.revSharePercent) {
-      toast.error('Set the revenue share percentage, or clear the mode');
-      return;
-    }
+    // Removing the last member offer clears the share along with it. The rate is a
+    // percentage of the sale a member offer earns, so without members it cannot be
+    // applied and the server refuses it — sending the stale value from before the
+    // members were removed would fail the save with an error about a field the form no
+    // longer shows.
+    const hasMembers = form.offerIds.length > 0;
 
     const payload = {
       name: form.name,
@@ -157,8 +157,7 @@ export function SmartLinkForm() {
       destinationUrl: form.destinationUrl || null,
       // Null rather than undefined: clearing the share on an existing link has to
       // reach the server as "set this to nothing", and undefined means "unchanged".
-      revShareMode: form.revShareMode || null,
-      revSharePercent: form.revSharePercent ? Number(form.revSharePercent) : null,
+      revSharePercent: hasMembers && form.revSharePercent ? Number(form.revSharePercent) : null,
     };
 
     setSaving(true);
@@ -236,7 +235,10 @@ export function SmartLinkForm() {
         </Field>
       </Section>
 
-      <Section title="Member offers" hint="Approved offers only — a paused or pending member would resolve to a dead redirect.">
+      <Section
+        title="Member offers"
+        hint="Optional. Approved offers only — a paused or pending member would resolve to a dead redirect. Leave empty to make this a plain redirect that sends every click to the Destination URL below, with no offer and no payout."
+      >
         <div className="max-h-72 space-y-1 overflow-y-auto rounded-md border border-border p-2">
           {approvedOffers.length === 0 && <p className="p-2 text-sm text-muted-foreground">No approved offers available yet.</p>}
           {approvedOffers.map((offer) => (
@@ -260,48 +262,56 @@ export function SmartLinkForm() {
 
       <Section
         title="Revenue share"
-        hint="Optional. When set, a conversion through this link pays the affiliate this percentage of what the advertiser pays, instead of the member offer's own payout."
+        hint="Optional. When set, a conversion through this link pays the affiliate this percentage of the sale amount the advertiser reports, instead of the member offer's own payout. Needs at least one member offer — a link with no members carries no offer, so there is no sale to take a share of."
       >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Method" hint="Which conversion type this rate is written for. One rate applies to the whole link.">
-            <Select value={form.revShareMode} onChange={(event) => set('revShareMode', event.target.value)}>
-              <option value="">No revenue share — use each offer's payout</option>
-              {REV_SHARE_MODES.map((mode) => (
-                <option key={mode} value={mode}>
-                  {mode}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Affiliate gets (%)" hint="Percent of the advertiser amount. 80 means the affiliate keeps 80% and you keep 20%.">
-            <Input
-              type="number"
-              min={0}
-              max={100}
-              step="0.01"
-              value={form.revSharePercent}
-              disabled={!form.revShareMode}
-              onChange={(event) => set('revSharePercent', event.target.value)}
-              placeholder="80"
-            />
-          </Field>
-        </div>
-        {form.revShareMode && form.revSharePercent && (
+        {form.offerIds.length === 0 ? (
+          // Disabled rather than hidden: someone who came looking for this setting needs
+          // to be told why it is not available, or they will assume it is missing.
+          // A memberless link has no offer, so /postback rejects the hit before a payout
+          // rule is ever loaded — a percentage here could never be applied to anything.
           <p className="text-xs text-muted-foreground">
-            On an offer where the advertiser pays 10.00, the affiliate would get{' '}
-            {((Number(form.revSharePercent) / 100) * 10).toFixed(2)} and you would keep{' '}
-            {(10 - (Number(form.revSharePercent) / 100) * 10).toFixed(2)}.
+            Unavailable while this link has no member offers. Such a link is a plain redirect — it carries no offer, so it
+            cannot record a conversion or pay a share. Add a member offer to set a rate.
           </p>
+        ) : (
+          <>
+        {/* No "method" select any more. It offered CPA or CPS, gated this input until
+            one was chosen, and was read by nothing — the rate applied to whatever the
+            link sent either way. A share of a sale is CPS by definition, so the choice
+            was never real. Leave the percentage blank for no share. */}
+        <Field
+          label="Affiliate gets (%)"
+          hint="Percent of the sale amount the advertiser reports. 80 means the affiliate keeps 80% and you keep 20%. Leave blank to use each member offer's own payout instead."
+        >
+          <Input
+            type="number"
+            min={0}
+            max={100}
+            step="0.01"
+            value={form.revSharePercent}
+            onChange={(event) => set('revSharePercent', event.target.value)}
+            placeholder="80"
+          />
+        </Field>
+        {form.revSharePercent && (
+          <p className="text-xs text-muted-foreground">
+            On a sale the advertiser reports as 100.00, the affiliate would get{' '}
+            {((Number(form.revSharePercent) / 100) * 100).toFixed(2)} and you would keep{' '}
+            {(100 - (Number(form.revSharePercent) / 100) * 100).toFixed(2)}. The share replaces the member offer's own
+            payout entirely, so a flat-rate offer pays this instead of its flat amount.
+          </p>
+        )}
+          </>
         )}
       </Section>
 
       <Section
         title="Destination"
-        hint="A smart-link normally has no destination of its own — the rotation picks a member offer and the click goes to that offer's Destination URL. Set this only to send matched traffic somewhere else instead."
+        hint="With member offers, this is an override and the link works without it. With no member offers, it is where the link sends everything — so one of the two has to be set."
       >
         <Field
-          label="Destination URL (override, optional)"
-          hint="Leave blank for normal behaviour. When set, every matched click lands here instead — the member offer is still chosen, logged and paid against, so reporting and payouts are unaffected. {click_id} and {payout_amount} are substituted."
+          label="Destination URL"
+          hint="With members: leave blank for normal behaviour, or set it to land every matched click here instead — the member offer is still chosen, logged and paid against, so reporting and payouts are unaffected. With no members: required, and every click goes straight here with no offer and no payout. {click_id} and {payout_amount} are substituted."
         >
           <Input
             value={form.destinationUrl}

@@ -117,10 +117,21 @@ export function getConversionForClick(clickId: string): Promise<ConversionList> 
  * No amount is sent: the backend prices it from the offer's payout rule, exactly as it
  * prices an advertiser's postback. See backend conversion.service.ts.
  */
-export function createConversionForClick(clickId: string, transactionId?: string): Promise<Conversion> {
+/**
+ * `reportedRevenue` is the sale amount — what the advertiser is paying for this
+ * conversion, in the offer's currency — and it is required, exactly as `sum` is on an
+ * inbound postback. It is the base the offer's rate is applied to: without it a
+ * percentage rule or a smart-link revenue share would price the row off the offer's one
+ * configured figure and book differently from every posted-back sibling.
+ */
+export function createConversionForClick(
+  clickId: string,
+  reportedRevenue: number,
+  transactionId?: string,
+): Promise<Conversion> {
   return apiFetch<Conversion>('/conversions', {
     method: 'POST',
-    body: JSON.stringify(transactionId ? { clickId, transactionId } : { clickId }),
+    body: JSON.stringify(transactionId ? { clickId, reportedRevenue, transactionId } : { clickId, reportedRevenue }),
   });
 }
 

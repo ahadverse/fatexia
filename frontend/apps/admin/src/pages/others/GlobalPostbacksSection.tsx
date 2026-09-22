@@ -86,7 +86,11 @@ export function GlobalPostbacksSection() {
    */
   function advertiserUrl(secret: string): string {
     const template =
-      postbacks.data?.find((row) => row.postbackUrl)?.postbackUrl ?? '/postback?click_id={click_id}&secret=<secret>';
+      postbacks.data?.find((row) => row.postbackUrl)?.postbackUrl ??
+      // Only a placeholder until a row loads — the server builds the real one. Kept in
+      // step with it anyway: `sum` is required on every postback, so a template missing
+      // it would be copied out and rejected on the advertiser's first call.
+      '/postback?click_id={click_id}&secret=<secret>&sum={sum}';
     return secret ? template.replace('<secret>', secret) : template;
   }
 
@@ -260,6 +264,18 @@ export function GlobalPostbacksSection() {
                     Affise-style tracker calls it <code className="text-card-foreground">{'{ref_id}'}</code>), and make
                     sure each offer's Destination URL passes <code className="text-card-foreground">{'{click_id}'}</code>
                     into their link so they have something to send back.
+                  </p>
+                  {/* Required, so it is stated as such rather than described as optional
+                      detail. A postback without it is rejected outright and the
+                      conversion is not recorded — the rejection is visible in the
+                      postback log, but the sale is still lost until they fix the URL. */}
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    <code className="text-card-foreground">{'{sum}'}</code> is required and is the{' '}
+                    <span className="text-card-foreground">sale amount they are paying you</span> — not the affiliate's
+                    payout. Replace it with their own sale-amount macro. Percentage payouts and smart-link revenue shares
+                    are calculated from it, so a postback without it is rejected and the conversion is lost. Send it in
+                    the offer's currency; <code className="text-card-foreground">{'revenue'}</code> is accepted as an
+                    alias if their platform spells it that way.
                   </p>
                 </div>
               </>

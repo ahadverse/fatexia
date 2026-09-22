@@ -77,19 +77,85 @@ describe('computeAmounts', () => {
   });
 
   /**
-   * The money-integrity rule from PLAN-backend.md, as a test rather than a comment:
-   * both figures come from what the network configured — the offer's own rule, or a
-   * smart-link rate the network set. Nothing an advertiser's postback carries reaches
-   * this function, so a payload claiming a huge sale cannot inflate what is owed.
+   * The money-integrity rule from PLAN-backend.md, as it stands now.
    *
-   * This used to assert `computeAmounts.length === 1`, using the arity as a proxy for
-   * "no outside input". The smart-link share added a second parameter — sourced from
-   * our own `smart_links` row, not from the payload — so the arity no longer says
-   * anything, and the property itself is asserted instead.
+   * It used to be "nothing from the postback reaches this function". That is no longer
+   * true and the test would be lying if it still said so: an authenticated advertiser
+   * may report the sale's revenue, and `reportedRevenue` carries it here.
+   *
+   * What survives is the part that protects the affiliate's money — the *rate* is always
+   * the network's. A reported figure can only say how large the sale was; the percentage
+   * taken out of it, and a flat payout, still come from the rule. So a payload claiming
+   * a huge sale moves the network's own revenue line, never what a flat-rate affiliate
+   * is owed, and never by more of a percentage offer than the rule already granted.
+   *
+   * This assertion is the no-report case, which must keep pricing from the rule alone.
+   * The reported-revenue cases are the describe block below.
    */
-  it('derives both amounts from the rule alone', () => {
+  it('derives both amounts from the rule when nothing was reported', () => {
     const configured = rule({ payoutType: PayoutType.PERCENTAGE, amount: '10', revenueAmount: '200.00' });
     expect(computeAmounts(configured)).toEqual({ revenueAmount: 200, payoutAmount: 20 });
+  });
+
+  /**
+   * The sale value an advertiser reports on the postback.
+   *
+   * The problem it solves: `rule.revenueAmount` is one configured number standing in for
+   * every sale on the offer, so a revenue share paid identically on a 5.00 order and a
+   * 500.00 one. That made the share unusable on any real CPS offer.
+   *
+   * The boundary being pinned here is base-vs-rate. The advertiser supplies the base;
+   * every percentage applied to it stays the network's.
+   */
+  describe('advertiser-reported revenue', () => {
+    it('becomes the base a percentage rule is applied to', () => {
+      const percentage = rule({ payoutType: PayoutType.PERCENTAGE, amount: '20', revenueAmount: '10.00' });
+      // 20% of the reported 500, not of the configured 10.
+      expect(computeAmounts(percentage, null, 500)).toEqual({ revenueAmount: 500, payoutAmount: 100 });
+    });
+
+    it('lets a smart-link share follow the real sale value', () => {
+      // The case the whole change exists for: one link, two sales, two payouts.
+      const flat = rule({ payoutType: PayoutType.FLAT, amount: '5', revenueAmount: '10.00' });
+      expect(computeAmounts(flat, 80, 42.5)).toEqual({ revenueAmount: 42.5, payoutAmount: 34 });
+      expect(computeAmounts(flat, 80, 5)).toEqual({ revenueAmount: 5, payoutAmount: 4 });
+    });
+
+    it('does not move a flat payout, only the revenue beside it', () => {
+      // A flat rate is what the affiliate was promised. The report corrects the
+      // network's own margin; it must not touch what is owed.
+      const flat = rule({ payoutType: PayoutType.FLAT, amount: '5', revenueAmount: '10.00' });
+      expect(computeAmounts(flat, null, 500)).toEqual({ revenueAmount: 500, payoutAmount: 5 });
+    });
+
+    it('keeps the rate ours — a huge sale cannot raise the percentage', () => {
+      const percentage = rule({ payoutType: PayoutType.PERCENTAGE, amount: '10', revenueAmount: '10.00' });
+      const { revenueAmount, payoutAmount } = computeAmounts(percentage, null, 1000);
+      expect(payoutAmount).toBe(100);
+      // Still exactly the rule's 10%, however large the reported figure was.
+      expect(payoutAmount / revenueAmount).toBeCloseTo(0.1);
+    });
+
+    it('falls back to the rule when nothing usable was reported', () => {
+      const percentage = rule({ payoutType: PayoutType.PERCENTAGE, amount: '20', revenueAmount: '10.00' });
+      // Zero is the one that matters: read literally it would price every conversion at
+      // nothing, so it has to mean "not reported" like null and undefined do.
+      expect(computeAmounts(percentage, null, 0).revenueAmount).toBe(10);
+      expect(computeAmounts(percentage, null, null).revenueAmount).toBe(10);
+      expect(computeAmounts(percentage, null, undefined).revenueAmount).toBe(10);
+    });
+
+    it('ignores a value that is not a finite number', () => {
+      // The query string is coerced before it reaches here, but a NaN slipping through
+      // would otherwise make both amounts NaN and write them to the conversion.
+      const percentage = rule({ payoutType: PayoutType.PERCENTAGE, amount: '20', revenueAmount: '10.00' });
+      expect(computeAmounts(percentage, null, Number.NaN)).toEqual({ revenueAmount: 10, payoutAmount: 2 });
+    });
+
+    it('rounds a payout off a reported figure to whole cents', () => {
+      const percentage = rule({ payoutType: PayoutType.PERCENTAGE, amount: '33', revenueAmount: '10.00' });
+      expect(computeAmounts(percentage, null, 10.1).payoutAmount).toBe(3.33);
+    });
   });
 
   describe('smart-link revenue share', () => {

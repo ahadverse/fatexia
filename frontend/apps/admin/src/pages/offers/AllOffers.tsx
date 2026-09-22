@@ -96,7 +96,18 @@ export function AllOffers() {
     },
     { key: 'advertiser', header: 'Advertiser', render: (o) => advertiserNames.get(o.advertiserId) ?? o.advertiserId },
     { key: 'category', header: 'Category', render: (o) => o.category ?? '—' },
-    { key: 'payout', header: 'Payout', render: (o) => `${o.currency} ${o.displayPayoutAmount.toFixed(2)}` },
+    {
+      key: 'payout',
+      header: 'Payout',
+      // A percentage offer is shown as its rate, not as a currency figure. The amount is
+      // computed from the offer's configured revenue, but a conversion is priced off the
+      // sale amount the advertiser reports — so quoting "USD 20.00" here would name a
+      // number that may match no conversion the offer ever produces.
+      render: (o) =>
+        o.payoutRatePercent !== null
+          ? `${o.payoutRatePercent.toFixed(2)}% of sale`
+          : `${o.currency} ${o.displayPayoutAmount.toFixed(2)}`,
+    },
     {
       key: 'status',
       header: 'Status',

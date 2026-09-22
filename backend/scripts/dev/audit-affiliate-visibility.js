@@ -47,6 +47,13 @@ const FORBIDDEN_KEYS = [
   'proxyCountryCode',
 ];
 const ZEROED_KEYS = ['revenueAmount'];
+// Forbidden rather than zeroed, unlike `revenueAmount` beside it. Zeroing works there
+// because the affiliate row genuinely carries the key and a 0 is a truthful "withheld".
+// Here null already means something specific — "the advertiser reported nothing" — so a
+// nulled field would read as a fact about the conversion rather than as a redaction. The
+// affiliate sees the payout their own rule produced; what the advertiser paid for the
+// sale is the network's margin and never theirs to see.
+FORBIDDEN_KEYS.push('reportedRevenue');
 
 const AFFILIATE_ENDPOINTS = [
   '/auth/me',

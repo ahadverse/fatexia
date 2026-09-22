@@ -192,10 +192,24 @@ export interface OfferDto {
   caps: OfferCapDto[];
   createdAt: string;
   defaultPayoutAmount: number;
-  // What the offer actually pays right now, per its own payout rules (issue #16) —
+  // What the offer's terms come to right now, per its own payout rules (issue #16) —
   // the wildcard/first rule's computed amount, not the separate defaultPayoutAmount
   // field, which is easy to leave at 0 while payoutRules is fully configured.
+  //
+  // On a flat rule this is exactly what a conversion pays. On a percentage rule it is
+  // the rule applied to the offer's *configured* revenue, and a real conversion is now
+  // priced off the sale amount the advertiser reports — so read it with payoutIsRate.
   displayPayoutAmount: number;
+  /**
+   * The representative rule's percentage, when the payout is a share of the sale; null
+   * on a flat rule.
+   *
+   * Non-null means `displayPayoutAmount` is an example at the configured revenue rather
+   * than the amount a conversion will pay, so render this rate instead of that figure.
+   * Before the postback carried the sale's own revenue the two agreed, and nothing
+   * needed to tell them apart.
+   */
+  payoutRatePercent: number | null;
   destinationUrl: string | null;
   fallbackUrl: string | null;
   postbackSecret: string | null;
@@ -339,7 +353,9 @@ export function affiliateLinkId(affiliate: { publicId: string | null; id: string
 // destinationUrl per click.
 function postbackUrlFor(offerRefId: number, postbackSecret: string | null): string | null {
   if (!postbackSecret) return null;
-  return `${env.PUBLIC_TRACKING_URL}/postback?offerId=${offerRefId}&click_id={click_id}&secret=${postbackSecret}`;
+  // `sum` is the sale's revenue and is required on every postback — an advertiser handed
+  // a URL without it has every conversion rejected on their first call.
+  return `${env.PUBLIC_TRACKING_URL}/postback?offerId=${offerRefId}&click_id={click_id}&secret=${postbackSecret}&sum={sum}`;
 }
 
 /**
@@ -409,7 +425,27 @@ export function toAffiliateOfferDto(offer: Offer, context: AffiliateOfferContext
 
 export function toOfferDto(offer: Offer): OfferDto {
   const representativeRule = pickRepresentativeRule(offer.payoutRules);
+  // An illustration of the rule, not a prediction of a conversion — and on a PERCENTAGE
+  // rule the two came apart when /postback started carrying the sale's own revenue. This
+  // figure is still the rule applied to the offer's configured revenue, which is the
+  // right thing for a catalogue column (it describes the terms, which is what an offer
+  // list is for). What it can no longer claim is that every conversion pays this, so the
+  // column is labelled as a rate rather than as an amount — see OfferDto.payoutIsRate
+  // and the Offers table.
   const displayPayoutAmount = representativeRule ? computeAmounts(representativeRule).payoutAmount : 0;
+  // The rule's own percentage, when the payout is a share of the sale. Null on a flat
+  // rule, where displayPayoutAmount is the whole story.
+  //
+  // This is `rule.amount` — the rate — not displayPayoutAmount, which on a percentage
+  // rule is that rate already applied to the configured revenue and so is a currency
+  // figure. Sending the rate is what lets a catalogue column say "20% of sale" instead
+  // of quoting an amount no conversion may ever match.
+  //
+  // Surfaced rather than inferred client-side: the frontend has the rules but not
+  // pickRepresentativeRule's choice among them, so it would have to guess which one the
+  // figure came from.
+  const payoutRatePercent =
+    representativeRule?.payoutType === PayoutType.PERCENTAGE ? Number(representativeRule.amount) : null;
   return {
     id: offer.id,
     refId: offer.refId,
@@ -440,6 +476,7 @@ export function toOfferDto(offer: Offer): OfferDto {
     createdAt: offer.createdAt.toISOString(),
     defaultPayoutAmount: Number(offer.defaultPayoutAmount),
     displayPayoutAmount,
+    payoutRatePercent,
     destinationUrl: offer.destinationUrl,
     fallbackUrl: offer.fallbackUrl,
     postbackSecret: offer.postbackSecret,
