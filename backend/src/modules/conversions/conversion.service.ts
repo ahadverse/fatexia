@@ -6,8 +6,10 @@ import { conversionRepository } from './conversion.repository';
 import { ConversionStatus } from './conversion.entity';
 import { affiliateService } from '../affiliates/affiliate.service';
 import { offerRepository } from '../offers/offer.repository';
+import type { Offer } from '../offers/offer.entity';
+import { networkSettingRepository } from '../network-settings/network-setting.repository';
 import { smartLinkRepository } from '../smart-links/smart-link.repository';
-import { computeAmounts, resolvePayoutRuleForPricing } from '../offers/payout-resolution';
+import { computeAmounts, computeSmartLinkAmounts, resolvePayoutRuleForPricing } from '../offers/payout-resolution';
 import { safeSendConversionPostback } from '../postback/outbound-postback.service';
 import { announceConversion } from './conversion-announce';
 import { notificationService } from '../notifications/notification.service';
@@ -40,7 +42,7 @@ export const conversionService = {
     ]);
 
     const [offers, affiliates, clickRefIds] = await Promise.all([
-      offerNames(rows.map((r) => r.offerId)),
+      offerNames(rows.flatMap((r) => (r.offerId ? [r.offerId] : []))),
       affiliateNames(rows.flatMap((r) => (r.affiliateId ? [r.affiliateId] : []))),
       // The number the advertiser posted back, which is what a dispute about this
       // conversion will quote — the stored clickId is the internal uuid.
@@ -49,7 +51,7 @@ export const conversionService = {
 
     const dtos = rows.map((row) =>
       toConversionDto(row, {
-        offerName: offers.get(row.offerId) ?? null,
+        offerName: row.offerId ? (offers.get(row.offerId) ?? null) : null,
         affiliateName: row.affiliateId ? (affiliates.get(row.affiliateId) ?? null) : null,
         clickRefId: row.clickId ? (clickRefIds.get(row.clickId) ?? null) : null,
       }),
@@ -81,14 +83,14 @@ export const conversionService = {
     ]);
 
     const [offers, clickRefIds] = await Promise.all([
-      offerNames(rows.map((row) => row.offerId)),
+      offerNames(rows.flatMap((row) => (row.offerId ? [row.offerId] : []))),
       clickRepository.refIdsByIds(rows.flatMap((row) => (row.clickId ? [row.clickId] : []))),
     ]);
 
     return {
       ...paginate(
         rows.map((row) =>
-          toOwnConversionDto(row, offers.get(row.offerId) ?? null, row.clickId ? (clickRefIds.get(row.clickId) ?? null) : null),
+          toOwnConversionDto(row, row.offerId ? (offers.get(row.offerId) ?? null) : null, row.clickId ? (clickRefIds.get(row.clickId) ?? null) : null),
         ),
         total,
         filters,
@@ -103,12 +105,12 @@ export const conversionService = {
       throw new NotFoundError('Conversion not found');
     }
     const [offers, affiliates, clickRefIds] = await Promise.all([
-      offerNames([conversion.offerId]),
+      offerNames(conversion.offerId ? [conversion.offerId] : []),
       affiliateNames(conversion.affiliateId ? [conversion.affiliateId] : []),
       clickRepository.refIdsByIds(conversion.clickId ? [conversion.clickId] : []),
     ]);
     return toConversionDto(conversion, {
-      offerName: offers.get(conversion.offerId) ?? null,
+      offerName: conversion.offerId ? (offers.get(conversion.offerId) ?? null) : null,
       affiliateName: conversion.affiliateId ? (affiliates.get(conversion.affiliateId) ?? null) : null,
       clickRefId: conversion.clickId ? (clickRefIds.get(conversion.clickId) ?? null) : null,
     });
@@ -148,45 +150,72 @@ export const conversionService = {
       throw new ValidationError(`This click already has conversion #${existing.refId} (${existing.status.toLowerCase()})`);
     }
 
-    const offer = await offerRepository.findForClick(click.offerId);
-    if (!offer) {
-      throw new NotFoundError('The offer this click belongs to no longer exists');
-    }
-
-    // No rule, no price. Every offer is supposed to have one (OfferForm requires it),
-    // so this is the case where an offer was configured incompletely — and inventing a
-    // zero-payout conversion for it would look like a successful add while quietly
-    // paying the affiliate nothing.
-    const rule = await resolvePayoutRuleForPricing(offer.payoutRules, click);
-    if (!rule) {
-      throw new ValidationError('This offer has no payout rule, so there is nothing to price the conversion from. Add a payout rule to the offer first.');
-    }
-
     // A click that came through a smart link is priced against that link's revenue
     // share, read now rather than at click time — same as the postback path.
     const smartLink = click.smartLinkId ? await smartLinkRepository.findById(click.smartLinkId) : null;
     const revSharePercent = smartLink?.revSharePercent != null ? Number(smartLink.revSharePercent) : null;
 
-    // Priced from the admin's reported sale amount, exactly as the postback path prices
-    // from the advertiser's. Without this a hand-added conversion on a percentage or
-    // revenue-share offer would be priced off the offer's configured revenue while every
-    // posted-back sibling was priced off the real sale.
-    const { revenueAmount, payoutAmount } = computeAmounts(rule, revSharePercent, dto.reportedRevenue);
+    // Two pricing paths, because a click may have no offer at all: one through a
+    // smart-link whose members are empty is sold against the link's own revenue share.
+    // Everything after this point is identical, which is why they converge on one create.
+    let revenueAmount: number;
+    let payoutAmount: number;
+    let currency: string;
+    let approved: boolean;
+    let offer: Offer | null = null;
 
-    // The offer's own settings decide this, not the admin — a hold configured on the
-    // rule exists precisely so conversions of this kind wait for review.
-    const approved = !rule.holdEnabled && offer.autoApproveConversions;
+    if (click.offerId) {
+      offer = await offerRepository.findForClick(click.offerId);
+      if (!offer) {
+        throw new NotFoundError('The offer this click belongs to no longer exists');
+      }
+
+      // No rule, no price. Every offer is supposed to have one (OfferForm requires it),
+      // so this is the case where an offer was configured incompletely — and inventing a
+      // zero-payout conversion for it would look like a successful add while quietly
+      // paying the affiliate nothing.
+      const rule = await resolvePayoutRuleForPricing(offer.payoutRules, click);
+      if (!rule) {
+        throw new ValidationError('This offer has no payout rule, so there is nothing to price the conversion from. Add a payout rule to the offer first.');
+      }
+
+      // Priced from the admin's reported sale amount, exactly as the postback path prices
+      // from the advertiser's. Without this a hand-added conversion on a percentage or
+      // revenue-share offer would be priced off the offer's configured revenue while every
+      // posted-back sibling was priced off the real sale.
+      ({ revenueAmount, payoutAmount } = computeAmounts(rule, revSharePercent, dto.reportedRevenue));
+      currency = offer.currency;
+      // The offer's own settings decide this, not the admin — a hold configured on the
+      // rule exists precisely so conversions of this kind wait for review.
+      approved = !rule.holdEnabled && offer.autoApproveConversions;
+    } else {
+      // No offer on the click: a smart-link with no members. The link's share is the only
+      // rate there is, so without one the conversion cannot be priced and is refused
+      // rather than booked at zero.
+      const amounts = computeSmartLinkAmounts(revSharePercent, dto.reportedRevenue);
+      if (!amounts) {
+        throw new ValidationError(
+          'This click came through a smart-link with no member offers, so it is priced from that link’s revenue share — set a percentage on the smart-link first.',
+        );
+      }
+      ({ revenueAmount, payoutAmount } = amounts);
+      // No offer means no per-offer currency or approval setting, so the network-level
+      // ones stand in — the same two an offer would otherwise have inherited a default from.
+      const settings = (await networkSettingRepository.find()) ?? (await networkSettingRepository.createDefault());
+      currency = settings.defaultCurrency;
+      approved = settings.autoApproveConversions;
+    }
 
     const conversion = await conversionRepository.create({
       clickId: click.id,
-      offerId: offer.id,
+      offerId: offer?.id ?? null,
       affiliateId: click.affiliateId,
       revenueAmount: revenueAmount.toFixed(2),
       payoutAmount: payoutAmount.toFixed(2),
       // Recorded like a postback's, so the Conversions screen shows where the figure
       // came from whether a machine or a person supplied it.
       reportedRevenue: dto.reportedRevenue.toFixed(2),
-      currency: offer.currency,
+      currency,
       status: approved ? ConversionStatus.APPROVED : ConversionStatus.PENDING,
       isDuplicate: false,
       // It has a click by construction — that is the only way to reach this method.

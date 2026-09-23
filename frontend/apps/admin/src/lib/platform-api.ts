@@ -56,6 +56,15 @@ export function deleteSmartLink(id: string): Promise<void> {
   return apiFetch<void>(`/smart-links/${id}`, { method: 'DELETE' });
 }
 
+// Same shape as uploadOfferThumbnail in offers-api — the file goes up on its own and
+// the form holds the URL it returns, so a thumbnail picked for a link that is never
+// saved costs an orphaned object rather than a half-written row.
+export function uploadSmartLinkThumbnail(file: File): Promise<{ url: string }> {
+  const formData = new FormData();
+  formData.append('image', file);
+  return apiFetch<{ url: string }>('/uploads/smart-link-thumbnail', { method: 'POST', body: formData });
+}
+
 // Billing (invoices, payout batches and the money ledger) lives in ./billing-api.
 
 // Subscriptions

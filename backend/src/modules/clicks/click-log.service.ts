@@ -123,7 +123,7 @@ function toClickLogRow(click: Click, offerName: string | null, affiliateName: st
 export interface OwnClickLogRow extends ClickGeoDto {
   id: string;
   refId: number;
-  offerId: string;
+  offerId: string | null;
   offerName: string | null;
   ip: string;
   userAgent: string | null;
@@ -155,7 +155,7 @@ export const clickLogService = {
       clickRepository.findLogs(scoped),
       clickRepository.summarize(scoped),
     ]);
-    const offers = await offerNames(rows.map((row) => row.offerId));
+    const offers = await offerNames(rows.flatMap((row) => (row.offerId ? [row.offerId] : [])));
 
     return {
       ...paginate(
@@ -164,7 +164,7 @@ export const clickLogService = {
           id: row.id,
           refId: row.refId,
           offerId: row.offerId,
-          offerName: offers.get(row.offerId) ?? null,
+          offerName: row.offerId ? offers.get(row.offerId) ?? null : null,
           ip: row.ip,
           userAgent: row.userAgent,
           deviceType: row.deviceType,
@@ -207,7 +207,7 @@ export const clickLogService = {
       clickRepository.summarize(filters),
     ]);
     const [offers, affiliates] = await Promise.all([
-      offerNames(rows.map((r) => r.offerId)),
+      offerNames(rows.flatMap((r) => (r.offerId ? [r.offerId] : []))),
       affiliateNames(rows.flatMap((r) => (r.affiliateId ? [r.affiliateId] : []))),
     ]);
 
@@ -216,7 +216,7 @@ export const clickLogService = {
         rows.map((row) =>
           toClickLogRow(
             row,
-            offers.get(row.offerId) ?? null,
+            row.offerId ? offers.get(row.offerId) ?? null : null,
             row.affiliateId ? (affiliates.get(row.affiliateId) ?? null) : null,
           ),
         ),

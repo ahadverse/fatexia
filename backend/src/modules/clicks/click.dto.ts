@@ -127,7 +127,7 @@ export interface ClickLogDto extends ClickGeoDto {
   id: string;
   /** The number the advertiser saw as `click_id` — what a postback dispute quotes. */
   refId: number;
-  offerId: string;
+  offerId: string | null;
   affiliateId: string | null;
   ip: string;
   // The raw UA is the row-level detail behind the parsed device/os/browser — "why was

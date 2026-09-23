@@ -30,9 +30,17 @@ export class Conversion {
   @Column({ type: 'uuid', nullable: true })
   clickId!: string | null;
 
+  /**
+   * Null when the conversion came through a smart-link with no member offers.
+   *
+   * Those are priced from the link's own revenue share against the sale amount the
+   * advertiser reported, so no offer is involved. The click's `smartLinkId` is the
+   * attribution. Offer-grouped reports inner-join `offers` and therefore omit these
+   * rows, which is the honest reading — they belong to no offer.
+   */
   @Index()
-  @Column({ type: 'uuid' })
-  offerId!: string;
+  @Column({ type: 'uuid', nullable: true })
+  offerId!: string | null;
 
   @Index()
   @Column({ type: 'uuid', nullable: true })

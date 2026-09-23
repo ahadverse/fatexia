@@ -127,7 +127,13 @@
       "Bash(sed -i \"s|{ point: 'Payout math', fatexia: 'Recomputed from the offer rule', typical: 'Trusted from the advertiser postback' },|{ point: 'Payout math', fatexia: 'Our rate, applied to the reported sale', typical: 'Whatever the advertiser postback claims' },|\" apps/public/src/lib/content.ts)",
       "Bash(sed -i \"s|Payout <span className=\\\\\"font-semibold text-foreground\\\\\">computed from the offer rule</span> — never trusted from the postback|Payout rate <span className=\\\\\"font-semibold text-foreground\\\\\">from the offer rule</span> — never set by the postback|\" apps/public/src/components/HeroVisual.tsx)",
       "Bash(node -e \"console.log\\(require\\('typeorm/package.json'\\).version\\)\")",
-      "Bash(awk '/public async up/,/^  }/' src/infra/database/migrations/1789000000000-ClickProxyProviderDetail.ts)"
+      "Bash(awk '/public async up/,/^  }/' src/infra/database/migrations/1789000000000-ClickProxyProviderDetail.ts)",
+      "Bash(grep -vE \"COUNTRY_OPTIONS|DEVICE_TYPE_OPTIONS|MultiSelect|checkbox|label|span|^\\\\s*//\")",
+      "Bash(grep -rn '\\\\\\\\\"' apps/admin/src/pages/offers/SmartLinkForm.tsx apps/admin/src/pages/reports/ClickLogs.tsx apps/admin/src/pages/others/GlobalPostbacksSection.tsx)",
+      "Bash(npx vite *)",
+      "PowerShell($wt = \"C:\\\\Users\\\\Ahad\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\e--Ahad-Hossain-Arif-vai-Fatexia\\\\f590ea66-296f-4844-a6df-a6ecfbbc26d8\\\\scratchpad\\\\head-wt\\\\backend\"; $src = \"E:\\\\Ahad Hossain\\\\Arif vai\\\\Fatexia\\\\backend\\\\node_modules\"; New-Item -ItemType Junction -Path \"$wt\\\\node_modules\" -Target $src | Out-Null; if \\($?\\) { \"junction created\" })",
+      "PowerShell($j = \"C:\\\\Users\\\\Ahad\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\e--Ahad-Hossain-Arif-vai-Fatexia\\\\f590ea66-296f-4844-a6df-a6ecfbbc26d8\\\\scratchpad\\\\head-wt\\\\backend\\\\node_modules\"; if \\(\\(Get-Item $j -Force\\).LinkType -eq 'Junction'\\) { cmd /c rmdir \"$j\"; \"junction removed\" } else { \"NOT a junction - aborting\"; exit 1 }; Test-Path \"E:\\\\Ahad Hossain\\\\Arif vai\\\\Fatexia\\\\backend\\\\node_modules\\\\typescript\")",
+      "Bash(git worktree *)"
     ]
   }
 }

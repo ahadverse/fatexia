@@ -5,7 +5,6 @@ import { Offer, OfferStatus } from '../offers/offer.entity';
 import { smartLinkRepository } from './smart-link.repository';
 import {
   MISSING_DESTINATION_MESSAGE,
-  REV_SHARE_WITHOUT_MEMBERS_MESSAGE,
   toSmartLinkDto,
   type CreateSmartLinkDto,
   type SmartLinkDto,
@@ -51,6 +50,8 @@ export const smartLinkService = {
       name: dto.name,
       slug: dto.slug,
       description: dto.description ?? null,
+      iconUrl: dto.iconUrl ?? null,
+      previewLink: dto.previewLink ?? null,
       offerIds: dto.offerIds,
       countries: dto.countries,
       devices: dto.devices,
@@ -82,14 +83,12 @@ export const smartLinkService = {
     if (mergedOfferIds.length === 0 && !mergedDestination) {
       throw new ValidationError(MISSING_DESTINATION_MESSAGE);
     }
-    const mergedRevSharePercent = dto.revSharePercent !== undefined ? dto.revSharePercent : link.revSharePercent;
-    if (mergedOfferIds.length === 0 && mergedRevSharePercent != null) {
-      throw new ValidationError(REV_SHARE_WITHOUT_MEMBERS_MESSAGE);
-    }
     await smartLinkRepository.update(id, {
       ...(dto.name !== undefined && { name: dto.name }),
       ...(dto.slug !== undefined && { slug: dto.slug }),
       ...(dto.description !== undefined && { description: dto.description ?? null }),
+      ...(dto.iconUrl !== undefined && { iconUrl: dto.iconUrl ?? null }),
+      ...(dto.previewLink !== undefined && { previewLink: dto.previewLink ?? null }),
       ...(dto.offerIds !== undefined && { offerIds: dto.offerIds }),
       ...(dto.countries !== undefined && { countries: dto.countries }),
       ...(dto.devices !== undefined && { devices: dto.devices }),

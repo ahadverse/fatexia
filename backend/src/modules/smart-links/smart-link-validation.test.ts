@@ -47,11 +47,12 @@ describe('createSmartLinkSchema', () => {
     }
   });
 
-  it('refuses a revenue share on a link with no members', () => {
-    // The share is a percentage of a member offer's revenue, and a memberless link has
-    // no offer — /postback rejects the hit before a payout rule is loaded, so the rate
-    // could never be applied. Refused rather than ignored, because a number sitting in
-    // the form looks like it is working.
+  it('allows a revenue share on a link with no members — that is what prices it', () => {
+    // This used to be refused, correctly at the time: a memberless link had no offer,
+    // /postback resolved one before doing anything, and so the link could not convert.
+    // Now such a link logs clicks with a null offerId and its conversions are priced
+    // from this percentage against the postback's reported sale, with no payout rule
+    // involved. The share is the only rate it has.
     const parsed = createSmartLinkSchema.safeParse({
       ...base,
       offerIds: [],
@@ -59,13 +60,10 @@ describe('createSmartLinkSchema', () => {
       revSharePercent: 80,
     });
 
-    expect(parsed.success).toBe(false);
-    if (!parsed.success) {
-      expect(parsed.error.issues.some((i) => i.path.join('.') === 'revSharePercent')).toBe(true);
-    }
+    expect(parsed.success).toBe(true);
   });
 
-  it('allows a revenue share once the link has a member', () => {
+  it('still allows a revenue share when the link has a member', () => {
     const parsed = createSmartLinkSchema.safeParse({
       ...base,
       offerIds: [OFFER_ID],

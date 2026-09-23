@@ -69,7 +69,10 @@ function buildValues(conversion: Conversion, offerName: string): Record<string, 
     payout: Number(conversion.payoutAmount).toFixed(2),
     currency: conversion.currency,
     status: conversion.status,
-    offer_id: conversion.offerId,
+    // Empty on a conversion through a smart-link with no member offers — there is no
+    // offer to name. The affiliate's tracker gets a blank macro rather than the string
+    // "null", which is what an unguarded interpolation would have sent.
+    offer_id: conversion.offerId ?? '',
     conversion_id: conversion.id,
     offer_name: offerName,
     affiliate_id: conversion.affiliateId ?? '',
@@ -129,7 +132,7 @@ async function attempt(url: string): Promise<{ status: number | null; error: str
  * back a conversion they just approved.
  */
 export async function sendConversionPostback(conversion: Conversion): Promise<void> {
-  const offer = await offerRepository.findById(conversion.offerId);
+  const offer = conversion.offerId ? await offerRepository.findById(conversion.offerId) : null;
   const values = buildValues(conversion, offer?.name ?? '');
 
   const targets: { template: string; globalId: string | null }[] = [];

@@ -86,12 +86,38 @@ export function AllOffers() {
       key: 'name',
       header: 'Name',
       render: (o) => (
-        <button type="button" onClick={() => navigate(`/offers/${o.id}`)} className="text-left font-medium text-foreground hover:underline">
-          {/* The offer number, where every network puts it — it is what the tracking
-              link carries and what a message about this offer will quote. */}
-          <span className="mr-1 text-muted-foreground">({o.refId})</span>
-          {o.name}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Letters when an offer has no thumbnail, rather than nothing: a missing image
+              would shift every name in the column left and right down the list. */}
+          {o.iconUrl ? (
+            <img src={o.iconUrl} alt="" className="size-8 shrink-0 rounded border border-border object-cover" />
+          ) : (
+            <span className="flex size-8 shrink-0 items-center justify-center rounded border border-border text-[10px] font-medium text-muted-foreground">
+              {o.name.slice(0, 2).toUpperCase()}
+            </span>
+          )}
+          <button type="button" onClick={() => navigate(`/offers/${o.id}`)} className="text-left font-medium text-foreground hover:underline">
+            {/* The offer number, where every network puts it — it is what the tracking
+                link carries and what a message about this offer will quote. */}
+            <span className="mr-1 text-muted-foreground">({o.refId})</span>
+            {o.name}
+          </button>
+          {/* Only when the offer has one — most will not, and an always-present button
+              that is dead half the time is worse than an absent one. Stops propagation
+              so it opens the landing page instead of the offer's detail view. */}
+          {o.previewLink && (
+            <a
+              href={o.previewLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(event) => event.stopPropagation()}
+              className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
+              title="Open the advertiser's landing page in a new tab"
+            >
+              Preview
+            </a>
+          )}
+        </div>
       ),
     },
     { key: 'advertiser', header: 'Advertiser', render: (o) => advertiserNames.get(o.advertiserId) ?? o.advertiserId },

@@ -1,26 +1,35 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Button, Input, PageHeader, Select, Skeleton, toast } from '@fatexia/ui';
-import type { Offer, SmartLink, SmartLinkRotation } from '@fatexia/types';
-import { createSmartLink, getSmartLinks, updateSmartLink } from '../../lib/platform-api';
-import { getOffers } from '../../lib/offers-api';
+import { Button, CountryFlag, Input, MultiSelectCombobox, PageHeader, Skeleton, cn, toast } from '@fatexia/ui';
+import type { SmartLink, SmartLinkRotation } from '@fatexia/types';
+import { COUNTRY_CODES } from '@fatexia/types';
+import { createSmartLink, getSmartLinks, updateSmartLink, uploadSmartLinkThumbnail } from '../../lib/platform-api';
 import { useAsync } from '../../hooks/useAsync';
 import { RichTextEditor } from '../../components/RichTextEditor';
 
-const ROTATIONS: { value: SmartLinkRotation; label: string; hint: string }[] = [
-  { value: 'TOP_PAYOUT', label: 'Highest payout', hint: 'Always sends to the best-paying eligible offer.' },
-  { value: 'ROUND_ROBIN', label: 'Round robin', hint: 'Splits traffic evenly across members.' },
-  { value: 'BEST_CR', label: 'Best converting', hint: 'Weights toward members with the strongest recent CR.' },
-];
+// The same two option lists the offer form's rule targeting uses. A smart-link's gate
+// and a payout rule's gate are matched against the identical click fields, so a value
+// that is valid on one screen has to be valid on the other.
+const COUNTRY_OPTIONS = COUNTRY_CODES.map((c) => ({
+  value: c.code,
+  label: c.name,
+  sublabel: c.code,
+  icon: <CountryFlag code={c.code} title={c.name} />,
+}));
+// UAParser's device.type taxonomy plus the "desktop" fallback click.service.ts applies —
+// exactly the values a click's deviceType is stored as.
+const DEVICE_TYPE_OPTIONS = ['desktop', 'mobile', 'tablet', 'console', 'smarttv', 'wearable', 'embedded'];
 
 
 interface FormState {
   name: string;
   slug: string;
   description: string;
+  iconUrl: string;
+  previewLink: string;
   offerIds: string[];
-  countries: string;
-  devices: string;
+  countries: string[];
+  devices: string[];
   rotation: SmartLinkRotation;
   fallbackUrl: string;
   destinationUrl: string;
@@ -31,9 +40,11 @@ const EMPTY_FORM: FormState = {
   name: '',
   slug: '',
   description: '',
+  iconUrl: '',
+  previewLink: '',
   offerIds: [],
-  countries: '',
-  devices: '',
+  countries: [],
+  devices: [],
   rotation: 'TOP_PAYOUT',
   fallbackUrl: '',
   destinationUrl: '',
@@ -48,13 +59,6 @@ function slugify(value: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 60);
-}
-
-function splitList(value: string): string[] {
-  return value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
 }
 
 function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
@@ -82,9 +86,9 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 /**
  * Create/edit a smart-link on its own page rather than in a modal.
  *
- * The form outgrew a dialog: member-offer picking is a scrolling list, and the revenue
- * share needs its own explained section. A modal put both inside a box that scrolled
- * independently of the page behind it.
+ * The form outgrew a dialog: targeting, the destination and the revenue share each need
+ * their own explained section. A modal put them inside a box that scrolled independently
+ * of the page behind it.
  */
 export function SmartLinkForm() {
   const navigate = useNavigate();
@@ -93,15 +97,12 @@ export function SmartLinkForm() {
 
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [uploadingIcon, setUploadingIcon] = useState(false);
+  const [draggingIcon, setDraggingIcon] = useState(false);
 
   // The list endpoint is the only way to read one link — there is no GET /:id — so the
   // edit view filters the collection it already knows how to fetch.
   const links = useAsync<SmartLink[]>(() => getSmartLinks(), []);
-  const offers = useAsync<Offer[]>(() => getOffers(), []);
-
-  // Only APPROVED offers can be members — the server rejects anything else, since a
-  // paused or pending member would resolve to a dead redirect at click time.
-  const approvedOffers = (offers.data ?? []).filter((offer) => offer.status === 'APPROVED');
 
   const existing = isEdit ? links.data?.find((link) => link.id === id) : undefined;
 
@@ -111,9 +112,11 @@ export function SmartLinkForm() {
       name: existing.name,
       slug: existing.slug,
       description: existing.description ?? '',
+      iconUrl: existing.iconUrl ?? '',
+      previewLink: existing.previewLink ?? '',
       offerIds: existing.offerIds,
-      countries: existing.countries.join(', '),
-      devices: existing.devices.join(', '),
+      countries: existing.countries,
+      devices: existing.devices,
       rotation: existing.rotation,
       fallbackUrl: existing.fallbackUrl ?? '',
       destinationUrl: existing.destinationUrl ?? '',
@@ -125,25 +128,42 @@ export function SmartLinkForm() {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  // Same two handlers as OfferForm's thumbnail, against the smart-link bucket.
+  async function handleIconUpload(file: File | undefined) {
+    if (!file) return;
+    // A drop accepts anything the OS allows — a PDF, a folder, a .txt. Checked here so
+    // the wrong file fails with a sentence rather than a 400 from the upload route.
+    if (!file.type.startsWith('image/')) {
+      toast.error('That file is not an image');
+      return;
+    }
+    setUploadingIcon(true);
+    try {
+      const { url } = await uploadSmartLinkThumbnail(file);
+      set('iconUrl', url);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to upload thumbnail');
+    } finally {
+      setUploadingIcon(false);
+    }
+  }
+
+  function handleDrop(event: React.DragEvent) {
+    event.preventDefault();
+    setDraggingIcon(false);
+    void handleIconUpload(event.dataTransfer.files?.[0]);
+  }
+
   async function save() {
     if (!form.name.trim()) {
       toast.error('Give the smart-link a name');
       return;
     }
-    // Member offers are optional: a link with none is a plain redirect. What it cannot
-    // be is a link with neither members nor a destination, because that has nowhere to
-    // send a visitor and throws on every click. Mirrors the backend's own check so the
-    // admin is told before the request rather than by a 400.
-    if (form.offerIds.length === 0 && !form.destinationUrl.trim()) {
-      toast.error('Pick a member offer, or set a destination URL for the link to send traffic to');
-      return;
-    }
-    // Said out loud rather than silently dropped. Sending null here would save cleanly
-    // and quietly discard a rate the operator had typed — the exact failure this whole
-    // section exists to avoid. The rate is a percentage of the sale a member offer
-    // earns, so without members there is nothing for it to apply to.
-    if (form.revSharePercent && form.offerIds.length === 0) {
-      toast.error('A revenue share needs at least one member offer — pick one, or clear the percentage');
+    // A smart-link is a redirect with a rate on it, so it must have somewhere to send
+    // traffic. Mirrors the backend's own check so the admin is told before the request
+    // rather than by a 400.
+    if (!form.destinationUrl.trim()) {
+      toast.error('Set a destination URL — it is where this link sends every click');
       return;
     }
 
@@ -151,17 +171,19 @@ export function SmartLinkForm() {
       name: form.name,
       slug: form.slug,
       description: form.description || undefined,
+      // Null rather than undefined when blank, so removing a thumbnail or a preview
+      // link on an existing record actually clears the column instead of leaving it
+      // untouched — same reason revSharePercent does it below.
+      iconUrl: form.iconUrl || null,
+      previewLink: form.previewLink.trim() || null,
       offerIds: form.offerIds,
-      countries: splitList(form.countries),
-      devices: splitList(form.devices),
+      countries: form.countries,
+      devices: form.devices,
       rotation: form.rotation,
       fallbackUrl: form.fallbackUrl || undefined,
       destinationUrl: form.destinationUrl || null,
-      // Null rather than undefined: clearing the share on an existing link has to
-      // reach the server as "set this to nothing", and undefined means "unchanged".
-      // Null rather than undefined when blank: clearing the share on an existing link
-      // has to reach the server as "set this to nothing", and undefined means
-      // "unchanged". The no-members case is refused above, not silently nulled here.
+      // Null rather than undefined when blank: clearing the rate on an existing link has
+      // to reach the server as "set this to nothing", and undefined means "unchanged".
       revSharePercent: form.revSharePercent ? Number(form.revSharePercent) : null,
     };
 
@@ -201,7 +223,7 @@ export function SmartLinkForm() {
     <div className="space-y-6">
       <PageHeader
         title={isEdit ? 'Edit smart-link' : 'New smart-link'}
-        description="One link that resolves to the best matching member offer at click time, based on the visitor's geo and device."
+        description="One tracking link with its own payout rate. Clicks are logged and redirected to its destination; conversions are priced from the sale amount the advertiser posts back."
         actions={
           <>
             <Button variant="outline" onClick={() => navigate('/offers/smart-links')}>
@@ -235,51 +257,72 @@ export function SmartLinkForm() {
             <Input value={form.slug} onChange={(event) => set('slug', slugify(event.target.value))} placeholder="finance-rotator" />
           </Field>
         </div>
+        <Field
+          label="Preview link"
+          hint="The landing page as an affiliate should see it, without tracking. Nothing redirects here — it is for looking at what the link sends traffic to. Leave blank to hide the button."
+        >
+          <Input
+            value={form.previewLink}
+            onChange={(event) => set('previewLink', event.target.value)}
+            placeholder="https://advertiser.com/landing-page"
+          />
+        </Field>
+
         <Field label="Description">
           <RichTextEditor value={form.description} onChange={(html) => set('description', html)} />
         </Field>
-      </Section>
 
-      <Section
-        title="Member offers"
-        hint="Optional. Approved offers only — a paused or pending member would resolve to a dead redirect. Leave empty to make this a plain redirect that sends every click to the Destination URL below, with no offer and no payout."
-      >
-        <div className="max-h-72 space-y-1 overflow-y-auto rounded-md border border-border p-2">
-          {approvedOffers.length === 0 && <p className="p-2 text-sm text-muted-foreground">No approved offers available yet.</p>}
-          {approvedOffers.map((offer) => (
-            <label key={offer.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent">
+        {/* Not wrapped in Field: that renders a <label>, and a file input inside one
+            opens the picker on every click of the surrounding text. */}
+        <div className="space-y-1.5">
+          <span className="text-xs font-medium text-muted-foreground">Thumbnail image</span>
+          {/* dragOver must preventDefault or the browser treats the drop as a
+              navigation and opens the image in place of the form — losing everything
+              typed so far. */}
+          <div
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDraggingIcon(true);
+            }}
+            onDragLeave={() => setDraggingIcon(false)}
+            onDrop={handleDrop}
+            className={cn(
+              'flex items-center gap-3 rounded-md border border-dashed p-3 transition-colors',
+              draggingIcon ? 'border-primary bg-primary/5' : 'border-border',
+            )}
+          >
+            {form.iconUrl && <img src={form.iconUrl} alt="" className="size-14 shrink-0 rounded-md border border-border object-cover" />}
+            <div className="space-y-1">
               <input
-                type="checkbox"
-                checked={form.offerIds.includes(offer.id)}
-                onChange={(event) =>
-                  set('offerIds', event.target.checked ? [...form.offerIds, offer.id] : form.offerIds.filter((x) => x !== offer.id))
-                }
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                disabled={uploadingIcon}
+                onChange={(event) => void handleIconUpload(event.target.files?.[0])}
+                className="text-xs text-muted-foreground file:mr-3 file:rounded-md file:border file:border-border file:bg-secondary file:px-3 file:py-1.5 file:text-xs file:text-secondary-foreground hover:file:bg-accent"
               />
-              <span className="text-card-foreground">{offer.name}</span>
-              <span className="text-xs text-muted-foreground">
-                {offer.currency} {offer.defaultPayoutAmount.toFixed(2)}
-              </span>
-            </label>
-          ))}
+              <p className="text-xs text-muted-foreground">
+                {uploadingIcon ? 'Uploading…' : 'or drop an image anywhere in this box'}
+              </p>
+              {form.iconUrl && !uploadingIcon && (
+                <button type="button" onClick={() => set('iconUrl', '')} className="text-xs text-destructive hover:underline">
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
         </div>
-        <p className="text-xs text-muted-foreground">{form.offerIds.length} selected</p>
       </Section>
 
       <Section
         title="Revenue share"
-        hint="Optional. When set, a conversion through this link pays the affiliate this percentage of the sale amount the advertiser reports, instead of the member offer's own payout. Needs at least one member offer — a link with no members carries no offer, so there is no sale to take a share of."
+        hint="What the affiliate earns on this link. The advertiser's postback reports the sale amount and this percentage of it is the payout. Without a rate the link still tracks clicks, but a conversion on it cannot be priced and is refused."
       >
-        {/* Disabled when the link has no members, never hidden. A control that vanishes
-            reads as a missing feature — the operator scrolls to the section they came
-            for and finds a paragraph where the input should be. Greyed out with the
-            reason underneath says the same thing without making them wonder.
-
-            No "method" select any more either. It offered CPA or CPS, gated this input
-            until one was chosen, and was read by nothing — the rate applied to whatever
-            the link sent regardless. A share of a sale is CPS by definition. */}
+        {/* No "method" select. It offered CPA or CPS, gated this input until one was
+            chosen, and was read by nothing — the rate applied to whatever the link sent
+            regardless. A share of a sale is CPS by definition. */}
         <Field
           label="Affiliate gets (%)"
-          hint="Percent of the sale amount the advertiser reports. 80 means the affiliate keeps 80% and you keep 20%. Leave blank to use each member offer's own payout instead."
+          hint="Percent of the sale amount the advertiser reports on the postback. 80 means the affiliate keeps 80% and you keep 20%."
         >
           <Input
             type="number"
@@ -291,18 +334,20 @@ export function SmartLinkForm() {
             placeholder="80"
           />
         </Field>
-        {form.offerIds.length === 0 && form.revSharePercent && (
+        {/* Warned, not blocked. A link can reasonably be saved before its rate is
+            decided — it just cannot earn until it is, and the postback that arrives
+            meanwhile is refused rather than booked at zero. */}
+        {!form.revSharePercent && (
           <p className="text-xs text-warning">
-            This rate needs a member offer. A link with no members is a plain redirect — it carries no offer, so there is
-            no sale to take a share of, and the save will be refused until one is picked.
+            Without a rate this link tracks clicks but cannot pay: a conversion on it has no percentage to apply to the
+            reported sale, so the postback is refused.
           </p>
         )}
-        {form.offerIds.length > 0 && form.revSharePercent && (
+        {form.revSharePercent && (
           <p className="text-xs text-muted-foreground">
             On a sale the advertiser reports as 100.00, the affiliate would get{' '}
             {((Number(form.revSharePercent) / 100) * 100).toFixed(2)} and you would keep{' '}
-            {(100 - (Number(form.revSharePercent) / 100) * 100).toFixed(2)}. The share replaces the member offer's own
-            payout entirely, so a flat-rate offer pays this instead of its flat amount.
+            {(100 - (Number(form.revSharePercent) / 100) * 100).toFixed(2)}.
           </p>
         )}
       </Section>
@@ -325,22 +370,46 @@ export function SmartLinkForm() {
 
       <Section title="Targeting and fallback">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Countries" hint="Comma separated. Blank = all.">
-            <Input value={form.countries} onChange={(event) => set('countries', event.target.value)} placeholder="US, CA" />
-          </Field>
-          <Field label="Devices" hint="Blank = all.">
-            <Input value={form.devices} onChange={(event) => set('devices', event.target.value)} placeholder="mobile, desktop" />
-          </Field>
-          <Field label="Rotation" hint={ROTATIONS.find((r) => r.value === form.rotation)?.hint}>
-            <Select value={form.rotation} onChange={(event) => set('rotation', event.target.value as SmartLinkRotation)}>
-              {ROTATIONS.map((rotation) => (
-                <option key={rotation.value} value={rotation.value}>
-                  {rotation.label}
-                </option>
+          {/* Picked, not typed. These are closed sets the tracker matches on exactly —
+              a country is an ISO code and a device is one of UAParser's types — so a
+              free-text box could only ever produce a link that silently matches nothing:
+              "USA", "Mobile" or a stray space all parse fine and match no click. Same
+              components and same option lists as the offer form's rule targeting, so the
+              two screens cannot drift apart on what a valid value is. */}
+          <div className="space-y-1.5 sm:col-span-2">
+            <label className="text-sm font-medium text-foreground">Geo targeting (optional)</label>
+            <MultiSelectCombobox
+              options={COUNTRY_OPTIONS}
+              value={form.countries}
+              onChange={(countries) => set('countries', countries)}
+              placeholder="All countries"
+              emptyLabel="Every country"
+            />
+            <p className="text-xs text-muted-foreground">
+              Leave empty for all. A visitor outside this list goes to the Fallback URL.
+            </p>
+          </div>
+          {/* Laid out exactly as the offer form's device targeting — same label style,
+              same bordered wrap, same option list — because they are the same choice
+              against the same click field, and two shapes for one decision is how an
+              operator ends up believing they mean different things. */}
+          <div className="space-y-1.5 sm:col-span-2">
+            <label className="text-sm font-medium text-foreground">Device targeting (optional)</label>
+            <div className="flex flex-wrap gap-3 rounded-md border border-border p-3">
+              {DEVICE_TYPE_OPTIONS.map((d) => (
+                <label key={d} className="flex items-center gap-1.5 text-sm text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={form.devices.includes(d)}
+                    onChange={(e) => set('devices', e.target.checked ? [...form.devices, d] : form.devices.filter((v) => v !== d))}
+                  />
+                  {d}
+                </label>
               ))}
-            </Select>
-          </Field>
-          <Field label="Fallback URL" hint="Where a click goes when no member offer matches the visitor's geo or device.">
+            </div>
+            <p className="text-xs text-muted-foreground">Leave all unticked for every device.</p>
+          </div>
+          <Field label="Fallback URL" hint="Where a click goes when the visitor falls outside the Countries or Devices above. Leave blank and such a visitor gets the “Offer not available” page instead.">
             <Input value={form.fallbackUrl} onChange={(event) => set('fallbackUrl', event.target.value)} placeholder="https://fatexia.com/thanks" />
           </Field>
         </div>

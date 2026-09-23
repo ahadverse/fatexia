@@ -59,5 +59,9 @@ function handleUpload(folder: UploadFolder): RequestHandler {
 }
 
 uploadRoutes.post('/offer-thumbnail', handleUpload('offerThumbnail'));
+// Its own folder rather than the offer one. The plumbing is identical, but the bucket
+// key is the only record of what an image belongs to — filing a smart-link's thumbnail
+// under offer-thumbnails/ would make that unanswerable later.
+uploadRoutes.post('/smart-link-thumbnail', handleUpload('smartLinkThumbnail'));
 uploadRoutes.post('/news-image', handleUpload('newsImage'));
 uploadRoutes.post('/manager-avatar', handleUpload('managerAvatar'));

@@ -31,9 +31,16 @@ export class Click {
   @Column({ type: 'bigint', transformer: refIdTransformer })
   refId!: number;
 
+  /**
+   * Null on a click through a smart-link that has no member offers.
+   *
+   * Such a link sells against its own revenue share rather than against an offer's
+   * payout rule, so there is no offer to name — `smartLinkId` below carries the
+   * attribution instead. Every other click still has one.
+   */
   @Index()
-  @Column({ type: 'uuid' })
-  offerId!: string;
+  @Column({ type: 'uuid', nullable: true })
+  offerId!: string | null;
 
   // Nullable: a click can arrive with a missing/invalid affiliateId (bad link,
   // tampering). Still logged — a null attribution is itself a fraud signal — but

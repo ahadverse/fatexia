@@ -24,6 +24,8 @@ export interface SmartLink {
   name: string;
   slug: string;
   description: string | null;
+  iconUrl: string | null;
+  previewLink: string | null;
   offerIds: string[];
   offerCount: number;
   countries: string[];
@@ -41,6 +43,10 @@ export interface CreateSmartLinkInput {
   name: string;
   slug: string;
   description?: string;
+  // Null, not just absent: clearing a thumbnail or preview link on an existing link has
+  // to reach the server as "set this to nothing" — undefined means "unchanged".
+  iconUrl?: string | null;
+  previewLink?: string | null;
   offerIds: string[];
   countries?: string[];
   devices?: string[];

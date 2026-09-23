@@ -78,7 +78,7 @@ export interface ConversionDto {
   clickId: string | null;
   /** The click's short number: what the advertiser was given and posted back. */
   clickRefId: number | null;
-  offerId: string;
+  offerId: string | null;
   offerName: string | null;
   affiliateId: string | null;
   affiliateName: string | null;
@@ -142,7 +142,7 @@ export interface OwnConversionDto {
   clickId: string | null;
   /** The click's short number: what the advertiser was given and posted back. */
   clickRefId: number | null;
-  offerId: string;
+  offerId: string | null;
   offerName: string | null;
   payoutAmount: number;
   currency: string;

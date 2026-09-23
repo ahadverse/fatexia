@@ -22,6 +22,13 @@ const smartLinkFields = z.object({
   name: z.string().trim().min(1).max(160),
   slug: slugSchema,
   description: z.string().trim().max(500).optional(),
+  // Both nullable rather than merely optional, for the same reason destinationUrl is:
+  // removing a thumbnail or a preview link on an existing link has to reach the server
+  // as "set this to nothing", and `undefined` means "unchanged" on the partial update
+  // schema below. The empty string a cleared input sends is folded into null here so
+  // the column never holds `''`, which reads as a URL everywhere downstream.
+  iconUrl: z.union([z.string().trim().url(), z.literal(''), z.null()]).optional().transform((v) => (v === undefined ? undefined : v ? v : null)),
+  previewLink: z.union([z.string().trim().url(), z.literal(''), z.null()]).optional().transform((v) => (v === undefined ? undefined : v ? v : null)),
   // No minimum. A link with no members is a valid thing to build — it is a plain
   // redirect that sends everything to `destinationUrl` — so the pairing below is what
   // keeps it from being a link with nowhere to go, not a floor on this field.
@@ -61,27 +68,24 @@ export const MISSING_DESTINATION_MESSAGE =
   'A smart-link with no member offers needs a destination URL to send its traffic to';
 
 /**
- * A revenue share with no member offer is a number that cannot ever be applied.
+ * A revenue share is allowed with or without member offers, and means the same thing
+ * either way: this percentage of the sale the advertiser reports.
  *
- * The share is a percentage of the sale's revenue — the amount the advertiser reports on
- * the postback, falling back to the member offer's configured figure — and it is read at
- * conversion time. A memberless link has no offer, so `/postback` rejects the hit before
- * a payout rule is ever loaded (`postback.service.ts` resolves the offer from the click
- * or the query and 404s when neither has one). Such a link cannot convert at all.
+ * It used to be refused on a memberless link, correctly at the time — such a link had no
+ * offer, `/postback` resolved an offer before doing anything, and so the link could not
+ * convert at all. That is no longer true. A memberless link now logs its clicks with a
+ * null `offerId`, and its conversions are priced from *this* percentage against the
+ * postback's `sum`, with no payout rule involved. The share is the only rate such a link
+ * has, so requiring members would be requiring the one thing it does not use.
  *
- * Refused rather than ignored: a percentage sitting in the form looks like it is doing
- * something, and the only way to discover otherwise is to notice conversions that never
- * arrive.
+ * What is still enforced at conversion time, in `computeSmartLinkAmounts`: a memberless
+ * link with no share cannot be priced, and its postback is refused rather than booked at
+ * zero. Not enforced here, because a link may legitimately be saved before its rate is
+ * decided — it simply cannot earn until it is.
  */
-export const REV_SHARE_WITHOUT_MEMBERS_MESSAGE =
-  'A smart-link with no member offers cannot pay a revenue share — it has no offer to take a percentage of';
-
 export const createSmartLinkSchema = smartLinkFields.superRefine((value, ctx) => {
   if (value.offerIds.length === 0 && !value.destinationUrl) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['destinationUrl'], message: MISSING_DESTINATION_MESSAGE });
-  }
-  if (value.offerIds.length === 0 && value.revSharePercent != null) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['revSharePercent'], message: REV_SHARE_WITHOUT_MEMBERS_MESSAGE });
   }
 });
 
@@ -98,6 +102,8 @@ export interface SmartLinkDto {
   name: string;
   slug: string;
   description: string | null;
+  iconUrl: string | null;
+  previewLink: string | null;
   offerIds: string[];
   offerCount: number;
   countries: string[];
@@ -128,6 +134,8 @@ export function toSmartLinkDto(link: SmartLink, affiliateId?: string): SmartLink
     name: link.name,
     slug: link.slug,
     description: link.description,
+    iconUrl: link.iconUrl,
+    previewLink: link.previewLink,
     offerIds: link.offerIds ?? [],
     offerCount: (link.offerIds ?? []).length,
     countries: link.countries ?? [],

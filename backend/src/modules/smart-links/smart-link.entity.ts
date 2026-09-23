@@ -33,6 +33,27 @@ export class SmartLink {
   @Column({ type: 'text', nullable: true })
   description!: string | null;
 
+  /**
+   * Thumbnail, the same kind an offer carries and shown the same way.
+   *
+   * A URL rather than the image: uploaded through `/uploads/smart-link-thumbnail`,
+   * which stores the file and hands back an address. Nullable, and the lists that
+   * render it fall back to the link's initials so a missing image does not shift
+   * every name in the column.
+   */
+  @Column({ type: 'varchar', nullable: true })
+  iconUrl!: string | null;
+
+  /**
+   * The landing page as an affiliate should see it, without tracking.
+   *
+   * Purely informational — nothing redirects here. A click still goes to
+   * `destinationUrl`; this is the address someone opens to look at what they would be
+   * sending traffic to before they decide to.
+   */
+  @Column({ type: 'varchar', nullable: true })
+  previewLink!: string | null;
+
   @Column({ type: 'jsonb', default: () => "'[]'" })
   offerIds!: string[];
 

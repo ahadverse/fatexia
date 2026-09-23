@@ -152,11 +152,21 @@ export const clickService = {
 
     const matchable = { countryCode, deviceType, os, affiliateId };
 
-    // Smart-link: choose the member offer now that the visitor is known. A link that
-    // resolves to nothing redirects to its own fallback and is deliberately NOT
-    // logged — clicks.offerId is NOT NULL, and there is no honest offer to attribute
-    // this click to.
-    let offer: Offer;
+    // Smart-link: choose the member offer now that the visitor is known.
+    //
+    // Null for a link with no member offers. Those sell against the link's own revenue
+    // share rather than an offer's payout rule, so there is no offer to name and the
+    // click is logged with `offerId` null and `smartLinkId` carrying the attribution.
+    // (A link whose members exist but exclude this visitor is a different case and still
+    // redirects to fallbackUrl unlogged — there the link does have offers.)
+    let offer: Offer | null = null;
+    // What uniqueness is counted against. An offer for a normal click, the link itself
+    // for an offer-less one — otherwise every memberless click across every link would
+    // share one bucket and only the first would ever read as unique.
+    let uniquenessKey: string;
+    // Where an offer-less link sends its traffic, resolved in the branch below so the
+    // redirect at the end does not have to re-derive it.
+    let memberlessDestination: string | null = null;
     let preMatchedRule: PayoutRule | null = null;
     // Kept for the click row: the conversion that arrives later needs to know this came
     // through a smart-link, to price it against that link's revenue share.
@@ -167,6 +177,7 @@ export const clickService = {
     let revSharePercent: number | null = null;
     if (target.offer) {
       offer = target.offer;
+      uniquenessKey = offer.id;
     } else {
       const { link, members } = target;
 
@@ -183,54 +194,65 @@ export const clickService = {
       // a link written before that rule existed must still not 500 its visitors, so
       // fallbackUrl is honoured as a second choice before giving up.
       if ((link.offerIds ?? []).length === 0) {
+        // The link's own geo/device gate applies here too. It is checked below for a
+        // link with members, and skipping it here would make the Countries and Devices
+        // fields silently inert on exactly the links that have nothing else to filter
+        // on — set in the form, ignored on every click.
+        //
+        // An excluded visitor goes to fallbackUrl, which is what that field means: the
+        // link matched nobody for this visitor. A link with no fallback has nowhere to
+        // put them, and sending them to the destination anyway would defeat the gate.
+        if (!linkAcceptsVisitor(link, matchable)) {
+          if (!link.fallbackUrl) {
+            throw new NotFoundError('No offer available for this smart-link');
+          }
+          return { redirectUrl: link.fallbackUrl, clickId, clickRefId };
+        }
+
         const direct = link.destinationUrl?.trim() || link.fallbackUrl?.trim();
         if (!direct) {
           throw new NotFoundError('No offer available for this smart-link');
         }
-        // Both macros resolve to empty, and `{click_id}` is the deliberate one.
-        //
-        // This path writes no click row — there is no offer to attribute one to — so a
-        // click id substituted here would name a click that does not exist. Anything
-        // receiving it and posting back would be rejected by /postback with "Offer not
-        // available", which reads as a broken integration rather than as the truth: a
-        // memberless link is a plain redirect and cannot convert. Sending nothing is
-        // the honest version of that. Both are still replaced rather than left in place,
-        // because the literal text `{click_id}` in a live URL is worse than an empty one.
-        return {
-          redirectUrl: direct.replace('{click_id}', '').replace('{payout_amount}', ''),
-          clickId,
-          clickRefId,
-        };
-      }
-
-      // The link's share is read here, before the rotation, because TOP_PAYOUT ranks on
-      // the payout it produces — see buildCandidates. Read again below for the redirect's
-      // own pricing; one read for both would be tidier but this value is also what
-      // decides which offer is chosen, so it has to exist before the choice is made.
-      const linkRevShare = link.revSharePercent != null ? Number(link.revSharePercent) : null;
-      const candidates = linkAcceptsVisitor(link, matchable)
-        ? await buildCandidates(members, matchable, linkRevShare)
-        : [];
-      if (candidates.length === 0) {
-        if (!link.fallbackUrl) {
-          throw new NotFoundError('No offer available for this smart-link');
+        // Falls through to the click write rather than returning here. The row is what
+        // makes a conversion possible at all: `/postback` finds the click by its refId,
+        // reads `smartLinkId` off it, and prices the sale against the link's own share.
+        // Returning early — which this used to do — meant the redirect carried a click
+        // id naming a row that did not exist, so every postback against it was rejected.
+        memberlessDestination = direct;
+        uniquenessKey = link.id;
+        smartLinkId = link.id;
+        revSharePercent = link.revSharePercent != null ? Number(link.revSharePercent) : null;
+      } else {
+        // The link's share is read here, before the rotation, because TOP_PAYOUT ranks on
+        // the payout it produces — see buildCandidates. Read again below for the redirect's
+        // own pricing; one read for both would be tidier but this value is also what
+        // decides which offer is chosen, so it has to exist before the choice is made.
+        const linkRevShare = link.revSharePercent != null ? Number(link.revSharePercent) : null;
+        const candidates = linkAcceptsVisitor(link, matchable)
+          ? await buildCandidates(members, matchable, linkRevShare)
+          : [];
+        if (candidates.length === 0) {
+          if (!link.fallbackUrl) {
+            throw new NotFoundError('No offer available for this smart-link');
+          }
+          return { redirectUrl: link.fallbackUrl, clickId, clickRefId };
         }
-        return { redirectUrl: link.fallbackUrl, clickId, clickRefId };
+        const chosen = await pickCandidate(link, candidates);
+        offer = chosen.offer;
+        uniquenessKey = offer.id;
+        // The rotation already resolved this click's rule; re-resolving it below could
+        // pick a different one and price the redirect differently from the offer that
+        // was chosen on the strength of that price.
+        preMatchedRule = chosen.rule;
+        smartLinkId = link.id;
+        smartLinkDestinationUrl = link.destinationUrl;
+        revSharePercent = link.revSharePercent != null ? Number(link.revSharePercent) : null;
       }
-      const chosen = await pickCandidate(link, candidates);
-      offer = chosen.offer;
-      // The rotation already resolved this click's rule; re-resolving it below could
-      // pick a different one and price the redirect differently from the offer that
-      // was chosen on the strength of that price.
-      preMatchedRule = chosen.rule;
-      smartLinkId = link.id;
-      smartLinkDestinationUrl = link.destinationUrl;
-      revSharePercent = link.revSharePercent != null ? Number(link.revSharePercent) : null;
     }
 
     // One Redis round-trip, alongside the proxy check that may already have made an
     // external HTTP call — this adds nothing meaningful to the hot path.
-    const isUnique = await isFirstClick(offer.id, req.ip);
+    const isUnique = await isFirstClick(uniquenessKey, req.ip);
 
     // Fire-and-forget: the redirect must not wait on this write. A full batched-flush
     // buffer (Redis/queue) is the production version of this — see PLAN-tracker.md;
@@ -239,7 +261,7 @@ export const clickService = {
       .create({
         id: clickId,
         refId: clickRefId,
-        offerId: offer.id,
+        offerId: offer?.id ?? null,
         affiliateId,
         smartLinkId,
         ip: req.ip,
@@ -307,7 +329,7 @@ export const clickService = {
       // Per-offer override first — some advertisers require rejected traffic to land
       // on their own "offer unavailable" page — then the network-wide setting, then
       // the built-in default.
-      return { redirectUrl: offer.blockedRedirectUrl?.trim() || settings.blockedRedirectUrl, clickId, clickRefId };
+      return { redirectUrl: offer?.blockedRedirectUrl?.trim() || settings.blockedRedirectUrl, clickId, clickRefId };
     }
 
     // Issue #15: route by the offer's own geo/device/OS targeting. A rule with empty
@@ -316,6 +338,21 @@ export const clickService = {
     // click (one that fits none of the offer's targeted rules) falls through to
     // fallbackUrl instead of destinationUrl.
     //
+    // An offer-less link has no rules to route by and no offer destination to fall back
+    // to — its address is the link's own, and what the click is worth is not knowable
+    // until the advertiser reports the sale. `{payout_amount}` is therefore empty rather
+    // than a guess, while `{click_id}` is real: the row above exists, and it is what a
+    // postback matches on to price the conversion against this link's revenue share.
+    if (!offer) {
+      return {
+        redirectUrl: memberlessDestination!
+          .replace('{click_id}', String(clickRefId))
+          .replace('{payout_amount}', ''),
+        clickId,
+        clickRefId,
+      };
+    }
+
     // A smart-link click already has its rule from the rotation, so this is skipped
     // there rather than resolved a second time.
     const matchedRule = preMatchedRule ?? (await findMatchingRuleForClick(offer.payoutRules, matchable));

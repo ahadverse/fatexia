@@ -34,6 +34,7 @@ function resolveS3Config(): S3Config {
 // request input is how a caller writes outside the prefix they were meant to.
 const FOLDERS = {
   offerThumbnail: 'offer-thumbnails',
+  smartLinkThumbnail: 'smart-link-thumbnails',
   newsImage: 'news-images',
   managerAvatar: 'manager-avatars',
 } as const;

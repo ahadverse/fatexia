@@ -109,6 +109,40 @@ export async function findMatchingRuleForClick(rules: PayoutRule[], click: Match
  * stored alongside the computed amounts, so a conversion priced from a postback can
  * always be told apart from one priced from the rule.
  */
+/**
+ * What a conversion through an offer-less smart-link is worth.
+ *
+ * The same two ingredients as everywhere else — a rate and an amount — sourced
+ * differently because there is no offer. The rate is the link's own revenue share, and
+ * the amount is the sale the advertiser reported. Nothing here consults a payout rule,
+ * because a link with no member offers has none to consult.
+ *
+ * The money-integrity split is unchanged and is the reason this is safe: the caller
+ * supplies how large the sale was, the *link* supplies what share of it the affiliate
+ * keeps, and the share is a number the network set on its own smart-link.
+ *
+ * Returns null when either ingredient is missing. A link with no share cannot price a
+ * conversion at all, and refusing is the only honest answer — booking it at zero would
+ * record a sale that paid nobody and look, in every report, like the affiliate earned
+ * nothing rather than like the link was misconfigured.
+ */
+export function computeSmartLinkAmounts(
+  revSharePercent: number | null,
+  reportedRevenue: number | null,
+): { revenueAmount: number; payoutAmount: number } | null {
+  if (revSharePercent == null || !(revSharePercent > 0)) return null;
+  if (reportedRevenue == null || !Number.isFinite(reportedRevenue) || !(reportedRevenue > 0)) return null;
+
+  // Clamped at 100 for the same reason computeAmounts does it: above that the affiliate
+  // is paid more than the advertiser paid, on every conversion, and the only symptom is
+  // a margin going negative in a report someone has to happen to read.
+  const percent = Math.min(revSharePercent, 100);
+  return {
+    revenueAmount: Number(reportedRevenue),
+    payoutAmount: Number(((percent / 100) * Number(reportedRevenue)).toFixed(2)),
+  };
+}
+
 export function computeAmounts(
   rule: PayoutRule,
   /**
