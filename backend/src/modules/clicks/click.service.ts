@@ -174,6 +174,9 @@ export const clickService = {
     // The link's own settings, read once here so the redirect and the payout below
     // don't each have to re-check whether this click came through a smart-link.
     let smartLinkDestinationUrl: string | null = null;
+    // Where BLOCKED traffic through this link goes. Read alongside the rest so the
+    // block branch below can prefer it without reloading the link.
+    let smartLinkBlockedRedirectUrl: string | null = null;
     let revSharePercent: number | null = null;
     if (target.offer) {
       offer = target.offer;
@@ -221,6 +224,7 @@ export const clickService = {
         memberlessDestination = direct;
         uniquenessKey = link.id;
         smartLinkId = link.id;
+        smartLinkBlockedRedirectUrl = link.blockedRedirectUrl;
         revSharePercent = link.revSharePercent != null ? Number(link.revSharePercent) : null;
       } else {
         // The link's share is read here, before the rotation, because TOP_PAYOUT ranks on
@@ -246,6 +250,7 @@ export const clickService = {
         preMatchedRule = chosen.rule;
         smartLinkId = link.id;
         smartLinkDestinationUrl = link.destinationUrl;
+        smartLinkBlockedRedirectUrl = link.blockedRedirectUrl;
         revSharePercent = link.revSharePercent != null ? Number(link.revSharePercent) : null;
       }
     }
@@ -326,10 +331,16 @@ export const clickService = {
       .catch((err) => logger.error({ err, clickId }, 'Failed to log click'));
 
     if (qualityStatus === ClickQualityStatus.BLOCKED) {
-      // Per-offer override first — some advertisers require rejected traffic to land
-      // on their own "offer unavailable" page — then the network-wide setting, then
-      // the built-in default.
-      return { redirectUrl: offer?.blockedRedirectUrl?.trim() || settings.blockedRedirectUrl, clickId, clickRefId };
+      // Most specific first — the offer, then the smart-link this click came through,
+      // then the network-wide setting, then the built-in default. Some advertisers
+      // require rejected traffic to land on their own "offer unavailable" page, and an
+      // offer-less link has no offer to carry that instruction, so it carries its own.
+      return {
+        redirectUrl:
+          offer?.blockedRedirectUrl?.trim() || smartLinkBlockedRedirectUrl?.trim() || settings.blockedRedirectUrl,
+        clickId,
+        clickRefId,
+      };
     }
 
     // Issue #15: route by the offer's own geo/device/OS targeting. A rule with empty

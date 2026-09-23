@@ -199,11 +199,14 @@ export const conversionService = {
         );
       }
       ({ revenueAmount, payoutAmount } = amounts);
-      // No offer means no per-offer currency or approval setting, so the network-level
-      // ones stand in — the same two an offer would otherwise have inherited a default from.
+      // No offer to read a currency or approval setting off. Resolved identically to
+      // the postback path — a conversion added by hand must not be priced or approved
+      // differently from the same sale arriving over HTTP: the network's currency, and
+      // the link's approval decision where it has made one.
       const settings = (await networkSettingRepository.find()) ?? (await networkSettingRepository.createDefault());
       currency = settings.defaultCurrency;
-      approved = settings.autoApproveConversions;
+      // `??`, not `||`: `false` on the link is a decision to hold.
+      approved = smartLink?.autoApproveConversions ?? settings.autoApproveConversions;
     }
 
     const conversion = await conversionRepository.create({

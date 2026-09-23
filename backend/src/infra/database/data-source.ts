@@ -15,6 +15,7 @@ import { OfferCap } from '../../modules/offers/offer-cap.entity';
 import { OfferFavourite } from '../../modules/offers/offer-favourite.entity';
 import { OfferAccessRequest } from '../../modules/offer-access-requests/offer-access-request.entity';
 import { SmartLink } from '../../modules/smart-links/smart-link.entity';
+import { SmartLinkCap } from '../../modules/smart-links/smart-link-cap.entity';
 import { Click } from '../../modules/clicks/click.entity';
 import { Conversion } from '../../modules/conversions/conversion.entity';
 import { PostbackLog } from '../../modules/postback-logs/postback-log.entity';
@@ -65,6 +66,7 @@ export const AppDataSource = new DataSource({
     OfferFavourite,
     OfferAccessRequest,
     SmartLink,
+    SmartLinkCap,
     Click,
     Conversion,
     PostbackLog,

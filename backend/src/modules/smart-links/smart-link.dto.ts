@@ -1,6 +1,36 @@
 import { z } from 'zod';
 import { env } from '../../common/env';
-import { SmartLinkRotation, SmartLinkStatus, type SmartLink } from './smart-link.entity';
+import { SmartLinkRotation, SmartLinkStatus, TrackingPlatform, type SmartLink } from './smart-link.entity';
+import { CapMetric, CapPeriod } from './smart-link-cap.entity';
+
+// Identical to offerCapInputSchema — the two are the same statement about a limit,
+// differing only in what they hang off.
+export const smartLinkCapInputSchema = z.object({
+  period: z.nativeEnum(CapPeriod),
+  metric: z.nativeEnum(CapMetric),
+  limit: z.coerce.number().nonnegative(),
+});
+
+export type SmartLinkCapInputDto = z.infer<typeof smartLinkCapInputSchema>;
+
+export interface SmartLinkCapDto {
+  id: string;
+  period: CapPeriod;
+  metric: CapMetric;
+  limit: number;
+}
+
+// An empty string clears the column; undefined leaves it unchanged on a partial update.
+const optionalUrl = z
+  .union([z.string().trim().url().max(500), z.literal(''), z.null()])
+  .optional()
+  .transform((v) => (v === undefined ? undefined : v ? v : null));
+
+const optionalText = (max: number) =>
+  z
+    .union([z.string().trim().max(max), z.null()])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v ? v : null));
 
 export const smartLinkFiltersSchema = z.object({
   status: z.nativeEnum(SmartLinkStatus).optional(),
@@ -27,8 +57,29 @@ const smartLinkFields = z.object({
   // as "set this to nothing", and `undefined` means "unchanged" on the partial update
   // schema below. The empty string a cleared input sends is folded into null here so
   // the column never holds `''`, which reads as a URL everywhere downstream.
-  iconUrl: z.union([z.string().trim().url(), z.literal(''), z.null()]).optional().transform((v) => (v === undefined ? undefined : v ? v : null)),
-  previewLink: z.union([z.string().trim().url(), z.literal(''), z.null()]).optional().transform((v) => (v === undefined ? undefined : v ? v : null)),
+  iconUrl: optionalUrl,
+  previewLink: optionalUrl,
+  // Optional where an offer requires it: a link may be built before it is settled
+  // which advertiser the sale lands with. See the column comment.
+  advertiserId: z.union([z.string().uuid(), z.literal(''), z.null()]).optional().transform((v) => (v === undefined ? undefined : v ? v : null)),
+  kpi: optionalText(2000),
+  category: optionalText(120),
+  trackingPlatform: z.nativeEnum(TrackingPlatform).default(TrackingPlatform.DIRECT),
+  isPublic: z.boolean().default(true),
+  trafficTypes: z.array(z.string().trim().max(60)).default([]),
+  disallowedTrafficTypes: z.array(z.string().trim().max(60)).default([]),
+  featured: z.boolean().default(false),
+  networkOfferId: optionalText(120),
+  // Tri-state on purpose: null = follow the network setting, which is the behaviour
+  // every link had before this field existed.
+  autoApproveConversions: z.boolean().nullish(),
+  allowDeepLinking: z.boolean().default(false),
+  remarksForAdmin: optionalText(5000),
+  remarksForAffiliateManager: optionalText(5000),
+  postbackSecret: optionalText(200),
+  allowedPostbackIps: optionalText(500),
+  blockedRedirectUrl: optionalUrl,
+  caps: z.array(smartLinkCapInputSchema).default([]),
   // No minimum. A link with no members is a valid thing to build — it is a plain
   // redirect that sends everything to `destinationUrl` — so the pairing below is what
   // keeps it from being a link with nowhere to go, not a floor on this field.
@@ -97,6 +148,40 @@ export const updateSmartLinkSchema = smartLinkFields.partial();
 
 export type UpdateSmartLinkDto = z.infer<typeof updateSmartLinkSchema>;
 
+/**
+ * The fields an affiliate must never receive.
+ *
+ * `GET /smart-links` is open to AFFILIATE — they read the list to fetch their own
+ * link — so everything on the returned shape is something an affiliate can see. These
+ * five are not: two are credentials that would let anyone holding them post a
+ * conversion, two are internal notes written about the affiliate rather than for them,
+ * and the last discloses how blocked traffic is handled, which is a hint about how to
+ * avoid being blocked.
+ *
+ * Kept as a key list rather than a second interface so that adding a staff-only field
+ * to `SmartLinkDto` and forgetting it here is the only way to leak one — and the
+ * `Omit` below means a reviewer sees exactly what an affiliate gets.
+ */
+const STAFF_ONLY_FIELDS = [
+  'postbackSecret',
+  'allowedPostbackIps',
+  'postbackVerifiedAt',
+  'remarksForAdmin',
+  'remarksForAffiliateManager',
+  'blockedRedirectUrl',
+] as const;
+
+export type AffiliateSmartLinkDto = Omit<SmartLinkDto, (typeof STAFF_ONLY_FIELDS)[number]>;
+
+/** Strips the staff-only fields for an affiliate caller. */
+export function toAffiliateSmartLinkDto(link: SmartLink, affiliateId: string): AffiliateSmartLinkDto {
+  const full = toSmartLinkDto(link, affiliateId);
+  for (const field of STAFF_ONLY_FIELDS) {
+    delete (full as Partial<SmartLinkDto>)[field];
+  }
+  return full;
+}
+
 export interface SmartLinkDto {
   id: string;
   name: string;
@@ -104,6 +189,24 @@ export interface SmartLinkDto {
   description: string | null;
   iconUrl: string | null;
   previewLink: string | null;
+  advertiserId: string | null;
+  kpi: string | null;
+  category: string | null;
+  trackingPlatform: TrackingPlatform;
+  isPublic: boolean;
+  trafficTypes: string[];
+  disallowedTrafficTypes: string[];
+  featured: boolean;
+  networkOfferId: string | null;
+  autoApproveConversions: boolean | null;
+  allowDeepLinking: boolean;
+  remarksForAdmin: string | null;
+  remarksForAffiliateManager: string | null;
+  postbackSecret: string | null;
+  allowedPostbackIps: string | null;
+  postbackVerifiedAt: string | null;
+  blockedRedirectUrl: string | null;
+  caps: SmartLinkCapDto[];
   offerIds: string[];
   offerCount: number;
   countries: string[];
@@ -136,6 +239,29 @@ export function toSmartLinkDto(link: SmartLink, affiliateId?: string): SmartLink
     description: link.description,
     iconUrl: link.iconUrl,
     previewLink: link.previewLink,
+    advertiserId: link.advertiserId,
+    kpi: link.kpi,
+    category: link.category,
+    trackingPlatform: link.trackingPlatform,
+    isPublic: link.isPublic,
+    trafficTypes: link.trafficTypes ?? [],
+    disallowedTrafficTypes: link.disallowedTrafficTypes ?? [],
+    featured: link.featured,
+    networkOfferId: link.networkOfferId,
+    autoApproveConversions: link.autoApproveConversions,
+    allowDeepLinking: link.allowDeepLinking,
+    remarksForAdmin: link.remarksForAdmin,
+    remarksForAffiliateManager: link.remarksForAffiliateManager,
+    postbackSecret: link.postbackSecret,
+    allowedPostbackIps: link.allowedPostbackIps,
+    postbackVerifiedAt: link.postbackVerifiedAt ? link.postbackVerifiedAt.toISOString() : null,
+    blockedRedirectUrl: link.blockedRedirectUrl,
+    caps: (link.caps ?? []).map((cap) => ({
+      id: cap.id,
+      period: cap.period,
+      metric: cap.metric,
+      limit: Number(cap.limit),
+    })),
     offerIds: link.offerIds ?? [],
     offerCount: (link.offerIds ?? []).length,
     countries: link.countries ?? [],

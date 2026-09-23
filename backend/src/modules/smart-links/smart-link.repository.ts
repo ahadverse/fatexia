@@ -6,7 +6,9 @@ const repository = AppDataSource.getRepository(SmartLink);
 
 export const smartLinkRepository = {
   findAll(filters: SmartLinkFiltersDto): Promise<SmartLink[]> {
-    const qb = repository.createQueryBuilder('link');
+    // Caps are joined rather than fetched per row: the list renders them, and a link
+    // has at most a handful, so this stays one query instead of N.
+    const qb = repository.createQueryBuilder('link').leftJoinAndSelect('link.caps', 'caps');
     if (filters.status) {
       qb.andWhere('link.status = :status', { status: filters.status });
     }
@@ -17,7 +19,7 @@ export const smartLinkRepository = {
   },
 
   findById(id: string): Promise<SmartLink | null> {
-    return repository.findOne({ where: { id } });
+    return repository.findOne({ where: { id }, relations: ['caps'] });
   },
 
   findBySlug(slug: string): Promise<SmartLink | null> {
@@ -30,6 +32,13 @@ export const smartLinkRepository = {
 
   async update(id: string, fields: Partial<SmartLink>): Promise<void> {
     await repository.update({ id }, fields);
+  },
+
+  // Stamped on the first postback that authenticates with the link's own credentials,
+  // so an operator can tell a configured integration from a merely saved one. Same
+  // role as offerRepository.markPostbackVerified.
+  async markPostbackVerified(id: string): Promise<void> {
+    await repository.update({ id }, { postbackVerifiedAt: new Date() });
   },
 
   async delete(id: string): Promise<void> {

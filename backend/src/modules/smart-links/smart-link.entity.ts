@@ -1,4 +1,19 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+import { Advertiser } from '../advertisers/advertiser.entity';
+import { TrackingPlatform } from '../offers/offer.entity';
+import { SmartLinkCap } from './smart-link-cap.entity';
+
+export { TrackingPlatform };
 
 export enum SmartLinkStatus {
   ACTIVE = 'ACTIVE',
@@ -22,6 +37,23 @@ export enum SmartLinkRotation {
 export class SmartLink {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
+
+  /**
+   * Who the traffic is ultimately sold to.
+   *
+   * Nullable, unlike `offers.advertiserId` which is required. An offer is always an
+   * advertiser's offer; a smart-link may be built before it is known which advertiser
+   * the sale settles against, and every link that existed before this column did has
+   * no answer to give. RESTRICT on delete for the same reason offers use it: an
+   * advertiser with live links must not vanish out from under them.
+   */
+  @ManyToOne(() => Advertiser, { onDelete: 'RESTRICT', nullable: true })
+  @JoinColumn({ name: 'advertiserId' })
+  advertiser!: Advertiser | null;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  advertiserId!: string | null;
 
   @Column({ type: 'varchar' })
   name!: string;
@@ -53,6 +85,83 @@ export class SmartLink {
    */
   @Column({ type: 'varchar', nullable: true })
   previewLink!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  kpi!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  category!: string | null;
+
+  // No startDate/endDate/currency, deliberately. An offer has all three; a smart-link
+  // is not scheduled and prices in the network's currency, so there was nowhere in the
+  // form to set them and a stored value nothing can write is worse than no column.
+  @Column({ type: 'enum', enum: TrackingPlatform, enumName: 'smart_links_trackingplatform_enum', default: TrackingPlatform.DIRECT })
+  trackingPlatform!: TrackingPlatform;
+
+  // Same meaning as on an offer: false gates the link behind an access request rather
+  // than hiding it. Default true, matching offers.
+  @Column({ type: 'boolean', default: true })
+  isPublic!: boolean;
+
+  // Traffic sources the affiliate MAY send; empty means "not specified", not "none".
+  @Column({ type: 'jsonb', default: () => "'[]'" })
+  trafficTypes!: string[];
+
+  // Traffic sources the affiliate may NOT send. A separate list rather than a flag,
+  // because absent from both means the link simply has not said.
+  @Column({ type: 'jsonb', default: () => "'[]'" })
+  disallowedTrafficTypes!: string[];
+
+  @Column({ type: 'boolean', default: false })
+  featured!: boolean;
+
+  // The id this link carries in whatever system the network runs alongside ours.
+  @Column({ type: 'varchar', nullable: true })
+  networkOfferId!: string | null;
+
+  /**
+   * Nullable for the same reason `currency` is: null means "use the network setting".
+   *
+   * An offer's copy of this is a plain boolean defaulting to false, because an offer
+   * always decides for itself. A smart-link's conversions have been approved according
+   * to `network_settings.autoApproveConversions` since the offer-less path was written,
+   * so a `false` default here would start holding conversions that were auto-approving
+   * yesterday — a money-visible change made by adding a column. Null keeps that
+   * behaviour and lets a link override it in either direction.
+   */
+  @Column({ type: 'boolean', nullable: true })
+  autoApproveConversions!: boolean | null;
+
+  @Column({ type: 'boolean', default: false })
+  allowDeepLinking!: boolean;
+
+  @Column({ type: 'text', nullable: true })
+  remarksForAdmin!: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  remarksForAffiliateManager!: string | null;
+
+  /**
+   * Per-link postback credentials, mirroring an offer's.
+   *
+   * Until these existed, a conversion on an offer-less link could only be authorised by
+   * the network-wide postback entry, because the per-offer gate needs an offer. These
+   * give such a link credentials of its own — see `postback.service.ts`, where they are
+   * checked exactly as an offer's are, with the global entry still accepted as before.
+   */
+  @Column({ type: 'varchar', nullable: true })
+  postbackSecret!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  allowedPostbackIps!: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  postbackVerifiedAt!: Date | null;
+
+  // Per-link override for where BLOCKED traffic goes. Null uses the network-wide
+  // setting, same as an offer's.
+  @Column({ type: 'varchar', nullable: true })
+  blockedRedirectUrl!: string | null;
 
   @Column({ type: 'jsonb', default: () => "'[]'" })
   offerIds!: string[];
@@ -99,6 +208,10 @@ export class SmartLink {
    */
   @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
   revSharePercent!: string | null;
+
+  // No DDL impact on this table — the FK column lives on SmartLinkCap.
+  @OneToMany(() => SmartLinkCap, (cap) => cap.smartLink)
+  caps!: SmartLinkCap[];
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt!: Date;

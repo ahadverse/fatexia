@@ -94,13 +94,14 @@ async function logAttempt(
  * A conversion on a smart-link that has no member offers.
  *
  * There is no offer anywhere in this path, so none of the offer-shaped machinery
- * applies: no per-offer secret, no payout rule, no per-offer currency or auto-approve
- * flag. What replaces each is named below, and the shape of the resulting row is
- * identical apart from a null `offerId`.
+ * applies: no payout rule, and no offer to read a currency or an approval flag off.
+ * What replaces each is named below, and the shape of the resulting row is identical
+ * apart from a null `offerId`.
  *
- * Authorisation is the network-level entry only. An offer secret needs an offer, so a
- * link like this can only ever be posted back to with the global one — which is also why
- * it is checked before we get here rather than being re-derived.
+ * Authorisation mirrors the offer path exactly: the link's own credentials, or the
+ * network-level entry. Until the link had credentials of its own, the global entry was
+ * the only way in — which is why the link is now loaded before the gate rather than
+ * after it.
  */
 async function handleOfferlessSmartLinkPostback(
   req: PostbackRequest,
@@ -108,13 +109,26 @@ async function handleOfferlessSmartLinkPostback(
   smartLinkId: string,
   globalAuthId: string | null,
 ): Promise<PostbackResult> {
-  if (!globalAuthId) {
+  const link = await smartLinkRepository.findById(smartLinkId);
+
+  // Both halves required, exactly as `offerAuthorised` demands both: a secret with no
+  // IP allowlist is a shared string that authorises from anywhere.
+  const linkAuthorised =
+    !!link?.postbackSecret &&
+    !!link.allowedPostbackIps &&
+    secretsMatch(req.secret, link.postbackSecret) &&
+    ipAllowed(req.sourceIp, link.allowedPostbackIps);
+
+  if (!linkAuthorised && !globalAuthId) {
     await logAttempt(req, { offerId: null, success: false, errorMessage: 'Secret or source IP not authorized' });
     // The same generic message every other rejection uses, so a caller cannot tell the
     // difference between a bad secret and a link that does not work this way.
     throw new NotFoundError('Offer not available');
   }
-  await globalPostbackRepository.markUsed(globalAuthId);
+  if (globalAuthId) await globalPostbackRepository.markUsed(globalAuthId);
+  if (linkAuthorised && !link.postbackVerifiedAt) {
+    await smartLinkRepository.markPostbackVerified(link.id);
+  }
 
   if (req.reportedRevenue == null) {
     await logAttempt(req, {
@@ -126,7 +140,6 @@ async function handleOfferlessSmartLinkPostback(
     throw new ValidationError('This postback must carry the sale amount as `sum` (or `revenue`)');
   }
 
-  const link = await smartLinkRepository.findById(smartLinkId);
   const revSharePercent = link?.revSharePercent != null ? Number(link.revSharePercent) : null;
   const amounts = computeSmartLinkAmounts(revSharePercent, req.reportedRevenue);
   if (!amounts) {
@@ -144,9 +157,14 @@ async function handleOfferlessSmartLinkPostback(
   const existingConversion = await conversionRepository.findByClickId(click.id);
   const isDuplicate = !!existingConversion;
 
-  // No offer means no per-offer currency or approval flag; the network-level settings
-  // are what an offer would have inherited its own defaults from anyway.
+  // No offer to read a currency or an approval flag off. The currency is the network's
+  // — a smart-link has none of its own — and the approval decision is the link's when
+  // it has made one, the network's when it has not.
   const settings = (await networkSettingRepository.find()) ?? (await networkSettingRepository.createDefault());
+  const currency = settings.defaultCurrency;
+  // `??`, not `||`: `false` on the link is a decision to hold, and must not fall
+  // through to a network setting that says auto-approve.
+  const autoApprove = link?.autoApproveConversions ?? settings.autoApproveConversions;
 
   const conversion = await conversionRepository.create({
     clickId: click.id,
@@ -157,13 +175,9 @@ async function handleOfferlessSmartLinkPostback(
     revenueAmount: (isDuplicate ? 0 : amounts.revenueAmount).toFixed(2),
     payoutAmount: (isDuplicate ? 0 : amounts.payoutAmount).toFixed(2),
     reportedRevenue: req.reportedRevenue.toFixed(2),
-    currency: settings.defaultCurrency,
-    status: isDuplicate
-      ? ConversionStatus.DUPLICATE
-      : settings.autoApproveConversions
-        ? ConversionStatus.APPROVED
-        : ConversionStatus.PENDING,
-    approvedAt: !isDuplicate && settings.autoApproveConversions ? new Date() : null,
+    currency,
+    status: isDuplicate ? ConversionStatus.DUPLICATE : autoApprove ? ConversionStatus.APPROVED : ConversionStatus.PENDING,
+    approvedAt: !isDuplicate && autoApprove ? new Date() : null,
     isDuplicate,
     // It has a click by construction — that is how this path was reached.
     isOrphan: false,
