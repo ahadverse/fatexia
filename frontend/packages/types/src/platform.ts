@@ -1,5 +1,9 @@
 // Access requests, smart-links, billing, messaging, content and platform config.
 
+// A smart-link carries the same tracking-platform choice an offer does, so the enum is
+// shared rather than restated — the two must not drift.
+import type { TrackingPlatform } from './offer';
+
 export type AccessRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 export interface AccessRequest {
@@ -18,6 +22,19 @@ export interface AccessRequest {
 
 export type SmartLinkStatus = 'ACTIVE' | 'PAUSED';
 export type SmartLinkRotation = 'TOP_PAYOUT' | 'ROUND_ROBIN' | 'BEST_CR';
+// Mirrors the offer enums of the same names — a cap means the same thing on a link.
+export type SmartLinkCapPeriod = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'OVERALL';
+export type SmartLinkCapMetric = 'CLICKS' | 'CONVERSIONS' | 'PAYOUT';
+
+export interface SmartLinkCapInput {
+  period: SmartLinkCapPeriod;
+  metric: SmartLinkCapMetric;
+  limit: number;
+}
+
+export interface SmartLinkCap extends SmartLinkCapInput {
+  id: string;
+}
 
 export interface SmartLink {
   id: string;
@@ -26,6 +43,25 @@ export interface SmartLink {
   description: string | null;
   iconUrl: string | null;
   previewLink: string | null;
+  advertiserId: string | null;
+  kpi: string | null;
+  category: string | null;
+  trackingPlatform: TrackingPlatform;
+  isPublic: boolean;
+  trafficTypes: string[];
+  disallowedTrafficTypes: string[];
+  featured: boolean;
+  networkOfferId: string | null;
+  // Tri-state: null follows the network setting.
+  autoApproveConversions: boolean | null;
+  allowDeepLinking: boolean;
+  remarksForAdmin: string | null;
+  remarksForAffiliateManager: string | null;
+  postbackSecret: string | null;
+  allowedPostbackIps: string | null;
+  postbackVerifiedAt: string | null;
+  blockedRedirectUrl: string | null;
+  caps: SmartLinkCap[];
   offerIds: string[];
   offerCount: number;
   countries: string[];
@@ -39,6 +75,20 @@ export interface SmartLink {
   createdAt: string;
 }
 
+/**
+ * What `GET /smart-links` returns to an affiliate caller.
+ *
+ * The endpoint is shared with staff, but the server strips six fields for an affiliate
+ * — postback credentials, the internal remarks, and the blocked-traffic destination —
+ * so the affiliate portal must not be typed as if it receives them. Mirrors
+ * `AffiliateSmartLinkDto` on the backend; the two are hand-kept in step like the rest
+ * of this package.
+ */
+export type AffiliateSmartLink = Omit<
+  SmartLink,
+  'postbackSecret' | 'allowedPostbackIps' | 'postbackVerifiedAt' | 'remarksForAdmin' | 'remarksForAffiliateManager' | 'blockedRedirectUrl'
+>;
+
 export interface CreateSmartLinkInput {
   name: string;
   slug: string;
@@ -47,6 +97,23 @@ export interface CreateSmartLinkInput {
   // to reach the server as "set this to nothing" — undefined means "unchanged".
   iconUrl?: string | null;
   previewLink?: string | null;
+  advertiserId?: string | null;
+  kpi?: string | null;
+  category?: string | null;
+  trackingPlatform?: TrackingPlatform;
+  isPublic?: boolean;
+  trafficTypes?: string[];
+  disallowedTrafficTypes?: string[];
+  featured?: boolean;
+  networkOfferId?: string | null;
+  autoApproveConversions?: boolean | null;
+  allowDeepLinking?: boolean;
+  remarksForAdmin?: string | null;
+  remarksForAffiliateManager?: string | null;
+  postbackSecret?: string | null;
+  allowedPostbackIps?: string | null;
+  blockedRedirectUrl?: string | null;
+  caps?: SmartLinkCapInput[];
   offerIds: string[];
   countries?: string[];
   devices?: string[];

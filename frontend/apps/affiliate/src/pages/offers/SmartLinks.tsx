@@ -1,5 +1,5 @@
 import { Button, DataTable, EmptyState, ExternalLinkButton, PageHeader, TableSkeleton, toast, type DataTableColumn } from '@fatexia/ui';
-import type { SmartLink } from '@fatexia/types';
+import type { AffiliateSmartLink } from '@fatexia/types';
 import { getSmartLinks } from '../../lib/portal-api';
 import { useAsync } from '../../hooks/useAsync';
 import { StatusPill } from '../../components/StatusPill';
@@ -7,9 +7,9 @@ import { StatusPill } from '../../components/StatusPill';
 // Read-only: smart-links are authored by the network, an affiliate just picks one up
 // and runs it.
 export function SmartLinks() {
-  const links = useAsync<SmartLink[]>(() => getSmartLinks(), []);
+  const links = useAsync<AffiliateSmartLink[]>(() => getSmartLinks(), []);
 
-  const columns: DataTableColumn<SmartLink>[] = [
+  const columns: DataTableColumn<AffiliateSmartLink>[] = [
     {
       key: 'name',
       header: 'Smart-link',

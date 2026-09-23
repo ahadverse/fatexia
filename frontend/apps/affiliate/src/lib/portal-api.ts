@@ -18,7 +18,7 @@ import type {
   OwnConversion,
   OwnReferral,
   Paginated,
-  SmartLink,
+  AffiliateSmartLink,
   Transaction,
 } from '@fatexia/types';
 import { apiFetch } from './api';
@@ -157,8 +157,11 @@ export function requestOfferAccess(offerId: string, affiliateNote?: string): Pro
   });
 }
 
-export function getSmartLinks(): Promise<SmartLink[]> {
-  return apiFetch<SmartLink[]>('/smart-links?status=ACTIVE');
+// AffiliateSmartLink, not SmartLink: the server strips the postback credentials, the
+// internal remarks and the blocked-traffic URL for an affiliate caller, so typing this
+// as the full shape would promise fields that never arrive.
+export function getSmartLinks(): Promise<AffiliateSmartLink[]> {
+  return apiFetch<AffiliateSmartLink[]>('/smart-links?status=ACTIVE');
 }
 
 // Comms

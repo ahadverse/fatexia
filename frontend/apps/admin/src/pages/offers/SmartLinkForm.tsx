@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Button, CountryFlag, Input, MultiSelectCombobox, PageHeader, Skeleton, cn, toast } from '@fatexia/ui';
-import type { SmartLink, SmartLinkRotation } from '@fatexia/types';
+import { Check, X } from 'lucide-react';
+import { Button, CountryFlag, Input, MultiSelectCombobox, PageHeader, Skeleton, Toggle, cn, toast } from '@fatexia/ui';
+import type { Advertiser, OfferCategory, SmartLink, SmartLinkCapInput, SmartLinkRotation } from '@fatexia/types';
 import { COUNTRY_CODES } from '@fatexia/types';
 import { createSmartLink, getSmartLinks, updateSmartLink, uploadSmartLinkThumbnail } from '../../lib/platform-api';
+import { getAdvertisers, createAdvertiser } from '../../lib/advertisers-api';
+import { getOfferCategories, createOfferCategory } from '../../lib/offer-categories-api';
 import { useAsync } from '../../hooks/useAsync';
 import { RichTextEditor } from '../../components/RichTextEditor';
 
@@ -19,6 +22,22 @@ const COUNTRY_OPTIONS = COUNTRY_CODES.map((c) => ({
 // UAParser's device.type taxonomy plus the "desktop" fallback click.service.ts applies —
 // exactly the values a click's deviceType is stored as.
 const DEVICE_TYPE_OPTIONS = ['desktop', 'mobile', 'tablet', 'console', 'smarttv', 'wearable', 'embedded'];
+// The same three lists the offer form uses, for the same reason as the two above: a
+// smart-link and an offer say these things about themselves in one vocabulary or the
+// affiliate portal renders two.
+const CAP_PERIODS: SmartLinkCapInput['period'][] = ['DAILY', 'WEEKLY', 'MONTHLY', 'OVERALL'];
+const CAP_METRICS: SmartLinkCapInput['metric'][] = ['CLICKS', 'CONVERSIONS', 'PAYOUT'];
+const TRAFFIC_TYPE_OPTIONS = ['Search', 'Social', 'Native', 'Email', 'Push', 'Display', 'Incent', 'Non-Incent'];
+
+const selectClass = 'h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground';
+
+// 24 random bytes (192 bits) as hex, "sk_"-prefixed so it reads unambiguously as a
+// secret rather than some other id in a log or a postback URL. Same as OfferForm's.
+function generatePostbackSecret(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `sk_${hex}`;
+}
 
 
 interface FormState {
@@ -27,6 +46,24 @@ interface FormState {
   description: string;
   iconUrl: string;
   previewLink: string;
+  advertiserId: string;
+  kpi: string;
+  category: string;
+  networkOfferId: string;
+  isPublic: boolean;
+  featured: boolean;
+  allowDeepLinking: boolean;
+  // Tri-state, stored as a string so a <select> can express all three: '' means
+  // "follow the network setting", which is not the same as "never auto-approve".
+  autoApproveConversions: '' | 'yes' | 'no';
+  trafficTypes: string[];
+  disallowedTrafficTypes: string[];
+  postbackSecret: string;
+  allowedPostbackIps: string;
+  blockedRedirectUrl: string;
+  remarksForAdmin: string;
+  remarksForAffiliateManager: string;
+  caps: SmartLinkCapInput[];
   offerIds: string[];
   countries: string[];
   devices: string[];
@@ -42,6 +79,22 @@ const EMPTY_FORM: FormState = {
   description: '',
   iconUrl: '',
   previewLink: '',
+  advertiserId: '',
+  kpi: '',
+  category: '',
+  networkOfferId: '',
+  isPublic: true,
+  featured: false,
+  allowDeepLinking: false,
+  autoApproveConversions: '',
+  trafficTypes: [],
+  disallowedTrafficTypes: [],
+  postbackSecret: '',
+  allowedPostbackIps: '',
+  blockedRedirectUrl: '',
+  remarksForAdmin: '',
+  remarksForAffiliateManager: '',
+  caps: [],
   offerIds: [],
   countries: [],
   devices: [],
@@ -99,6 +152,15 @@ export function SmartLinkForm() {
   const [saving, setSaving] = useState(false);
   const [uploadingIcon, setUploadingIcon] = useState(false);
   const [draggingIcon, setDraggingIcon] = useState(false);
+  const [advertisers, setAdvertisers] = useState<Advertiser[]>([]);
+  const [categories, setCategories] = useState<OfferCategory[]>([]);
+  const [newAdvertiserName, setNewAdvertiserName] = useState('');
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [newTrafficSource, setNewTrafficSource] = useState('');
+  // Custom sources typed on this link, seeded from what it already carries so
+  // re-opening one that used a custom source still lists it.
+  const [customTrafficSources, setCustomTrafficSources] = useState<string[]>([]);
 
   // The list endpoint is the only way to read one link — there is no GET /:id — so the
   // edit view filters the collection it already knows how to fetch.
@@ -114,6 +176,22 @@ export function SmartLinkForm() {
       description: existing.description ?? '',
       iconUrl: existing.iconUrl ?? '',
       previewLink: existing.previewLink ?? '',
+      advertiserId: existing.advertiserId ?? '',
+      kpi: existing.kpi ?? '',
+      category: existing.category ?? '',
+      networkOfferId: existing.networkOfferId ?? '',
+      isPublic: existing.isPublic,
+      featured: existing.featured,
+      allowDeepLinking: existing.allowDeepLinking,
+      autoApproveConversions: existing.autoApproveConversions == null ? '' : existing.autoApproveConversions ? 'yes' : 'no',
+      trafficTypes: existing.trafficTypes,
+      disallowedTrafficTypes: existing.disallowedTrafficTypes,
+      postbackSecret: existing.postbackSecret ?? '',
+      allowedPostbackIps: existing.allowedPostbackIps ?? '',
+      blockedRedirectUrl: existing.blockedRedirectUrl ?? '',
+      remarksForAdmin: existing.remarksForAdmin ?? '',
+      remarksForAffiliateManager: existing.remarksForAffiliateManager ?? '',
+      caps: existing.caps.map((cap) => ({ period: cap.period, metric: cap.metric, limit: cap.limit })),
       offerIds: existing.offerIds,
       countries: existing.countries,
       devices: existing.devices,
@@ -122,7 +200,22 @@ export function SmartLinkForm() {
       destinationUrl: existing.destinationUrl ?? '',
       revSharePercent: existing.revSharePercent != null ? String(existing.revSharePercent) : '',
     });
+    setCustomTrafficSources(
+      [...existing.trafficTypes, ...existing.disallowedTrafficTypes].filter((s) => !TRAFFIC_TYPE_OPTIONS.includes(s)),
+    );
   }, [existing]);
+
+  useEffect(() => {
+    // Swallowed rather than surfaced, exactly as OfferForm does it: a manager may hold
+    // smart-link rights without advertisers.view, and a 403 here should cost them a
+    // dropdown, not block the whole form with an error toast.
+    getAdvertisers()
+      .then(setAdvertisers)
+      .catch(() => setAdvertisers([]));
+    getOfferCategories()
+      .then(setCategories)
+      .catch(() => setCategories([]));
+  }, []);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -154,6 +247,75 @@ export function SmartLinkForm() {
     void handleIconUpload(event.dataTransfer.files?.[0]);
   }
 
+  const trafficSourceOptions = [...TRAFFIC_TYPE_OPTIONS, ...customTrafficSources];
+
+  function addTrafficSource() {
+    const name = newTrafficSource.trim();
+    if (!name) return;
+    // Case-insensitive so "email" doesn't sit beside the built-in "Email" as a second,
+    // separately-toggleable row that means the same thing.
+    if (trafficSourceOptions.some((source) => source.toLowerCase() === name.toLowerCase())) {
+      toast.error(`"${name}" is already listed`);
+      setNewTrafficSource('');
+      return;
+    }
+    setCustomTrafficSources((sources) => [...sources, name]);
+    setNewTrafficSource('');
+  }
+
+  // Cleared from all three places at once — leaving the name in `trafficTypes` while
+  // dropping its row would keep saving a permission with no way to see or undo it.
+  function removeTrafficSource(name: string) {
+    setCustomTrafficSources((sources) => sources.filter((source) => source !== name));
+    setForm((current) => ({
+      ...current,
+      trafficTypes: current.trafficTypes.filter((t) => t !== name),
+      disallowedTrafficTypes: current.disallowedTrafficTypes.filter((t) => t !== name),
+    }));
+  }
+
+  // One click sets one state and clears the other, so a source can never end up in both
+  // lists — a contradiction the affiliate portal has no way to render.
+  function chooseTrafficState(source: string, next: 'allowed' | 'disallowed' | 'unset') {
+    setForm((current) => ({
+      ...current,
+      trafficTypes: next === 'allowed' ? [...current.trafficTypes.filter((t) => t !== source), source] : current.trafficTypes.filter((t) => t !== source),
+      disallowedTrafficTypes:
+        next === 'disallowed'
+          ? [...current.disallowedTrafficTypes.filter((t) => t !== source), source]
+          : current.disallowedTrafficTypes.filter((t) => t !== source),
+    }));
+  }
+
+  function addCap() {
+    set('caps', [...form.caps, { period: 'DAILY', metric: 'CONVERSIONS', limit: 0 }]);
+  }
+
+  function updateCap(index: number, patch: Partial<SmartLinkCapInput>) {
+    set('caps', form.caps.map((cap, i) => (i === index ? { ...cap, ...patch } : cap)));
+  }
+
+  function removeCap(index: number) {
+    set('caps', form.caps.filter((_, i) => i !== index));
+  }
+
+  async function handleAddAdvertiser() {
+    if (!newAdvertiserName.trim()) return;
+    const created = await createAdvertiser({ name: newAdvertiserName.trim() });
+    setAdvertisers((prev) => [...prev, created]);
+    set('advertiserId', created.id);
+    setNewAdvertiserName('');
+  }
+
+  async function handleAddCategory() {
+    if (!newCategoryName.trim()) return;
+    const created = await createOfferCategory(newCategoryName.trim());
+    setCategories((prev) => [...prev, created]);
+    set('category', created.name);
+    setNewCategoryName('');
+    setShowNewCategory(false);
+  }
+
   async function save() {
     if (!form.name.trim()) {
       toast.error('Give the smart-link a name');
@@ -166,6 +328,14 @@ export function SmartLinkForm() {
       toast.error('Set a destination URL — it is where this link sends every click');
       return;
     }
+    // Both or neither. The tracker authorises a link's own postback only when the
+    // secret AND the allowlist match, so one without the other is a field that looks
+    // configured and authorises nothing — the advertiser's postbacks would keep being
+    // rejected with no visible reason.
+    if (Boolean(form.postbackSecret.trim()) !== Boolean(form.allowedPostbackIps.trim())) {
+      toast.error('A postback secret needs an IP allowlist beside it — set both, or clear both');
+      return;
+    }
 
     const payload = {
       name: form.name,
@@ -176,6 +346,24 @@ export function SmartLinkForm() {
       // untouched — same reason revSharePercent does it below.
       iconUrl: form.iconUrl || null,
       previewLink: form.previewLink.trim() || null,
+      advertiserId: form.advertiserId || null,
+      kpi: form.kpi.trim() || null,
+      category: form.category || null,
+      networkOfferId: form.networkOfferId.trim() || null,
+      isPublic: form.isPublic,
+      featured: form.featured,
+      allowDeepLinking: form.allowDeepLinking,
+      autoApproveConversions: form.autoApproveConversions === '' ? null : form.autoApproveConversions === 'yes',
+      // Only sources the operator actually placed. A custom source left on "unset" is
+      // in neither list and is therefore not saved — the row warns about that.
+      trafficTypes: form.trafficTypes,
+      disallowedTrafficTypes: form.disallowedTrafficTypes,
+      postbackSecret: form.postbackSecret.trim() || null,
+      allowedPostbackIps: form.allowedPostbackIps.trim() || null,
+      blockedRedirectUrl: form.blockedRedirectUrl.trim() || null,
+      remarksForAdmin: form.remarksForAdmin.trim() || null,
+      remarksForAffiliateManager: form.remarksForAffiliateManager.trim() || null,
+      caps: form.caps,
       offerIds: form.offerIds,
       countries: form.countries,
       devices: form.devices,
@@ -257,6 +445,56 @@ export function SmartLinkForm() {
             <Input value={form.slug} onChange={(event) => set('slug', slugify(event.target.value))} placeholder="finance-rotator" />
           </Field>
         </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground">Advertiser (optional)</label>
+            <div className="flex gap-2">
+              <select value={form.advertiserId} onChange={(event) => set('advertiserId', event.target.value)} className={selectClass}>
+                <option value="">None</option>
+                {advertisers.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <Input placeholder="New advertiser name" value={newAdvertiserName} onChange={(event) => setNewAdvertiserName(event.target.value)} className="h-8 text-sm" />
+              <button type="button" onClick={handleAddAdvertiser} className="shrink-0 rounded-md border border-border px-3 text-sm hover:bg-accent">
+                + Add
+              </button>
+            </div>
+            {/* Optional where an offer requires one: a link can be built before it is
+                settled which advertiser the sale lands with. */}
+            <p className="text-xs text-muted-foreground">Who the sale settles against. Leave as None if it is not decided yet.</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground">Category</label>
+            <div className="flex gap-2">
+              <select value={form.category} onChange={(event) => set('category', event.target.value)} className={selectClass}>
+                <option value="">None</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.name}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <button type="button" onClick={() => setShowNewCategory((s) => !s)} className="shrink-0 rounded-md border border-border px-3 text-sm hover:bg-accent">
+                + Add
+              </button>
+            </div>
+            {showNewCategory && (
+              <div className="flex gap-2 pt-1">
+                <Input placeholder="New category name" value={newCategoryName} onChange={(event) => setNewCategoryName(event.target.value)} className="h-8 text-sm" />
+                <button type="button" onClick={handleAddCategory} className="shrink-0 rounded-md bg-primary px-3 text-sm text-primary-foreground">
+                  Add
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
         <Field
           label="Preview link"
           hint="The landing page as an affiliate should see it, without tracking. Nothing redirects here — it is for looking at what the link sends traffic to. Leave blank to hide the button."
@@ -270,6 +508,14 @@ export function SmartLinkForm() {
 
         <Field label="Description">
           <RichTextEditor value={form.description} onChange={(html) => set('description', html)} />
+        </Field>
+
+        <Field label="KPI" hint="What counts as a good conversion on this link. Shown to affiliates.">
+          <textarea
+            value={form.kpi}
+            onChange={(event) => set('kpi', event.target.value)}
+            className="h-16 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
         </Field>
 
         {/* Not wrapped in Field: that renders a <label>, and a file input inside one
@@ -310,6 +556,140 @@ export function SmartLinkForm() {
               )}
             </div>
           </div>
+        </div>
+      </Section>
+
+      <Section title="Traffic Sources" hint="What affiliates may and may not send. Shown on the link in their portal.">
+        {/* Three states per source, not a checkbox: allowed, disallowed, and unstated.
+            A list that could only say yes gives a link forbidding incent or email
+            nowhere to say so, and the affiliate finds out when conversions are voided. */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-foreground">Traffic sources</label>
+          <p className="text-xs text-muted-foreground">
+            Affiliates see these on the link — allowed in green, not allowed in red. Leave a source unset if there is no
+            rule about it.
+          </p>
+          <div className="space-y-1 rounded-md border border-border p-3">
+            {trafficSourceOptions.map((t) => {
+              const state = form.trafficTypes.includes(t) ? 'allowed' : form.disallowedTrafficTypes.includes(t) ? 'disallowed' : 'unset';
+              // A custom source lives only in the two lists. Left unset it is stored
+              // nowhere and is gone on reopen — said here rather than discovered after
+              // saving. A built-in left unset is fine: it returns from the constant.
+              const unsavedCustom = state === 'unset' && customTrafficSources.includes(t);
+              return (
+                <div key={t} className="flex items-center justify-between gap-3 py-1 text-sm">
+                  <span className={cn(unsavedCustom ? 'text-muted-foreground' : 'text-foreground')}>
+                    {t}
+                    {unsavedCustom && <span className="ml-2 text-xs text-amber-500">pick one, or this is not saved</span>}
+                  </span>
+                  <div className="flex shrink-0 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => chooseTrafficState(t, state === 'allowed' ? 'unset' : 'allowed')}
+                      className={cn(
+                        'flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors',
+                        state === 'allowed'
+                          ? 'border-emerald-500 bg-emerald-500/15 text-emerald-500'
+                          : 'border-border text-muted-foreground hover:bg-accent',
+                      )}
+                    >
+                      <Check className="size-3.5" /> Allowed
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => chooseTrafficState(t, state === 'disallowed' ? 'unset' : 'disallowed')}
+                      className={cn(
+                        'flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors',
+                        state === 'disallowed'
+                          ? 'border-rose-500 bg-rose-500/15 text-rose-500'
+                          : 'border-border text-muted-foreground hover:bg-accent',
+                      )}
+                    >
+                      <X className="size-3.5" /> Not allowed
+                    </button>
+                    {/* Only custom sources can be removed — the eight built-ins are a
+                        fixed vocabulary, and deleting one from a single link would make
+                        the list mean something different on each link. */}
+                    {customTrafficSources.includes(t) && (
+                      <button
+                        type="button"
+                        onClick={() => removeTrafficSource(t)}
+                        aria-label={`Remove ${t}`}
+                        title={`Remove ${t}`}
+                        className="rounded-md border border-border px-1.5 text-muted-foreground hover:bg-accent hover:text-destructive"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            <div className="flex gap-2 border-t border-border pt-3">
+              <Input
+                value={newTrafficSource}
+                onChange={(event) => setNewTrafficSource(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    addTrafficSource();
+                  }
+                }}
+                placeholder="Add another source, e.g. Brand bidding"
+                className="h-8 text-sm"
+              />
+              <button type="button" onClick={addTrafficSource} className="shrink-0 rounded-md border border-border px-3 text-sm hover:bg-accent">
+                + Add
+              </button>
+            </div>
+          </div>
+        </div>
+      </Section>
+
+      <Section title="Visibility" hint="Who can see this link, and where it appears.">
+        <div className="space-y-4">
+          <div>
+            <Toggle checked={form.featured} onCheckedChange={(v) => set('featured', v)} label="Set as Featured" />
+            <p className="mt-1 text-xs text-muted-foreground">Featured links appear in the Featured section of the affiliate dashboard.</p>
+          </div>
+
+          <div>
+            <Toggle checked={form.isPublic} onCheckedChange={(v) => set('isPublic', v)} label="Public link" />
+            <p className="mt-1 text-xs text-muted-foreground">
+              {form.isPublic
+                ? 'Any affiliate can see and run this link.'
+                : 'Gated — only affiliates with an approved access request can see or run this link.'}
+            </p>
+          </div>
+
+          <div>
+            <Toggle checked={form.allowDeepLinking} onCheckedChange={(v) => set('allowDeepLinking', v)} label="Allow deep linking" />
+          </div>
+
+          <Field label="Advertiser Network Offer ID (optional)">
+            <Input value={form.networkOfferId} onChange={(event) => set('networkOfferId', event.target.value)} />
+          </Field>
+
+          {/* Three options, not a toggle. An offer's copy of this is a plain boolean
+              because an offer always decides for itself; a link's conversions have been
+              following the network setting since this path was written, so "not set"
+              has to stay expressible or saving the form would silently change how
+              existing links approve. */}
+          <Field
+            label="Auto-approve conversions"
+            hint="Not set means this link follows the network-wide setting, which is what it did before this field existed."
+          >
+            <select
+              value={form.autoApproveConversions}
+              onChange={(event) => set('autoApproveConversions', event.target.value as FormState['autoApproveConversions'])}
+              className={selectClass}
+            >
+              <option value="">Not set — follow the network setting</option>
+              <option value="yes">Yes — approve on arrival</option>
+              <option value="no">No — hold for review</option>
+            </select>
+          </Field>
         </div>
       </Section>
 
@@ -366,6 +746,47 @@ export function SmartLinkForm() {
             placeholder="https://fatexia.com/go?cid={click_id}"
           />
         </Field>
+
+        {/* Optional here, unlike on an offer where all three gate activation. A link
+            with no credentials of its own still converts — the network-wide postback
+            entry authorises it, which until now was the only way in. These give the
+            link its own, checked exactly as an offer's are. */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Postback secret (optional)">
+            <div className="flex gap-2">
+              <Input
+                value={form.postbackSecret}
+                onChange={(event) => set('postbackSecret', event.target.value)}
+                placeholder="Shared secret the advertiser sends on /postback"
+              />
+              <button
+                type="button"
+                onClick={() => set('postbackSecret', generatePostbackSecret())}
+                className="shrink-0 rounded-md border border-border px-3 text-sm hover:bg-accent"
+              >
+                Generate
+              </button>
+            </div>
+          </Field>
+          <Field label="Allowed postback IPs" hint="Comma separated. Required alongside a secret — a secret with no allowlist authorises nothing.">
+            <Input
+              value={form.allowedPostbackIps}
+              onChange={(event) => set('allowedPostbackIps', event.target.value)}
+              placeholder="203.0.113.10, 198.51.100.4"
+            />
+          </Field>
+        </div>
+
+        <Field
+          label="Blocked traffic redirect (optional)"
+          hint="Where a click scored as blocked is sent instead of the destination. Blank uses the network-wide setting."
+        >
+          <Input
+            value={form.blockedRedirectUrl}
+            onChange={(event) => set('blockedRedirectUrl', event.target.value)}
+            placeholder="Network default"
+          />
+        </Field>
       </Section>
 
       <Section title="Targeting and fallback">
@@ -413,6 +834,74 @@ export function SmartLinkForm() {
             <Input value={form.fallbackUrl} onChange={(event) => set('fallbackUrl', event.target.value)} placeholder="https://fatexia.com/thanks" />
           </Field>
         </div>
+      </Section>
+
+      <Section
+        title="Cap Limit Options"
+        hint="How many conversions, clicks or payout this link may accrue, daily, weekly, monthly or overall. Stored and shown, not yet enforced — the same as an offer's caps."
+      >
+        <div className="space-y-2">
+          {form.caps.map((cap, i) => (
+            <div key={i} className="flex flex-wrap items-end gap-2">
+              <select
+                value={cap.period}
+                onChange={(event) => updateCap(i, { period: event.target.value as SmartLinkCapInput['period'] })}
+                className={`${selectClass} w-32`}
+              >
+                {CAP_PERIODS.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={cap.metric}
+                onChange={(event) => updateCap(i, { metric: event.target.value as SmartLinkCapInput['metric'] })}
+                className={`${selectClass} w-36`}
+              >
+                {CAP_METRICS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+              <Input
+                type="number"
+                min="0"
+                value={cap.limit}
+                onChange={(event) => updateCap(i, { limit: Number(event.target.value) })}
+                className="w-28"
+              />
+              <button
+                type="button"
+                onClick={() => removeCap(i)}
+                className="rounded-md border border-destructive/50 px-2 py-1.5 text-xs text-destructive"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+        <button type="button" onClick={addCap} className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent">
+          + Add New Cap
+        </button>
+      </Section>
+
+      <Section title="Remarks (Optional)" hint="Just for the reminders — put the link's remarks if any.">
+        <Field label="Remarks for Admin">
+          <textarea
+            value={form.remarksForAdmin}
+            onChange={(event) => set('remarksForAdmin', event.target.value)}
+            className="h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </Field>
+        <Field label="Remarks for Affiliate Manager">
+          <textarea
+            value={form.remarksForAffiliateManager}
+            onChange={(event) => set('remarksForAffiliateManager', event.target.value)}
+            className="h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </Field>
       </Section>
     </div>
   );

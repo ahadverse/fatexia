@@ -133,7 +133,8 @@
       "Bash(npx vite *)",
       "PowerShell($wt = \"C:\\\\Users\\\\Ahad\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\e--Ahad-Hossain-Arif-vai-Fatexia\\\\f590ea66-296f-4844-a6df-a6ecfbbc26d8\\\\scratchpad\\\\head-wt\\\\backend\"; $src = \"E:\\\\Ahad Hossain\\\\Arif vai\\\\Fatexia\\\\backend\\\\node_modules\"; New-Item -ItemType Junction -Path \"$wt\\\\node_modules\" -Target $src | Out-Null; if \\($?\\) { \"junction created\" })",
       "PowerShell($j = \"C:\\\\Users\\\\Ahad\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\e--Ahad-Hossain-Arif-vai-Fatexia\\\\f590ea66-296f-4844-a6df-a6ecfbbc26d8\\\\scratchpad\\\\head-wt\\\\backend\\\\node_modules\"; if \\(\\(Get-Item $j -Force\\).LinkType -eq 'Junction'\\) { cmd /c rmdir \"$j\"; \"junction removed\" } else { \"NOT a junction - aborting\"; exit 1 }; Test-Path \"E:\\\\Ahad Hossain\\\\Arif vai\\\\Fatexia\\\\backend\\\\node_modules\\\\typescript\")",
-      "Bash(git worktree *)"
+      "Bash(git worktree *)",
+      "Bash(npx typeorm-ts-node-commonjs *)"
     ]
   }
 }
