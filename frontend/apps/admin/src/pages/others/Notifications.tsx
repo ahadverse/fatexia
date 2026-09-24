@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, ConfirmModal, EmptyState, FilterBar, FilterField, PageHeader, Pagination, Select, TableSkeleton } from '@fatexia/ui';
-import { getNotifications, markAllNotificationsRead, markNotificationRead } from '../../lib/platform-api';
+import { bulkDeleteNotifications, getNotifications, markAllNotificationsRead, markNotificationRead } from '../../lib/platform-api';
 import { runAction, useAsync } from '../../hooks/useAsync';
 import { useRealtime } from '../../realtime/RealtimeContext';
 import { dateTime } from '../../lib/format';
@@ -18,6 +18,9 @@ export function Notifications() {
   const [page, setPage] = useState(1);
   const [confirmMarkAll, setConfirmMarkAll] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const notifications = useAsync(
     () => getNotifications({ category: category || undefined, unreadOnly: unreadOnly || undefined, page, pageSize: PAGE_SIZE }),
@@ -25,6 +28,29 @@ export function Notifications() {
   );
 
   const rows = notifications.data?.rows ?? [];
+  const pageIds = rows.map((row) => row.id);
+  const selectedOnPage = pageIds.filter((id) => selected.has(id)).length;
+  const allOnPageSelected = pageIds.length > 0 && selectedOnPage === pageIds.length;
+  const someOnPageSelected = selectedOnPage > 0 && !allOnPageSelected;
+
+  function toggleAllOnPage() {
+    const next = new Set(selected);
+    if (allOnPageSelected) pageIds.forEach((id) => next.delete(id));
+    else pageIds.forEach((id) => next.add(id));
+    setSelected(next);
+  }
+
+  function toggleRow(id: string) {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelected(next);
+  }
+
+  function changePage(next: number) {
+    setPage(next);
+    setSelected(new Set());
+  }
 
   async function open(id: string, link: string | null) {
     await markNotificationRead(id);
@@ -35,15 +61,38 @@ export function Notifications() {
     if (link) navigate(link);
   }
 
+  async function confirmBulkDelete() {
+    setDeleting(true);
+    const result = await runAction(() => bulkDeleteNotifications([...selected]), {
+      success: `${selected.size} notification${selected.size === 1 ? '' : 's'} deleted`,
+      onDone: () => {
+        notifications.reload();
+        refreshNotificationUnread();
+      },
+    });
+    setDeleting(false);
+    if (result) {
+      setSelected(new Set());
+      setConfirmDelete(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Notifications"
         description="Everything the network flagged for attention, newest first. Opening one takes you to the screen that resolves it."
         actions={
-          <Button variant="outline" onClick={() => setConfirmMarkAll(true)}>
-            Mark all read
-          </Button>
+          <>
+            {selected.size > 0 && (
+              <Button variant="destructive" onClick={() => setConfirmDelete(true)}>
+                Delete selected ({selected.size})
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setConfirmMarkAll(true)}>
+              Mark all read
+            </Button>
+          </>
         }
       />
 
@@ -53,7 +102,7 @@ export function Notifications() {
             value={category}
             onChange={(event) => {
               setCategory(event.target.value);
-              setPage(1);
+              changePage(1);
             }}
             className="w-44"
           >
@@ -70,7 +119,7 @@ export function Notifications() {
             value={unreadOnly ? 'unread' : 'all'}
             onChange={(event) => {
               setUnreadOnly(event.target.value === 'unread');
-              setPage(1);
+              changePage(1);
             }}
             className="w-40"
           >
@@ -88,9 +137,28 @@ export function Notifications() {
         <EmptyState title="Nothing to show" description="No notifications match this filter." />
       ) : (
         <>
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={allOnPageSelected}
+              ref={(el) => {
+                if (el) el.indeterminate = someOnPageSelected;
+              }}
+              onChange={toggleAllOnPage}
+              className="size-3.5 accent-[hsl(var(--primary))]"
+            />
+            Select all on this page
+          </label>
           <ul className="space-y-2">
             {rows.map((notification) => (
-              <li key={notification.id}>
+              <li key={notification.id} className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={selected.has(notification.id)}
+                  onChange={() => toggleRow(notification.id)}
+                  aria-label="Select notification"
+                  className="mt-4 size-3.5 shrink-0 accent-[hsl(var(--primary))]"
+                />
                 <button
                   type="button"
                   onClick={() => open(notification.id, notification.link)}
@@ -110,7 +178,7 @@ export function Notifications() {
               </li>
             ))}
           </ul>
-          <Pagination page={page} pageSize={PAGE_SIZE} total={notifications.data?.total ?? 0} onPageChange={setPage} />
+          <Pagination page={page} pageSize={PAGE_SIZE} total={notifications.data?.total ?? 0} onPageChange={changePage} />
         </>
       )}
 
@@ -133,6 +201,17 @@ export function Notifications() {
           setMarkingAll(false);
           if (result) setConfirmMarkAll(false);
         }}
+      />
+
+      <ConfirmModal
+        open={confirmDelete}
+        onOpenChange={(open) => !open && setConfirmDelete(false)}
+        title={`Delete ${selected.size} notification${selected.size === 1 ? '' : 's'}?`}
+        description="This can't be undone."
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={confirmBulkDelete}
       />
     </div>
   );

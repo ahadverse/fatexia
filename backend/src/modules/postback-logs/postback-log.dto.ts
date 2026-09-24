@@ -14,6 +14,14 @@ export const postbackLogFiltersSchema = paginationSchema.extend({
 
 export type PostbackLogFiltersDto = z.infer<typeof postbackLogFiltersSchema>;
 
+// Capped well above a single page (50 rows) — "select all on this page" is the only
+// way the UI builds this list, but the cap still bounds a hand-crafted request.
+export const bulkDeletePostbackLogsSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(500),
+});
+
+export type BulkDeletePostbackLogsDto = z.infer<typeof bulkDeletePostbackLogsSchema>;
+
 export interface PostbackLogDto {
   id: string;
   conversionId: string | null;

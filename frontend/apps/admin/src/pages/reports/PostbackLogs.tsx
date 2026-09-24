@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   Button,
+  ConfirmModal,
   DataTable,
   FilterBar,
   FilterField,
@@ -12,8 +13,9 @@ import {
   type DataTableColumn,
 } from '@fatexia/ui';
 import type { PostbackLog } from '@fatexia/types';
-import { getPostbackLogs } from '../../lib/reports-api';
-import { useAsync } from '../../hooks/useAsync';
+import { bulkDeletePostbackLogs, getPostbackLogs } from '../../lib/reports-api';
+import { runAction, useAsync } from '../../hooks/useAsync';
+import { useAccess } from '../../session/AccessContext';
 import { dateTime } from '../../lib/format';
 import { StatusPill } from '../../components/StatusPill';
 import { DateRangeFilter, defaultRange, toApiRange, type DateRange } from '../../components/DateRangeFilter';
@@ -22,11 +24,15 @@ const PAGE_SIZE = 50;
 
 // INBOUND = advertiser → Fatexia. OUTBOUND = Fatexia → the affiliate's postback URL.
 export function PostbackLogs() {
+  const { isAdmin } = useAccess();
   const [range, setRange] = useState<DateRange>(defaultRange());
   const [direction, setDirection] = useState('');
   const [outcome, setOutcome] = useState('');
   const [page, setPage] = useState(1);
   const [inspecting, setInspecting] = useState<PostbackLog | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const apiRange = toApiRange(range);
   const filters = useMemo(
@@ -47,6 +53,22 @@ export function PostbackLogs() {
   function changeFilter(apply: () => void) {
     apply();
     setPage(1);
+    // A selection made under one filter/page shouldn't carry into rows the admin
+    // never actually saw selected.
+    setSelected(new Set());
+  }
+
+  async function confirmBulkDelete() {
+    setDeleting(true);
+    const result = await runAction(() => bulkDeletePostbackLogs([...selected]), {
+      success: `${selected.size} postback log${selected.size === 1 ? '' : 's'} deleted`,
+      onDone: logs.reload,
+    });
+    setDeleting(false);
+    if (result) {
+      setSelected(new Set());
+      setConfirmDelete(false);
+    }
   }
 
   const columns: DataTableColumn<PostbackLog>[] = [
@@ -79,9 +101,16 @@ export function PostbackLogs() {
         title="Postback logs"
         description="Every inbound conversion postback and every outbound delivery attempt to an affiliate, including the failures."
         actions={
-          <Button variant="outline" onClick={logs.reload}>
-            Refresh
-          </Button>
+          <>
+            {isAdmin && selected.size > 0 && (
+              <Button variant="destructive" onClick={() => setConfirmDelete(true)}>
+                Delete selected ({selected.size})
+              </Button>
+            )}
+            <Button variant="outline" onClick={logs.reload}>
+              Refresh
+            </Button>
+          </>
         }
       />
 
@@ -113,8 +142,18 @@ export function PostbackLogs() {
             rows={logs.data?.rows ?? []}
             getRowKey={(row) => row.id}
             emptyMessage="No postbacks matched these filters."
+            selectedKeys={isAdmin ? selected : undefined}
+            onSelectionChange={isAdmin ? setSelected : undefined}
           />
-          <Pagination page={page} pageSize={PAGE_SIZE} total={logs.data?.total ?? 0} onPageChange={setPage} />
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={logs.data?.total ?? 0}
+            onPageChange={(next) => {
+              setPage(next);
+              setSelected(new Set());
+            }}
+          />
         </>
       )}
 
@@ -142,6 +181,17 @@ export function PostbackLogs() {
           </div>
         )}
       </Modal>
+
+      <ConfirmModal
+        open={confirmDelete}
+        onOpenChange={(open) => !open && setConfirmDelete(false)}
+        title={`Delete ${selected.size} postback log${selected.size === 1 ? '' : 's'}?`}
+        description="These rows are gone for good — including their payload and delivery history. This can't be undone."
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={confirmBulkDelete}
+      />
     </div>
   );
 }

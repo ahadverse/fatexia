@@ -1,7 +1,7 @@
 import type { NextFunction, Response } from 'express';
 import type { AuthenticatedRequest } from '../../common/guards/auth.guard';
 import { notificationService } from './notification.service';
-import type { CreateNotificationDto, NotificationFiltersDto } from './notification.dto';
+import type { BulkDeleteNotificationsDto, CreateNotificationDto, NotificationFiltersDto } from './notification.dto';
 
 export const notificationController = {
   async getNotifications(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
@@ -50,6 +50,15 @@ export const notificationController = {
   async markAllRead(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       res.json(await notificationService.markAllRead(req.user!.id));
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async bulkDelete(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { ids } = req.body as BulkDeleteNotificationsDto;
+      res.json(await notificationService.bulkDelete(req.user!.id, ids));
     } catch (err) {
       next(err);
     }

@@ -29,6 +29,14 @@ export const createNotificationSchema = z.object({
 
 export type CreateNotificationDto = z.infer<typeof createNotificationSchema>;
 
+// Capped well above a single page (25 rows) — "select all on this page" is the only
+// way the UI builds this list, but the cap still bounds a hand-crafted request.
+export const bulkDeleteNotificationsSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(500),
+});
+
+export type BulkDeleteNotificationsDto = z.infer<typeof bulkDeleteNotificationsSchema>;
+
 /** What a domain event supplies; the recipient is decided by the notify helper. */
 export interface NotificationContent {
   level?: NotificationLevel;
