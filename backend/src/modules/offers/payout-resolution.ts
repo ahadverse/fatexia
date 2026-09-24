@@ -175,7 +175,16 @@ export function computeAmounts(
     // every conversion, and the only sign would be the margin going negative in a
     // report someone has to notice.
     const percent = Math.min(revSharePercent, 100);
-    return { revenueAmount, payoutAmount: Number(((percent / 100) * revenueAmount).toFixed(2)) };
+    const sharePayout = Number(((percent / 100) * revenueAmount).toFixed(2));
+    // A share so small it rounds to nothing (e.g. a link's rate left at a token
+    // percentage) would otherwise book the sale at full revenue and zero payout —
+    // taking 100% margin on paper while the affiliate who sent the traffic is paid
+    // nothing, with no error anywhere to say why. Same "never silently zero" rule
+    // computeSmartLinkAmounts already applies; here the fallback is the offer's own
+    // rule rather than refusing outright, since one exists.
+    if (sharePayout > 0) {
+      return { revenueAmount, payoutAmount: sharePayout };
+    }
   }
 
   const payoutAmount = rule.payoutType === PayoutType.PERCENTAGE ? Number(((ruleAmount / 100) * revenueAmount).toFixed(2)) : ruleAmount;

@@ -19,7 +19,7 @@ const PAYMENT_PRINCIPLES = [
   { icon: Calculator, title: 'Computed, not trusted', description: "Every payout is calculated from the offer's own payout rule — never taken from the advertiser's postback payload." },
   { icon: ShieldCheck, title: 'Verified conversions only', description: 'Conversions clear the fraud pipeline before they count toward a payout, so your balance reflects real, payable actions.' },
   { icon: Clock, title: 'On your schedule', description: 'Payouts are released on your agreed payment terms once conversions are verified — no moving goalposts.' },
-  { icon: Wallet, title: 'Paid your way', description: 'Bank/wire, PayPal, Payoneer, Wise, crypto and more — pick what works for your region and balance.' },
+  { icon: Wallet, title: 'Paid your way', description: 'Bank/wire, PayPal, or crypto (USDT, USDC, BTC, ETH, LTC, TRX) — pick what works for your region and balance.' },
 ];
 
 export default function PaymentsPage() {

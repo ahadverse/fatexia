@@ -31,12 +31,11 @@ const TRAFFIC_TYPE_OPTIONS = ['Search', 'Social', 'Native', 'Email', 'Push', 'Di
 
 const selectClass = 'h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground';
 
-// 24 random bytes (192 bits) as hex, "sk_"-prefixed so it reads unambiguously as a
-// secret rather than some other id in a log or a postback URL. Same as OfferForm's.
+// 6-digit numeric secret, short enough for an advertiser to type by hand into their
+// postback config. Same as OfferForm's.
 function generatePostbackSecret(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(24));
-  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-  return `sk_${hex}`;
+  const n = crypto.getRandomValues(new Uint32Array(1))[0] % 900000;
+  return String(100000 + n);
 }
 
 

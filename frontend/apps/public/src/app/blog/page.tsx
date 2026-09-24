@@ -23,6 +23,12 @@ export default async function BlogIndexPage() {
       <PageHero eyebrow="Blog" title="Notes from behind the tracker" description="Plain-language writing on CPA tracking, fraud detection, and how Fatexia is built." />
 
       <Section>
+        {!featured && (
+          <div className="rounded-2xl border border-dashed border-border py-16 text-center">
+            <p className="text-muted-foreground">No posts published yet — check back soon.</p>
+          </div>
+        )}
+
         {/* Featured */}
         {featured && (
           <Reveal>

@@ -1,4 +1,4 @@
-import { Button, DataTable, EmptyState, ExternalLinkButton, PageHeader, TableSkeleton, toast, type DataTableColumn } from '@fatexia/ui';
+import { Button, DataTable, EmptyState, ExternalLinkButton, PageHeader, RichText, TableSkeleton, toast, type DataTableColumn } from '@fatexia/ui';
 import type { AffiliateSmartLink } from '@fatexia/types';
 import { getSmartLinks } from '../../lib/portal-api';
 import { useAsync } from '../../hooks/useAsync';
@@ -16,7 +16,7 @@ export function SmartLinks() {
       render: (row) => (
         <div>
           <p className="text-card-foreground">{row.name}</p>
-          <p className="text-xs text-muted-foreground">{row.description ?? ''}</p>
+          <RichText html={row.description} className="text-xs text-muted-foreground" />
         </div>
       ),
     },

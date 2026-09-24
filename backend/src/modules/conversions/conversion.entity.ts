@@ -132,6 +132,59 @@ export class Conversion {
   @Column({ type: 'varchar', nullable: true })
   transactionId!: string | null;
 
+  // Extra tokens some advertiser tracking platforms carry on their postback (their own
+  // macro picker's token names). Opaque, like transactionId above — display/audit only,
+  // never consulted by pricing (see payout-resolution.ts's computeAmounts).
+  @Column({ type: 'varchar', nullable: true })
+  timestamp!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  ip!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  atlasCode!: string | null;
+
+  @Column({ type: 'varchar', length: 2000, nullable: true })
+  customParameters!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  conversionId!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  conversionType!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  affiliateUsername!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  networkName!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  siteName!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  programName!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  campaignName!: string | null;
+
+  // Advertiser-reported, unlike `countryCode`/click data above which is Fatexia's own
+  // click-time detection — same "reported vs. computed" split as reportedRevenue.
+  @Column({ type: 'varchar', nullable: true })
+  reportedCountryCode!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  reportedDeviceType!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  commissionAmount!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  userAgent!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  prepaidTransactions!: string | null;
+
   @Column({ type: 'timestamp', nullable: true })
   approvedAt!: Date | null;
 

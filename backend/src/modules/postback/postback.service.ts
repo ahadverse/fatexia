@@ -29,6 +29,28 @@ export interface PostbackRequest {
   reportedRevenue: number | null;
   sourceIp: string;
   rawQuery: Record<string, unknown>;
+  // Extra tokens some advertiser tracking platforms carry on their postback. Opaque,
+  // like transactionId above — stored verbatim on the conversion, never consulted by
+  // pricing (see payout-resolution.ts's computeAmounts). Optional so every existing
+  // caller (and every test fixture) that doesn't set them still type-checks.
+  timestamp?: string | null;
+  ip?: string | null;
+  atlasCode?: string | null;
+  customParameters?: string | null;
+  conversionId?: string | null;
+  conversionType?: string | null;
+  affiliateUsername?: string | null;
+  networkName?: string | null;
+  siteName?: string | null;
+  programName?: string | null;
+  campaignName?: string | null;
+  // Prefixed "reported", like reportedRevenue: the click's own countryCode/deviceType
+  // (Fatexia's own detection) are separate columns and never overwritten by these.
+  reportedCountryCode?: string | null;
+  reportedDeviceType?: string | null;
+  commissionAmount?: string | null;
+  userAgent?: string | null;
+  prepaidTransactions?: string | null;
 }
 
 export interface PostbackResult {
@@ -192,6 +214,22 @@ async function handleOfferlessSmartLinkPostback(
     subId8: click.subId8,
     countryCode: click.countryCode,
     transactionId: req.transactionId,
+    timestamp: req.timestamp,
+    ip: req.ip,
+    atlasCode: req.atlasCode,
+    customParameters: req.customParameters,
+    conversionId: req.conversionId,
+    conversionType: req.conversionType,
+    affiliateUsername: req.affiliateUsername,
+    networkName: req.networkName,
+    siteName: req.siteName,
+    programName: req.programName,
+    campaignName: req.campaignName,
+    reportedCountryCode: req.reportedCountryCode,
+    reportedDeviceType: req.reportedDeviceType,
+    commissionAmount: req.commissionAmount,
+    userAgent: req.userAgent,
+    prepaidTransactions: req.prepaidTransactions,
   });
 
   await logAttempt(req, {
@@ -348,6 +386,22 @@ export const postbackService = {
       subId8: matchedClick?.subId8 ?? null,
       countryCode: matchedClick?.countryCode ?? null,
       transactionId: req.transactionId,
+      timestamp: req.timestamp,
+      ip: req.ip,
+      atlasCode: req.atlasCode,
+      customParameters: req.customParameters,
+      conversionId: req.conversionId,
+      conversionType: req.conversionType,
+      affiliateUsername: req.affiliateUsername,
+      networkName: req.networkName,
+      siteName: req.siteName,
+      programName: req.programName,
+      campaignName: req.campaignName,
+      reportedCountryCode: req.reportedCountryCode,
+      reportedDeviceType: req.reportedDeviceType,
+      commissionAmount: req.commissionAmount,
+      userAgent: req.userAgent,
+      prepaidTransactions: req.prepaidTransactions,
       approvedAt,
     });
 

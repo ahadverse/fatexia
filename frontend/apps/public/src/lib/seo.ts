@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { LEGAL_OPERATOR, LEGAL_ADDRESS_PARTS } from './legal';
 
 /**
  * Single source of truth for every SEO signal the public site emits.
@@ -108,6 +109,10 @@ export function organizationSchema() {
     description:
       'Fatexia is a CPA affiliate network with an in-house click tracker, layered fraud detection, and payouts computed from the offer rule on every conversion.',
     email: CONTACT_EMAIL,
+    // No separate registered company yet — operated by an individual, disclosed here
+    // as founder rather than invented as a corporate entity. See lib/legal.ts.
+    founder: { '@type': 'Person', name: LEGAL_OPERATOR },
+    address: { '@type': 'PostalAddress', ...LEGAL_ADDRESS_PARTS },
     contactPoint: [
       {
         '@type': 'ContactPoint',

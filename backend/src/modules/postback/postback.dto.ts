@@ -1,6 +1,28 @@
 import { z } from 'zod';
 import { isRefId, isUuid } from '../../common/ref-id';
 
+// Kept in sync with the optional fields on postbackQuerySchema below by hand — the
+// list every "here's your postback URL" builder (per-offer, global inbound) appends as
+// macros so the admin/advertiser can see them, without duplicating validation here.
+export const OPTIONAL_POSTBACK_PARAMS = [
+  'timestamp',
+  'ip',
+  'atlas_code',
+  'custom_parameters',
+  'conversion_id',
+  'conversion_type',
+  'affiliate_username',
+  'network_name',
+  'site_name',
+  'program_name',
+  'campaign_name',
+  'country_code',
+  'device_type',
+  'commission_amount',
+  'user_agent',
+  'prepaid_transactions',
+] as const;
+
 // GET-only, query-based — mirrors /click. transaction_id stays an opaque advertiser
 // reference (their own order/sale id) and is never money.
 //
@@ -53,6 +75,27 @@ export const postbackQuerySchema = z.object({
   // see the note there.
   sum: z.coerce.number().finite().nonnegative().max(9_999_999_999.99).optional(),
   revenue: z.coerce.number().finite().nonnegative().max(9_999_999_999.99).optional(),
+
+  // Extra tokens some advertiser tracking platforms carry on their postback (their own
+  // macro picker's token names, lowercased). Same treatment as transaction_id above:
+  // opaque, stored verbatim, never money — commission_amount included, since the only
+  // figure that ever prices a conversion is sum/revenue (see computeAmounts).
+  timestamp: z.string().max(255).optional(),
+  ip: z.string().max(255).optional(),
+  atlas_code: z.string().max(255).optional(),
+  custom_parameters: z.string().max(2000).optional(),
+  conversion_id: z.string().max(255).optional(),
+  conversion_type: z.string().max(255).optional(),
+  affiliate_username: z.string().max(255).optional(),
+  network_name: z.string().max(255).optional(),
+  site_name: z.string().max(255).optional(),
+  program_name: z.string().max(255).optional(),
+  campaign_name: z.string().max(255).optional(),
+  country_code: z.string().max(255).optional(),
+  device_type: z.string().max(255).optional(),
+  commission_amount: z.string().max(255).optional(),
+  user_agent: z.string().max(255).optional(),
+  prepaid_transactions: z.string().max(255).optional(),
 });
 
 export type PostbackQueryDto = z.infer<typeof postbackQuerySchema>;

@@ -198,7 +198,7 @@ export function OfferDetails() {
                 Payout Mode: <span className="font-medium text-foreground">{rule.payoutMode}</span> · Payout Type: {rule.payoutType} · Payout: ${rule.amount.toFixed(2)}
               </p>
               <p>
-                Revenue Model: <span className="font-medium text-foreground">{rule.revenueModel}</span> · Revenue: ${rule.revenueAmount.toFixed(2)}
+                Advertiser Payout Model: <span className="font-medium text-foreground">{rule.revenueModel}</span> · Advertiser payout: ${rule.revenueAmount.toFixed(2)}
               </p>
               <p className="text-muted-foreground">
                 Manager Commission: {rule.managerCommissionPercent}% · Refer Affiliate Commission: {rule.referAffiliateCommissionPercent}% · Hold:{' '}

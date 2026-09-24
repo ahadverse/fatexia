@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { Mail, HelpCircle, Users, Megaphone, Send } from 'lucide-react';
+import { Mail, HelpCircle, Users, Megaphone, Send, MapPin } from 'lucide-react';
 import { Input } from '@fatexia/ui';
 import { PageHero, Section } from '@/components/marketing';
 import { Reveal } from '@/components/Reveal';
+import { LEGAL_ADDRESS } from '@/lib/legal';
 
 const CONTACT_EMAIL = 'hello@fatexia.com';
 
@@ -56,39 +57,49 @@ export default function ContactPage() {
                   </div>
                 </a>
               ))}
+
+              <div className="flex items-start gap-4 rounded-xl border border-border bg-card p-5">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-secondary text-foreground">
+                  <MapPin className="size-5" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-foreground">Registered address</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{LEGAL_ADDRESS}</div>
+                </div>
+              </div>
             </div>
           </Reveal>
 
           {/* Form */}
           <Reveal delay={100} className="lg:col-span-3">
             <form onSubmit={handleSubmit} className="ring-gradient rounded-2xl border border-border bg-card p-6 sm:p-8">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Name</label>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
+                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" className="h-11 px-4" />
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Email</label>
-                  <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+                  <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" className="h-11 px-4" />
                 </div>
               </div>
-              <div className="mt-4 space-y-1.5">
+              <div className="mt-5 space-y-2">
                 <label className="text-sm font-medium text-foreground">Subject</label>
-                <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="What's this about?" />
+                <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="What's this about?" className="h-11 px-4" />
               </div>
-              <div className="mt-4 space-y-1.5">
+              <div className="mt-5 space-y-2">
                 <label className="text-sm font-medium text-foreground">Message</label>
                 <textarea
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   rows={5}
                   placeholder="Tell us about your traffic, your offer, or your question…"
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
+                  className="w-full rounded-md border border-input bg-background px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
                 />
               </div>
               <button
                 type="submit"
-                className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_8px_30px_-8px_hsl(var(--primary)/0.7)] transition-all hover:brightness-110"
+                className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_8px_30px_-8px_hsl(var(--primary)/0.7)] transition-all hover:brightness-110"
               >
                 <Send className="size-4" />
                 Send message

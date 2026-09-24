@@ -111,6 +111,25 @@ function request(overrides: Partial<Parameters<typeof postbackService.handlePost
     reportedRevenue: 100 as number | null,
     sourceIp: IP,
     rawQuery: {},
+    // Matches what postback.controller.ts actually sends for every one of these —
+    // `query.x ?? null`, never undefined — so a test that doesn't override one is
+    // exercising the same shape a real request produces.
+    timestamp: null,
+    ip: null,
+    atlasCode: null,
+    customParameters: null,
+    conversionId: null,
+    conversionType: null,
+    affiliateUsername: null,
+    networkName: null,
+    siteName: null,
+    programName: null,
+    campaignName: null,
+    reportedCountryCode: null,
+    reportedDeviceType: null,
+    commissionAmount: null,
+    userAgent: null,
+    prepaidTransactions: null,
     ...overrides,
   };
 }
@@ -293,6 +312,48 @@ describe('click attribution', () => {
     findClick.mockResolvedValue(null);
     await postbackService.handlePostback(request());
     expect(written().ctitMs).toBeNull();
+  });
+});
+
+describe('extra postback tokens', () => {
+  // The advertiser-platform tokens (timestamp, campaign_name, device_type, etc.) —
+  // opaque, stored verbatim on the conversion, never consulted by pricing. One test per
+  // field would be redundant; this exercises every one of them in a single request and
+  // checks each lands under its own column, unmodified.
+  const extras = {
+    timestamp: '2026-09-24T10:00:00Z',
+    ip: '203.0.113.5',
+    atlasCode: 'atlas-42',
+    customParameters: 'a=1;b=2',
+    conversionId: 'conv-ext-1',
+    conversionType: 'sale',
+    affiliateUsername: 'jdoe',
+    networkName: 'SomeNetwork',
+    siteName: 'example.com',
+    programName: 'Spring Promo',
+    campaignName: 'summer-push',
+    reportedCountryCode: 'DE',
+    reportedDeviceType: 'mobile',
+    commissionAmount: '12.50',
+    userAgent: 'Mozilla/5.0',
+    prepaidTransactions: '3',
+  };
+
+  it('writes every optional token to the conversion, unmodified', async () => {
+    await postbackService.handlePostback(request(extras));
+    expect(written()).toMatchObject(extras);
+  });
+
+  it('defaults every optional token to null when the advertiser sends none of them', async () => {
+    await postbackService.handlePostback(request());
+    expect(written()).toMatchObject(Object.fromEntries(Object.keys(extras).map((key) => [key, null])));
+  });
+
+  it('never lets an optional token influence pricing', async () => {
+    // A duplicate-looking commissionAmount that, if it were mistakenly read as money,
+    // would price the conversion at $999 instead of the rule's configured $25 FLAT.
+    await postbackService.handlePostback(request({ ...extras, commissionAmount: '999.00' }));
+    expect(written()).toMatchObject({ payoutAmount: '25.00', commissionAmount: '999.00' });
   });
 });
 

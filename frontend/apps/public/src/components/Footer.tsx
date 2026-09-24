@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ButtonLink } from './marketing';
+import { LEGAL_OPERATOR, LEGAL_ADDRESS } from '@/lib/legal';
 
 const FOOTER_COLUMNS = [
   {
@@ -33,6 +34,9 @@ const FOOTER_COLUMNS = [
       { href: '/terms', label: 'Terms of Service' },
       { href: '/privacy', label: 'Privacy Policy' },
       { href: '/cookies', label: 'Cookie Policy' },
+      { href: '/publisher-agreement', label: 'Publisher Agreement' },
+      { href: '/advertiser-agreement', label: 'Advertiser Agreement' },
+      { href: '/anti-fraud', label: 'Anti-Fraud Policy' },
     ],
   },
 ];
@@ -85,7 +89,9 @@ export function Footer() {
         </div>
 
         <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-border pt-6 text-sm text-muted-foreground sm:flex-row">
-          <p>© {new Date().getFullYear()} Fatexia. All rights reserved.</p>
+          <p>
+            © {new Date().getFullYear()} Fatexia. All rights reserved. Operated by {LEGAL_OPERATOR}, {LEGAL_ADDRESS}.
+          </p>
           <p className="text-xs">Built on infrastructure we own — not infrastructure we rent.</p>
         </div>
       </div>

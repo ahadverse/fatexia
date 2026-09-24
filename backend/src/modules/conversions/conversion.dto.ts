@@ -111,6 +111,22 @@ export interface ConversionDto {
   subId8: string | null;
   countryCode: string | null;
   transactionId: string | null;
+  timestamp: string | null;
+  ip: string | null;
+  atlasCode: string | null;
+  customParameters: string | null;
+  conversionId: string | null;
+  conversionType: string | null;
+  affiliateUsername: string | null;
+  networkName: string | null;
+  siteName: string | null;
+  programName: string | null;
+  campaignName: string | null;
+  reportedCountryCode: string | null;
+  reportedDeviceType: string | null;
+  commissionAmount: string | null;
+  userAgent: string | null;
+  prepaidTransactions: string | null;
   approvedAt: string | null;
   paidAt: string | null;
   createdAt: string;
@@ -230,6 +246,22 @@ export function toConversionDto(
     subId8: conversion.subId8,
     countryCode: conversion.countryCode,
     transactionId: conversion.transactionId,
+    timestamp: conversion.timestamp,
+    ip: conversion.ip,
+    atlasCode: conversion.atlasCode,
+    customParameters: conversion.customParameters,
+    conversionId: conversion.conversionId,
+    conversionType: conversion.conversionType,
+    affiliateUsername: conversion.affiliateUsername,
+    networkName: conversion.networkName,
+    siteName: conversion.siteName,
+    programName: conversion.programName,
+    campaignName: conversion.campaignName,
+    reportedCountryCode: conversion.reportedCountryCode,
+    reportedDeviceType: conversion.reportedDeviceType,
+    commissionAmount: conversion.commissionAmount,
+    userAgent: conversion.userAgent,
+    prepaidTransactions: conversion.prepaidTransactions,
     approvedAt: conversion.approvedAt?.toISOString() ?? null,
     paidAt: conversion.paidAt?.toISOString() ?? null,
     createdAt: conversion.createdAt.toISOString(),

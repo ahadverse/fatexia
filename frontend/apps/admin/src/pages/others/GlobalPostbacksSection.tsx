@@ -32,6 +32,29 @@ const MACROS = [
   ['{sub1}…{sub8}', 'Sub ids carried from the click'],
 ] as const;
 
+// Kept in sync by hand with OPTIONAL_POSTBACK_PARAMS in
+// backend/src/modules/postback/postback.dto.ts — the fallback inbound URL below only
+// needs it until a real INBOUND row has loaded, but it should show the same tokens
+// that URL will once one has.
+const OPTIONAL_INBOUND_PARAMS = [
+  'timestamp',
+  'ip',
+  'atlas_code',
+  'custom_parameters',
+  'conversion_id',
+  'conversion_type',
+  'affiliate_username',
+  'network_name',
+  'site_name',
+  'program_name',
+  'campaign_name',
+  'country_code',
+  'device_type',
+  'commission_amount',
+  'user_agent',
+  'prepaid_transactions',
+];
+
 interface DraftState {
   id: string | null;
   name: string;
@@ -52,9 +75,11 @@ const EMPTY: DraftState = {
   enabled: true,
 };
 
+// 6-digit numeric secret, short enough to type by hand — same as OfferForm's and
+// SmartLinkForm's generatePostbackSecret.
 function randomSecret(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(24));
-  return `pb_${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`;
+  const n = crypto.getRandomValues(new Uint32Array(1))[0] % 900000;
+  return String(100000 + n);
 }
 
 /**
@@ -69,6 +94,9 @@ export function GlobalPostbacksSection() {
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<GlobalPostback | null>(null);
+  // Which optional tokens the admin has clicked into the preview URL below — starts
+  // empty so the URL handed to an advertiser stays short by default.
+  const [selectedTokens, setSelectedTokens] = useState<string[]>([]);
 
   // Inbound only for now. The outbound half is built and live on the server — it still
   // fires for every approved conversion — but is kept off this page until it is needed,
@@ -91,11 +119,17 @@ export function GlobalPostbacksSection() {
       // step with it anyway: `sum` is required on every postback, so a template missing
       // it would be copied out and rejected on the advertiser's first call.
       '/postback?click_id={click_id}&secret=<secret>&sum={sum}';
-    return secret ? template.replace('<secret>', secret) : template;
+    const withSecret = secret ? template.replace('<secret>', secret) : template;
+    // Optional tokens are opt-in per click below, not baked into the base template —
+    // an advertiser's platform rarely has all sixteen, and a URL that assumes it does
+    // is a URL they have to edit down rather than paste as-is.
+    if (selectedTokens.length === 0) return withSecret;
+    return `${withSecret}&${selectedTokens.map((t) => `${t}={${t}}`).join('&')}`;
   }
 
   function openCreate(direction: GlobalPostbackDirection) {
     setDraft({ ...EMPTY, direction, secret: direction === 'INBOUND' ? randomSecret() : '' });
+    setSelectedTokens([]);
   }
 
   function openEdit(row: GlobalPostback) {
@@ -110,6 +144,11 @@ export function GlobalPostbacksSection() {
       allowedIps: row.allowedIps ?? '',
       enabled: row.enabled,
     });
+    setSelectedTokens([]);
+  }
+
+  function toggleToken(token: string) {
+    setSelectedTokens((tokens) => (tokens.includes(token) ? tokens.filter((t) => t !== token) : [...tokens, token]));
   }
 
   async function save() {
@@ -277,6 +316,25 @@ export function GlobalPostbacksSection() {
                     the offer's currency; <code className="text-card-foreground">{'revenue'}</code> is accepted as an
                     alias if their platform spells it that way.
                   </p>
+                </div>
+                <div className="rounded-md border border-border p-3">
+                  <p className="text-xs font-medium text-muted-foreground">Optional tokens — click to add to the URL above</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {OPTIONAL_INBOUND_PARAMS.map((token) => (
+                      <button
+                        key={token}
+                        type="button"
+                        onClick={() => toggleToken(token)}
+                        className={
+                          selectedTokens.includes(token)
+                            ? 'rounded border border-primary bg-primary/10 px-2 py-1 font-mono text-xs text-primary'
+                            : 'rounded border border-border px-2 py-1 font-mono text-xs text-muted-foreground hover:bg-accent'
+                        }
+                      >
+                        {token}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </>
             )}

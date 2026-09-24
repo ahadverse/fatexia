@@ -84,7 +84,11 @@ export const createOfferSchema = z.object({
   allowDeepLinking: z.boolean(),
   remarksForAdmin: z.string().optional(),
   remarksForAffiliateManager: z.string().optional(),
-  payoutRules: z.array(payoutRuleInputSchema),
+  // At least one is required — postback pricing (resolvePayoutRuleForPricing) falls
+  // back to zero revenue/payout when an offer has none, silently booking every
+  // conversion at $0 instead of failing loudly. The create form already enforces this;
+  // this is the same rule enforced where it can't be bypassed by a direct API call.
+  payoutRules: z.array(payoutRuleInputSchema).min(1, 'At least one payout rule is required'),
   caps: z.array(offerCapInputSchema),
   defaultPayoutAmount: z.coerce.number().nonnegative(),
   destinationUrl: z.string().optional(),
@@ -354,7 +358,11 @@ export function affiliateLinkId(affiliate: { publicId: string | null; id: string
 function postbackUrlFor(offerRefId: number, postbackSecret: string | null): string | null {
   if (!postbackSecret) return null;
   // `sum` is the sale's revenue and is required on every postback — an advertiser handed
-  // a URL without it has every conversion rejected on their first call.
+  // a URL without it has every conversion rejected on their first call. The optional
+  // tokens (timestamp, campaign_name, etc. — see OPTIONAL_POSTBACK_PARAMS) are NOT
+  // appended here: they're documented as a pick-list in the admin UI instead, so the
+  // URL an advertiser is handed stays short rather than carrying sixteen macros most
+  // platforms have no matching value for.
   return `${env.PUBLIC_TRACKING_URL}/postback?offerId=${offerRefId}&click_id={click_id}&secret=${postbackSecret}&sum={sum}`;
 }
 

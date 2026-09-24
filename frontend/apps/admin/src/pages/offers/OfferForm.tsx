@@ -50,12 +50,11 @@ const EMPTY_RULE: PayoutRuleInput = {
   commissionPercent: 0,
 };
 
-// 24 random bytes (192 bits) as hex, "sk_"-prefixed so it reads unambiguously as a
-// secret rather than some other id when it shows up in logs or the postback URL.
+// 6-digit numeric secret, short enough for an advertiser to type by hand into their
+// postback config. Same as SmartLinkForm's.
 function generatePostbackSecret(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(24));
-  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-  return `sk_${hex}`;
+  const n = crypto.getRandomValues(new Uint32Array(1))[0] % 900000;
+  return String(100000 + n);
 }
 
 function isoDateOnly(value?: string): string {
@@ -695,7 +694,7 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Postback Secret" required>
+          <Field label="Postback Secret">
             <div className="flex gap-2">
               <Input value={postbackSecret} onChange={(e) => setPostbackSecret(e.target.value)} placeholder="Shared secret the advertiser sends back on /postback" />
               <button
@@ -707,7 +706,7 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
               </button>
             </div>
           </Field>
-          <Field label="Allowed Postback IPs" required>
+          <Field label="Allowed Postback IPs">
             <Input value={allowedPostbackIps} onChange={(e) => setAllowedPostbackIps(e.target.value)} placeholder="Comma-separated IPs allowed to call /postback" />
           </Field>
         </div>
@@ -764,6 +763,21 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
                 payout or a smart-link revenue share is calculated from.
               </span>
             </p>
+            <p className="pt-2 font-medium text-foreground">Optional postback tokens</p>
+            <p className="text-muted-foreground">
+              Also accepted on the postback URL, if the advertiser&apos;s platform can send them — stored on the
+              conversion, never used to price it:
+            </p>
+            <p className="text-muted-foreground">
+              <code className="text-foreground">{'{timestamp}'}</code>, <code className="text-foreground">{'{ip}'}</code>,{' '}
+              <code className="text-foreground">{'{atlas_code}'}</code>, <code className="text-foreground">{'{custom_parameters}'}</code>,{' '}
+              <code className="text-foreground">{'{conversion_id}'}</code>, <code className="text-foreground">{'{conversion_type}'}</code>,{' '}
+              <code className="text-foreground">{'{affiliate_username}'}</code>, <code className="text-foreground">{'{network_name}'}</code>,{' '}
+              <code className="text-foreground">{'{site_name}'}</code>, <code className="text-foreground">{'{program_name}'}</code>,{' '}
+              <code className="text-foreground">{'{campaign_name}'}</code>, <code className="text-foreground">{'{country_code}'}</code>,{' '}
+              <code className="text-foreground">{'{device_type}'}</code>, <code className="text-foreground">{'{commission_amount}'}</code>,{' '}
+              <code className="text-foreground">{'{user_agent}'}</code>, <code className="text-foreground">{'{prepaid_transactions}'}</code>.
+            </p>
           </div>
         )}
       </SectionCard>
@@ -778,7 +792,7 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
                     Payout Mode: <span className="font-medium text-foreground">{rule.payoutMode}</span> · Payout Type: {rule.payoutType} · Payout: ${rule.amount.toFixed(2)}
                   </p>
                   <p>
-                    Revenue Model: <span className="font-medium text-foreground">{rule.revenueModel}</span> · Revenue: ${rule.revenueAmount.toFixed(2)}
+                    Advertiser Payout Model: <span className="font-medium text-foreground">{rule.revenueModel}</span> · Advertiser payout: ${rule.revenueAmount.toFixed(2)}
                   </p>
                   <p className="text-muted-foreground">
                     Manager Commission: {rule.managerCommissionPercent}% · Refer Affiliate Commission: {rule.referAffiliateCommissionPercent}%
@@ -838,7 +852,7 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
               <p className="text-xs text-muted-foreground">Percentage payout is only available for CPS (Cost Per Sale).</p>
             )}
           </Field>
-          <Field label="Revenue Model">
+          <Field label="Advertiser Payout Model">
             <select value={draftRule.revenueModel} onChange={(e) => setDraftRule((r) => ({ ...r, revenueModel: e.target.value as RevenueModel }))} className={selectClass}>
               {REVENUE_MODELS.map((m) => (
                 <option key={m} value={m}>
