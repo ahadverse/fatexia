@@ -134,4 +134,13 @@ export const notificationService = {
     await emitUnread(userId);
     return this.getUnreadCount(userId);
   },
+
+  async bulkDelete(userId: string, ids: string[]): Promise<{ deleted: number; unread: number }> {
+    const deleted = await notificationRepository.bulkDeleteForUser(userId, ids);
+    // Some of what was deleted may have been unread — the header bell's badge has to
+    // reflect that they're gone, not just that they were read.
+    await emitUnread(userId);
+    const { unread } = await this.getUnreadCount(userId);
+    return { deleted, unread };
+  },
 };

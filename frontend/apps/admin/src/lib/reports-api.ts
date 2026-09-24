@@ -149,3 +149,7 @@ export interface PostbackLogFilters {
 export function getPostbackLogs(filters: PostbackLogFilters = {}): Promise<Paginated<PostbackLog>> {
   return apiFetch<Paginated<PostbackLog>>(`/postback-logs${toQuery({ ...filters })}`);
 }
+
+export function bulkDeletePostbackLogs(ids: string[]): Promise<{ deleted: number }> {
+  return apiFetch<{ deleted: number }>('/postback-logs/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) });
+}

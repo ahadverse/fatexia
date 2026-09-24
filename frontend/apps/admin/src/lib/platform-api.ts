@@ -135,6 +135,13 @@ export function markAllNotificationsRead(): Promise<{ unread: number }> {
   return apiFetch<{ unread: number }>('/notifications/read-all', { method: 'PATCH' });
 }
 
+export function bulkDeleteNotifications(ids: string[]): Promise<{ deleted: number; unread: number }> {
+  return apiFetch<{ deleted: number; unread: number }>('/notifications/bulk-delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
+}
+
 // News
 
 export function getNewsPosts(filters: { status?: string; search?: string } = {}): Promise<NewsPost[]> {

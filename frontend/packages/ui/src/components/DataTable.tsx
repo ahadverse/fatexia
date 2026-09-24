@@ -37,6 +37,16 @@ export interface DataTableProps<T> {
    * or an email in every row needs more.
    */
   minWidth?: string;
+  /**
+   * Row-selection checkboxes, opt-in like sorting (`canSelect = Boolean(onSelectionChange)`).
+   *
+   * Scoped to the current page: the header checkbox reflects and toggles only the
+   * `rows` currently rendered, not every row a caller has ever selected across pages —
+   * the same page-at-a-time model every other piece of state on these tables already
+   * follows (sort, filters, page size).
+   */
+  selectedKeys?: Set<string>;
+  onSelectionChange?: (keys: Set<string>) => void;
 }
 
 /**
@@ -64,10 +74,13 @@ export function DataTable<T>({
   onSortChange,
   footer,
   minWidth,
+  selectedKeys,
+  onSelectionChange,
 }: DataTableProps<T>) {
   // A column only sorts when the table was actually given a handler — otherwise the
   // header would look interactive and do nothing.
   const canSort = Boolean(onSortChange);
+  const canSelect = Boolean(onSelectionChange);
 
   function toggleSort(key: string) {
     if (!onSortChange) return;
@@ -78,11 +91,49 @@ export function DataTable<T>({
     );
   }
 
+  const pageKeys = rows.map(getRowKey);
+  const selectedOnPage = pageKeys.filter((key) => selectedKeys?.has(key)).length;
+  const allOnPageSelected = pageKeys.length > 0 && selectedOnPage === pageKeys.length;
+  const someOnPageSelected = selectedOnPage > 0 && !allOnPageSelected;
+
+  function toggleAllOnPage() {
+    if (!onSelectionChange || !selectedKeys) return;
+    const next = new Set(selectedKeys);
+    if (allOnPageSelected) {
+      pageKeys.forEach((key) => next.delete(key));
+    } else {
+      pageKeys.forEach((key) => next.add(key));
+    }
+    onSelectionChange(next);
+  }
+
+  function toggleRow(key: string) {
+    if (!onSelectionChange || !selectedKeys) return;
+    const next = new Set(selectedKeys);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    onSelectionChange(next);
+  }
+
   return (
     <div className="overflow-x-auto rounded-lg border border-border bg-card">
       <table className="w-full text-sm" style={{ minWidth: minWidth ?? defaultMinWidth(columns.length) }}>
         <thead>
           <tr className="border-b border-border">
+            {canSelect && (
+              <th className="w-10 px-4 py-2.5">
+                <input
+                  type="checkbox"
+                  checked={allOnPageSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = someOnPageSelected;
+                  }}
+                  onChange={toggleAllOnPage}
+                  aria-label="Select all rows on this page"
+                  className="size-3.5 accent-[hsl(var(--primary))]"
+                />
+              </th>
+            )}
             {columns.map((col) => {
               const sortable = canSort && col.sortable;
               const active = sort?.key === col.key;
@@ -116,20 +167,34 @@ export function DataTable<T>({
         <tbody>
           {rows.length === 0 && (
             <tr>
-              <td colSpan={columns.length} className="px-4 py-8 text-center text-muted-foreground">
+              <td colSpan={columns.length + (canSelect ? 1 : 0)} className="px-4 py-8 text-center text-muted-foreground">
                 {emptyMessage}
               </td>
             </tr>
           )}
-          {rows.map((row) => (
-            <tr key={getRowKey(row)} className="border-b border-border last:border-0 hover:bg-accent/50">
-              {columns.map((col) => (
-                <td key={col.key} className={cn('px-4 py-2.5 text-card-foreground', col.className)}>
-                  {col.render(row)}
-                </td>
-              ))}
-            </tr>
-          ))}
+          {rows.map((row) => {
+            const key = getRowKey(row);
+            return (
+              <tr key={key} className="border-b border-border last:border-0 hover:bg-accent/50">
+                {canSelect && (
+                  <td className="px-4 py-2.5">
+                    <input
+                      type="checkbox"
+                      checked={selectedKeys?.has(key) ?? false}
+                      onChange={() => toggleRow(key)}
+                      aria-label="Select row"
+                      className="size-3.5 accent-[hsl(var(--primary))]"
+                    />
+                  </td>
+                )}
+                {columns.map((col) => (
+                  <td key={col.key} className={cn('px-4 py-2.5 text-card-foreground', col.className)}>
+                    {col.render(row)}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
         </tbody>
         {footer && (
           <tfoot className="border-t-2 border-border">

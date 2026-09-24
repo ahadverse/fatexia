@@ -1,3 +1,4 @@
+import { In } from 'typeorm';
 import { AppDataSource } from '../../infra/database/data-source';
 import { offsetOf } from '../../common/pagination';
 import { PostbackLog } from './postback-log.entity';
@@ -38,5 +39,12 @@ export const postbackLogRepository = {
 
   create(data: Partial<PostbackLog>): Promise<PostbackLog> {
     return repository.save(repository.create(data));
+  },
+
+  // Nothing else references postback_logs rows, so a hard delete has no FK fallout —
+  // unlike a click, deleting one here can't orphan a conversion or any other record.
+  async bulkDelete(ids: string[]): Promise<number> {
+    const result = await repository.delete({ id: In(ids) });
+    return result.affected ?? 0;
   },
 };

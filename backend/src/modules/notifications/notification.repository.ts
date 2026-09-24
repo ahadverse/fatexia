@@ -82,4 +82,17 @@ export const notificationRepository = {
       .andWhere('"readAt" IS NULL')
       .execute();
   },
+
+  // Scoped by owner as well as id, same as markRead — without this, any authenticated
+  // user could delete any notification just by knowing its uuid.
+  async bulkDeleteForUser(userId: string, ids: string[]): Promise<number> {
+    const result = await repository
+      .createQueryBuilder()
+      .delete()
+      .from(Notification)
+      .where('"userId" = :userId', { userId })
+      .andWhere('id IN (:...ids)', { ids })
+      .execute();
+    return result.affected ?? 0;
+  },
 };

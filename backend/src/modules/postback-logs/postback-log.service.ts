@@ -21,4 +21,8 @@ export const postbackLogService = {
 
     return paginate(dtos, total, filters);
   },
+
+  async bulkDelete(ids: string[]): Promise<{ deleted: number }> {
+    return { deleted: await postbackLogRepository.bulkDelete(ids) };
+  },
 };
