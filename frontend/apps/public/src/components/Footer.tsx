@@ -1,6 +1,7 @@
 import Link from 'next/link';
+import { MapPin } from 'lucide-react';
 import { ButtonLink } from './marketing';
-import { LEGAL_OPERATOR, LEGAL_ADDRESS } from '@/lib/legal';
+import { LEGAL_ADDRESS } from '@/lib/legal';
 
 const FOOTER_COLUMNS = [
   {
@@ -89,10 +90,11 @@ export function Footer() {
         </div>
 
         <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-border pt-6 text-sm text-muted-foreground sm:flex-row">
-          <p>
-            © {new Date().getFullYear()} Fatexia. All rights reserved. Operated by {LEGAL_OPERATOR}, {LEGAL_ADDRESS}.
+          <p>© {new Date().getFullYear()} Fatexia. All rights reserved.</p>
+          <p className="flex items-center gap-1.5 text-xs">
+            <MapPin className="size-3.5 shrink-0" />
+            {LEGAL_ADDRESS}
           </p>
-          <p className="text-xs">Built on infrastructure we own — not infrastructure we rent.</p>
         </div>
       </div>
     </footer>

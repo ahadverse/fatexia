@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { PageHero, Section } from '@/components/marketing';
 import { JsonLd } from '@/components/JsonLd';
 import { breadcrumbSchema, pageMetadata } from '@/lib/seo';
-import { LEGAL_OPERATOR, LEGAL_ADDRESS, LEGAL_JURISDICTION, LEGAL_EMAIL } from '@/lib/legal';
+import { LEGAL_ADDRESS, LEGAL_JURISDICTION, LEGAL_EMAIL } from '@/lib/legal';
 
 export const metadata: Metadata = pageMetadata({
   title: 'Advertiser Agreement',
@@ -13,7 +13,7 @@ export const metadata: Metadata = pageMetadata({
 const SECTIONS = [
   {
     heading: '1. Scope',
-    body: `This Advertiser Agreement applies to every advertiser account on Fatexia, operated by ${LEGAL_OPERATOR} (${LEGAL_ADDRESS}). It sits alongside, and does not replace, the general Terms of Service — where the two disagree on advertiser-specific matters, this Agreement controls.`,
+    body: `This Advertiser Agreement applies to every advertiser account on Fatexia, operated from ${LEGAL_ADDRESS}. It sits alongside, and does not replace, the general Terms of Service — where the two disagree on advertiser-specific matters, this Agreement controls.`,
   },
   {
     heading: '2. Campaign submission and approval',

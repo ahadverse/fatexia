@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { PageHero, Section } from '@/components/marketing';
 import { JsonLd } from '@/components/JsonLd';
 import { breadcrumbSchema, pageMetadata } from '@/lib/seo';
-import { LEGAL_OPERATOR, LEGAL_ADDRESS, LEGAL_EMAIL } from '@/lib/legal';
+import { LEGAL_ADDRESS, LEGAL_EMAIL } from '@/lib/legal';
 
 export const metadata: Metadata = pageMetadata({
   title: 'Terms of Service',
@@ -19,7 +19,7 @@ const SECTIONS = [
   },
   {
     heading: '2. Who operates Fatexia',
-    body: `Fatexia is operated by ${LEGAL_OPERATOR}, based at ${LEGAL_ADDRESS}. References to "Fatexia", "we", "us" or "the network" in this document mean the operator described here.`,
+    body: `Fatexia is operated from ${LEGAL_ADDRESS}. References to "Fatexia", "we", "us" or "the network" in this document mean the operator described here.`,
   },
   {
     heading: '3. Eligibility and account approval',

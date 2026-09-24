@@ -1,13 +1,13 @@
 /**
  * Single source of truth for the operator identity shown on Terms, Privacy, the
  * Publisher/Advertiser Agreements, the footer, and the Organization JSON-LD — one
- * place to correct if the legal name or address ever changes, instead of five.
+ * place to correct if the address ever changes, instead of five.
  *
- * Fatexia has no separate registered legal entity yet; the network is operated by an
- * individual. `LEGAL_OPERATOR` is that person's name, not a company name — do not
- * invent a "Ltd."/"Inc." suffix or a registration number that doesn't exist.
+ * Fatexia has no separate registered legal entity; deliberately no individual's name
+ * is published here either — every reference is to "Fatexia" plus this address, not
+ * to a person. Do not invent a "Ltd."/"Inc." suffix, a registration number, or a name
+ * that isn't meant to be public.
  */
-export const LEGAL_OPERATOR = 'Ahad Hossain';
 
 // Structured once so the Organization JSON-LD's PostalAddress and the plain-text
 // LEGAL_ADDRESS shown on-page can't drift apart into two different addresses.

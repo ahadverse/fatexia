@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { PageHero, Section } from '@/components/marketing';
 import { JsonLd } from '@/components/JsonLd';
 import { breadcrumbSchema, pageMetadata } from '@/lib/seo';
-import { LEGAL_OPERATOR, LEGAL_ADDRESS, LEGAL_EMAIL } from '@/lib/legal';
+import { LEGAL_ADDRESS, LEGAL_EMAIL } from '@/lib/legal';
 
 export const metadata: Metadata = pageMetadata({
   title: 'Privacy Policy',
@@ -15,7 +15,7 @@ export const metadata: Metadata = pageMetadata({
 const SECTIONS = [
   {
     heading: 'Who operates this site',
-    body: `Fatexia is operated by ${LEGAL_OPERATOR}, based at ${LEGAL_ADDRESS} ("we", "us"). For the purposes of data protection law, this is the entity responsible for the data described below.`,
+    body: `Fatexia is operated from ${LEGAL_ADDRESS} ("we", "us"). For the purposes of data protection law, this is the entity responsible for the data described below.`,
   },
   {
     heading: 'Information we collect',
