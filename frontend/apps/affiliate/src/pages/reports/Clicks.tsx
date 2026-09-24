@@ -253,9 +253,14 @@ export function Clicks() {
         title="Clicks"
         description="Every click your links generated. Open a row for the full record — blocked clicks never reach the advertiser and cannot convert."
         actions={
-          <Button variant="outline" disabled={rows.length === 0} onClick={exportCsv}>
-            Export CSV
-          </Button>
+          <>
+            <Button variant="outline" onClick={clicks.reload}>
+              Refresh
+            </Button>
+            <Button variant="outline" disabled={rows.length === 0} onClick={exportCsv}>
+              Export CSV
+            </Button>
+          </>
         }
       />
 

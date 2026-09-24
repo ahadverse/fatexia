@@ -251,6 +251,9 @@ export function ReportView({ title, description, dimension, initialPreset, selec
                 setRange(next);
               }}
             />
+            <Button variant="outline" onClick={report.reload}>
+              Refresh
+            </Button>
             <Button variant="outline" disabled={allRows.length === 0} onClick={exportCsv}>
               Export CSV
             </Button>

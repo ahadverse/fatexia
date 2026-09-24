@@ -108,9 +108,10 @@ export function GlobalPostbacksSection() {
    *
    * The template comes from the server — the admin app has no idea what
    * PUBLIC_TRACKING_URL is, which is why the preview used to start with an ellipsis.
-   * Falls back to a relative path only if no row has been loaded yet, and the real
-   * secret is substituted while it is still in the draft, since the server never
-   * returns it again afterwards.
+   * Falls back to a relative path only if no row has been loaded yet. The server now
+   * bakes each row's own real secret into its `postbackUrl`, so `secret=...` is
+   * replaced by regex rather than a literal `<secret>` token — that also covers the
+   * fallback template, which still uses the placeholder.
    */
   function advertiserUrl(secret: string): string {
     const template =
@@ -119,7 +120,7 @@ export function GlobalPostbacksSection() {
       // step with it anyway: `sum` is required on every postback, so a template missing
       // it would be copied out and rejected on the advertiser's first call.
       '/postback?click_id={click_id}&secret=<secret>&sum={sum}';
-    const withSecret = secret ? template.replace('<secret>', secret) : template;
+    const withSecret = template.replace(/secret=[^&]*/, `secret=${secret || '<secret>'}`);
     // Optional tokens are opt-in per click below, not baked into the base template —
     // an advertiser's platform rarely has all sixteen, and a URL that assumes it does
     // is a URL they have to edit down rather than paste as-is.
@@ -138,9 +139,10 @@ export function GlobalPostbacksSection() {
       name: row.name,
       direction: row.direction,
       url: row.url ?? '',
-      // Left blank on purpose: the server never returns the stored secret, and an empty
-      // field on save means "keep the existing one".
-      secret: '',
+      // Prefilled with the real value — the server returns it in full for this field
+      // (see GlobalPostbackDto.secret), so there is nothing to keep the admin from
+      // seeing and copying back out.
+      secret: row.secret ?? '',
       allowedIps: row.allowedIps ?? '',
       enabled: row.enabled,
     });
@@ -208,7 +210,7 @@ export function GlobalPostbacksSection() {
                   {!row.enabled && <StatusBadge variant="warning">Disabled</StatusBadge>}
                 </p>
                 <p className="truncate font-mono text-xs text-muted-foreground">
-                  {row.direction === 'OUTBOUND' ? row.url : `secret ${row.secretPreview ?? '—'} · IPs ${row.allowedIps || 'any'}`}
+                  {row.direction === 'OUTBOUND' ? row.url : `secret ${row.secret ?? '—'} · IPs ${row.allowedIps || 'any'}`}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {row.lastUsedAt ? `Last used ${dateTime(row.lastUsedAt)}` : 'Never used yet'}
@@ -271,9 +273,7 @@ export function GlobalPostbacksSection() {
             ) : (
               <>
                 <label className="block">
-                  <span className="text-xs font-medium text-muted-foreground">
-                    Secret {draft.id && '(leave blank to keep the current one)'}
-                  </span>
+                  <span className="text-xs font-medium text-muted-foreground">Secret</span>
                   <Input
                     value={draft.secret}
                     onChange={(e) => setDraft({ ...draft, secret: e.target.value })}

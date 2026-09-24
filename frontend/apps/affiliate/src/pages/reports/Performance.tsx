@@ -151,9 +151,14 @@ export function Performance() {
         title="Performance"
         description="Your traffic and earnings, grouped however you need to read them."
         actions={
-          <Button variant="outline" disabled={allRows.length === 0} onClick={exportCsv}>
-            Export CSV
-          </Button>
+          <>
+            <Button variant="outline" onClick={report.reload}>
+              Refresh
+            </Button>
+            <Button variant="outline" disabled={allRows.length === 0} onClick={exportCsv}>
+              Export CSV
+            </Button>
+          </>
         }
       />
 

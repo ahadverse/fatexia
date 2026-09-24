@@ -405,15 +405,14 @@ export interface GlobalPostback {
   direction: GlobalPostbackDirection;
   /** OUTBOUND only — the URL to call, with {macro} placeholders. */
   url: string | null;
-  /** Masked; the raw secret is never returned once stored. */
-  secretPreview: string | null;
-  hasSecret: boolean;
+  /** INBOUND only — the real stored secret, returned in full so it can be handed to an advertiser. */
+  secret: string | null;
   /** INBOUND only. Null means any source IP. */
   allowedIps: string | null;
   enabled: boolean;
   lastUsedAt: string | null;
   createdAt: string;
-  /** INBOUND: the ready-made address to hand an advertiser, on the tracker host. */
+  /** INBOUND: the ready-made address to hand an advertiser, secret included, on the tracker host. */
   postbackUrl: string | null;
 }
 

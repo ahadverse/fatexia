@@ -173,8 +173,11 @@ export const reportRepository = {
       .addSelect('COUNT(*)', 'conversions')
       .addSelect(`COUNT(*) FILTER (WHERE conversion.status IN (:...approvedStates))`, 'approved')
       .addSelect(`COUNT(*) FILTER (WHERE conversion.status = :rejected)`, 'rejected')
-      .addSelect('SUM(conversion."revenueAmount")', 'revenue')
-      .addSelect('SUM(conversion."payoutAmount")', 'payout')
+      // Same approvedStates filter as the counts above — a REJECTED/DUPLICATE/PENDING
+      // row is never paid and must not add its amount into these sums, or "revenue"/
+      // "payout" over-counts by whatever was rejected in the window.
+      .addSelect('SUM(conversion."revenueAmount") FILTER (WHERE conversion.status IN (:...approvedStates))', 'revenue')
+      .addSelect('SUM(conversion."payoutAmount") FILTER (WHERE conversion.status IN (:...approvedStates))', 'payout')
       .setParameters({
         // PAID conversions were approved first — counting only APPROVED would make
         // historical rows appear to un-approve themselves once they were paid out.

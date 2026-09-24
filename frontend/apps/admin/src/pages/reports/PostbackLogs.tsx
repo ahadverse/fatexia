@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
+  Button,
   DataTable,
   FilterBar,
   FilterField,
@@ -77,6 +78,11 @@ export function PostbackLogs() {
       <PageHeader
         title="Postback logs"
         description="Every inbound conversion postback and every outbound delivery attempt to an affiliate, including the failures."
+        actions={
+          <Button variant="outline" onClick={logs.reload}>
+            Refresh
+          </Button>
+        }
       />
 
       <FilterBar right={<DateRangeFilter value={range} onChange={(next) => changeFilter(() => setRange(next))} />}>

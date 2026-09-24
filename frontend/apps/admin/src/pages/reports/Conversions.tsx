@@ -151,6 +151,11 @@ export function Conversions() {
       <PageHeader
         title="Conversions"
         description="Every conversion received, with the review actions that move it through the approval lifecycle."
+        actions={
+          <Button variant="outline" onClick={conversions.reload}>
+            Refresh
+          </Button>
+        }
       />
 
       <FilterBar right={<DateRangeFilter value={range} onChange={(next) => changeFilter(() => setRange(next))} />}>

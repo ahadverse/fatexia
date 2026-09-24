@@ -149,7 +149,8 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:4000 --max-time 10)",
       "Bash(curl -s http://localhost:3000/ --max-time 10)",
       "Bash(echo \"---exit: $?---\")",
-      "Bash(timeout 30 bash -c 'until curl -sf http://localhost:3000 >/dev/null 2>&1; do sleep 1; done')"
+      "Bash(timeout 30 bash -c 'until curl -sf http://localhost:3000 >/dev/null 2>&1; do sleep 1; done')",
+      "Bash(grep -n -B5 -A20 \"^- \\\\`notifications\\\\`\" PLAN-backend.md)"
     ]
   }
 }

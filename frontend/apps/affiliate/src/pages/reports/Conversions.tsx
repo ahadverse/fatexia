@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
+  Button,
   DataTable,
   FilterBar,
   FilterField,
@@ -61,6 +62,11 @@ export function Conversions() {
       <PageHeader
         title="Conversions"
         description="Every conversion credited to you and where it is in the approval process. Approved conversions become payable once the hold window passes."
+        actions={
+          <Button variant="outline" onClick={conversions.reload}>
+            Refresh
+          </Button>
+        }
       />
 
       <FilterBar right={<DateRangeFilter value={range} onChange={(next) => changeFilter(() => setRange(next))} />}>

@@ -49,26 +49,27 @@ export interface GlobalPostbackDto {
   name: string;
   direction: PostbackDirectionKind;
   url: string | null;
-  /** Masked. The raw secret is never returned once stored — same rule as integrations. */
-  secretPreview: string | null;
-  hasSecret: boolean;
+  /**
+   * INBOUND: the real stored secret, returned in full — unlike a third-party
+   * `integrations` credential (entered once, only ever used by our own server), this
+   * one has to be handed to the advertiser, possibly more than once, so masking it
+   * from the admin who owns it only makes it impossible to retrieve. Same rule
+   * offers already follow for their own `postbackSecret` (offer.dto.ts).
+   */
+  secret: string | null;
   allowedIps: string | null;
   enabled: boolean;
   lastUsedAt: string | null;
   createdAt: string;
   /**
-   * INBOUND: the address to hand an advertiser, on this deployment's tracker host.
+   * INBOUND: the address to hand an advertiser, on this deployment's tracker host,
+   * with the real secret substituted in — ready to copy-paste, the same way an
+   * offer's own postbackUrl already is (see offer.dto.ts's postbackUrlFor).
    *
    * Built here rather than in the admin app, which has no idea what PUBLIC_TRACKING_URL
-   * is — the same reason offers and smart-links return their URLs ready-made. The
-   * secret is left as a placeholder because it is never returned once stored.
+   * is — the same reason offers and smart-links return their URLs ready-made.
    */
   postbackUrl: string | null;
-}
-
-function mask(secret: string | null): string | null {
-  if (!secret) return null;
-  return `••••${secret.slice(-4)}`;
 }
 
 export function toGlobalPostbackDto(row: GlobalPostback): GlobalPostbackDto {
@@ -77,8 +78,7 @@ export function toGlobalPostbackDto(row: GlobalPostback): GlobalPostbackDto {
     name: row.name,
     direction: row.direction,
     url: row.url,
-    secretPreview: mask(row.secret),
-    hasSecret: !!row.secret,
+    secret: row.secret,
     allowedIps: row.allowedIps,
     enabled: row.enabled,
     lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
@@ -96,8 +96,8 @@ export function toGlobalPostbackDto(row: GlobalPostback): GlobalPostbackDto {
     // network's own revenue and margin correct in reporting, and an advertiser who sends
     // it on a flat offer costs nothing.
     postbackUrl:
-      row.direction === PostbackDirectionKind.INBOUND
-        ? `${env.PUBLIC_TRACKING_URL}/postback?click_id={click_id}&secret=<secret>&sum={sum}`
+      row.direction === PostbackDirectionKind.INBOUND && row.secret
+        ? `${env.PUBLIC_TRACKING_URL}/postback?click_id={click_id}&secret=${row.secret}&sum={sum}`
         : null,
   };
 }

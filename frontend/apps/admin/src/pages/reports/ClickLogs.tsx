@@ -583,9 +583,14 @@ export function ClickLogs() {
         title="Click logs"
         description="Every click the tracker recorded. Open a row for the full record — geo, device, network and the fraud signals it was scored on."
         actions={
-          <Button variant="outline" disabled={rows.length === 0} onClick={exportCsv}>
-            Export CSV
-          </Button>
+          <>
+            <Button variant="outline" onClick={logs.reload}>
+              Refresh
+            </Button>
+            <Button variant="outline" disabled={rows.length === 0} onClick={exportCsv}>
+              Export CSV
+            </Button>
+          </>
         }
       />
 

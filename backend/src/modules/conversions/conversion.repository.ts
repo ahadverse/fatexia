@@ -65,11 +65,18 @@ export const conversionRepository = {
 
   // Totals for the current filter set, computed in SQL over every matching row —
   // not just the page being displayed, which would make the footer lie.
+  //
+  // `count` is unfiltered by status — it describes the table, not money owed. The
+  // money sums are restricted to APPROVED/PAID (same set `report.repository.ts`'s
+  // conversionAggregates uses): a REJECTED or DUPLICATE row is never paid, so it must
+  // not add its amount into "Total payout"/"Revenue", and PAID stays in because it was
+  // approved first — dropping it would make a paid-out period's total shrink to zero.
   totals(filters: ConversionFiltersDto): Promise<ConversionTotalsRow | undefined> {
     return applyFilters(repository.createQueryBuilder('conversion'), filters)
       .select('COUNT(*)', 'count')
-      .addSelect('SUM(conversion."revenueAmount")', 'revenue')
-      .addSelect('SUM(conversion."payoutAmount")', 'payout')
+      .addSelect('SUM(conversion."revenueAmount") FILTER (WHERE conversion.status IN (:...approvedStates))', 'revenue')
+      .addSelect('SUM(conversion."payoutAmount") FILTER (WHERE conversion.status IN (:...approvedStates))', 'payout')
+      .setParameter('approvedStates', [ConversionStatus.APPROVED, ConversionStatus.PAID])
       .getRawOne<ConversionTotalsRow>();
   },
 
