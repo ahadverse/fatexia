@@ -53,7 +53,7 @@ const EMPTY_RULE: PayoutRuleInput = {
 // 6-digit numeric secret, short enough for an advertiser to type by hand into their
 // postback config. Same as SmartLinkForm's.
 function generatePostbackSecret(): string {
-  const n = crypto.getRandomValues(new Uint32Array(1))[0] % 900000;
+  const n = crypto.getRandomValues(new Uint32Array(1))[0]! % 900000;
   return String(100000 + n);
 }
 

@@ -78,7 +78,7 @@ const EMPTY: DraftState = {
 // 6-digit numeric secret, short enough to type by hand — same as OfferForm's and
 // SmartLinkForm's generatePostbackSecret.
 function randomSecret(): string {
-  const n = crypto.getRandomValues(new Uint32Array(1))[0] % 900000;
+  const n = crypto.getRandomValues(new Uint32Array(1))[0]! % 900000;
   return String(100000 + n);
 }
 
