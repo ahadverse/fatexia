@@ -102,6 +102,7 @@ export function Browse() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
+  const [status, setStatus] = useState<AffiliateOffer['access'] | ''>('');
   const [onlyFavourites, setOnlyFavourites] = useState(false);
   const [requesting, setRequesting] = useState<AffiliateOffer | null>(null);
   const [note, setNote] = useState('');
@@ -131,6 +132,7 @@ export function Browse() {
   const rows = (offers.data ?? []).filter((offer) => {
     if (onlyFavourites && !isFavourite(offer)) return false;
     if (category && offer.category !== category) return false;
+    if (status && offer.access !== status) return false;
     if (!search) return true;
     // The offer number is searchable because it is what an affiliate is given in a
     // message — "run 100042" should find the row without them translating it to a name.
@@ -318,6 +320,19 @@ export function Browse() {
             <Bookmark className={`mr-1.5 size-3.5 ${onlyFavourites ? 'fill-current' : ''}`} />
             Bookmarked only
           </Button>
+        </FilterField>
+        <FilterField label="Status">
+          <Select
+            value={status}
+            onChange={(event) => setStatus(event.target.value as AffiliateOffer['access'] | '')}
+            className="w-44"
+          >
+            <option value="">All statuses</option>
+            <option value="GRANTED">Approved</option>
+            <option value="PENDING">Awaiting approval</option>
+            <option value="REJECTED">Not approved</option>
+            <option value="LOCKED">Request access</option>
+          </Select>
         </FilterField>
       </FilterBar>
 

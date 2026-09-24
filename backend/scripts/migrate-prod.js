@@ -35,7 +35,17 @@ async function main() {
   // Matches data-source.ts: Neon terminates every connection with TLS, and its
   // certificate chain is not one Node ships with.
   const ssl = process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : undefined;
-  const client = new Client({ connectionString, ssl });
+
+  // pg_advisory_lock/unlock are session-scoped, but DATABASE_URL is Neon's pooled
+  // endpoint (PgBouncer transaction mode) per render.yaml, which is free to hand this
+  // Client's lock call and its later unlock call to two different backend sessions.
+  // When that happens the unlock silently no-ops, the lock stays held on whichever
+  // session acquired it, and that session goes back into Neon's pool to be handed to
+  // some unrelated later connection — wedging every future deploy's lock wait forever.
+  // The direct host (no "-pooler" segment) pins this Client to one real backend
+  // session for its whole lifetime, so the session that locks is the one that unlocks.
+  const lockConnectionString = connectionString.replace('-pooler.', '.');
+  const client = new Client({ connectionString: lockConnectionString, ssl });
 
   await client.connect();
   console.log('[migrate] waiting for the migration lock…');

@@ -51,7 +51,7 @@ const slugSchema = z
 const smartLinkFields = z.object({
   name: z.string().trim().min(1).max(160),
   slug: slugSchema,
-  description: z.string().trim().max(500).optional(),
+  description: z.string().trim().optional(),
   // Both nullable rather than merely optional, for the same reason destinationUrl is:
   // removing a thumbnail or a preview link on an existing link has to reach the server
   // as "set this to nothing", and `undefined` means "unchanged" on the partial update
