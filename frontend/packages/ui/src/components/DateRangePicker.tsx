@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import * as Popover from '@radix-ui/react-popover';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../lib/cn';
+import { useLayerContainer } from '../lib/layer-container';
 import {
   PRESET_LABELS,
   PRESET_ORDER,
@@ -58,6 +59,7 @@ function isSameDay(a: Date, b: Date): boolean {
  */
 export function DateRangeFilter({ value, onChange, label = 'Date range', className }: DateRangeFilterProps) {
   const [open, setOpen] = useState(false);
+  const container = useLayerContainer();
   // Half-finished selection: `from` set, waiting for `to`. Null when nothing is pending.
   const [pendingFrom, setPendingFrom] = useState<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
@@ -182,7 +184,9 @@ export function DateRangeFilter({ value, onChange, label = 'Date range', classNa
           </button>
         </Popover.Trigger>
 
-        <Popover.Portal>
+        {/* Null outside a modal; the dialog's content inside one, or the calendar opens
+            unclickable — see lib/layer-container.ts. */}
+        <Popover.Portal container={container}>
           <Popover.Content
             align="start"
             sideOffset={6}

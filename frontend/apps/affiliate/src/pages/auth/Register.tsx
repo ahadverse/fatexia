@@ -5,7 +5,7 @@ import { LogoMark, toast } from '@fatexia/ui';
 import { COUNTRIES } from '@fatexia/types';
 import { ApiError } from '../../lib/api';
 import { registerAffiliate, resendVerification, verifyEmail, type MessengerType } from '../../lib/auth-api';
-import { AuthShell, Chips, FIELD, INPUT, Label, PRIMARY_BUTTON, SectionLabel, Select, scrollAuthToTop } from './fields';
+import { AuthShell, Chips, FIELD, INPUT, Label, PasswordInput, PRIMARY_BUTTON, SectionLabel, Select, scrollAuthToTop } from './fields';
 import './auth-theme.css';
 
 // Mirrors the closed lists the backend's register schema validates against
@@ -316,13 +316,11 @@ export function Register() {
                 </div>
                 <div className="space-y-2">
                   <Label required>Password</Label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     autoComplete="new-password"
                     placeholder="At least 8 characters"
-                    className={INPUT}
                   />
                 </div>
               </div>

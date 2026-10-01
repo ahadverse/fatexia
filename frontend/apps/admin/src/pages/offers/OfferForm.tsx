@@ -522,8 +522,8 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
             </select>
             {status === 'APPROVED' && (
               <p className="text-xs text-muted-foreground">
-                Approving requires the Destination URL, Postback Secret and Allowed Postback IPs below to be filled in
-                first.
+                Approving requires the Destination URL below. The postback credentials are optional — leave them blank
+                when the advertiser reports against the network-wide global postback.
               </p>
             )}
           </Field>
@@ -669,15 +669,25 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
 
       <SectionCard
         title="Destination & Postback"
-        hint="Where the Tracker sends clicks, and the credentials the advertiser uses to report conversions back. All three are required before this offer can go Approved."
+        hint="Where the Tracker sends clicks, and the credentials the advertiser uses to report conversions back. Only the Destination URL is required to approve the offer."
       >
         <Field label="Destination URL" required>
-          <Input value={destinationUrl} onChange={(e) => setDestinationUrl(e.target.value)} placeholder="https://advertiser-landing-page.com/lp" />
+          <Input value={destinationUrl} onChange={(e) => setDestinationUrl(e.target.value)} placeholder="https://advertiser-tracking-link.com/?s1={click_id}" />
           <p className="text-xs text-muted-foreground">
-            Just the landing page — {'{click_id}'} and {'{payout_amount}'} are appended automatically on save. Write
-            them in yourself only when the advertiser needs them under different parameter names; whatever you type is
-            kept as-is.
+            Stored exactly as you type it. Add {'{click_id}'} yourself, under whichever parameter name the advertiser's
+            platform reads — <code className="text-foreground">?s1={'{click_id}'}</code>,{' '}
+            <code className="text-foreground">?aff_sub={'{click_id}'}</code>, whatever they call it. Only the macro is
+            ours; the parameter name is theirs.
           </p>
+          {/* A warning, not a block: the parameter name is the advertiser's, so there is
+              no spelling the server could require without also rejecting correct URLs.
+              This is the one place the admin can see the URL while being told. */}
+          {destinationUrl.trim() !== '' && !destinationUrl.includes('{click_id}') && (
+            <p className="text-xs text-amber-500">
+              No {'{click_id}'} in this URL. The advertiser will have no click id to send back, so conversions on this
+              offer can never be attributed — every postback will be logged as "Offer not found".
+            </p>
+          )}
         </Field>
 
         <Field label="Fallback URL (optional)">
@@ -694,9 +704,9 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Postback Secret">
+          <Field label="Postback Secret (optional)">
             <div className="flex gap-2">
-              <Input value={postbackSecret} onChange={(e) => setPostbackSecret(e.target.value)} placeholder="Shared secret the advertiser sends back on /postback" />
+              <Input value={postbackSecret} onChange={(e) => setPostbackSecret(e.target.value)} placeholder="Leave blank to use the global postback" />
               <button
                 type="button"
                 onClick={() => setPostbackSecret(generatePostbackSecret())}
@@ -706,10 +716,24 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
               </button>
             </div>
           </Field>
-          <Field label="Allowed Postback IPs">
+          <Field label="Allowed Postback IPs (optional)">
             <Input value={allowedPostbackIps} onChange={(e) => setAllowedPostbackIps(e.target.value)} placeholder="Comma-separated IPs allowed to call /postback" />
           </Field>
         </div>
+        <p className="text-xs text-muted-foreground">
+          Credentials for this offer alone. Skip both when the advertiser reports against the network-wide entry under
+          Others → Global Postbacks — that is checked independently, and either path is enough to authorise a
+          conversion.
+        </p>
+        {/* Both halves or neither: the service requires a secret *and* an allowlist
+            together, so one on its own authorises nothing and silently falls through to
+            the global entry — or to a rejection, if there isn't one. */}
+        {(postbackSecret.trim() === '') !== (allowedPostbackIps.trim() === '') && (
+          <p className="text-xs text-amber-500">
+            A per-offer secret only works alongside an IP allowlist, and vice versa. With just one of the two filled
+            in, this offer's own credentials authorise nothing and postbacks fall back to the global entry.
+          </p>
+        )}
 
         <Field label="Blocked traffic redirect (optional)">
           <Input
@@ -733,16 +757,18 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
             <p>
               <code className="text-foreground">{'{click_id}'}</code>{' '}
               <span className="text-muted-foreground">
-                — the unique click identifier. Added to the Destination URL for you if you don&apos;t type it, and it is
-                what the advertiser must send back on the postback for a conversion to be attributed.
+                — the unique click identifier, and the one macro that actually matters. Put it in the Destination URL
+                under the advertiser&apos;s own parameter name, then have them send that same value back on their
+                postback as <code className="text-foreground">click_id</code>. Nothing is added for you: a parameter
+                name we guessed would be ignored by their tracker and the conversion would arrive unattributable.
               </span>
             </p>
             <p>
               <code className="text-foreground">{'{payout_amount}'}</code>{' '}
               <span className="text-muted-foreground">
                 — the payout for the rule matching this click&apos;s geo/device/OS, substituted at redirect time from
-                the offer&apos;s own payout rule. Also added automatically. Worth knowing: this puts your affiliate
-                payout in the advertiser&apos;s query string, so they can read what you pay per conversion.
+                the offer&apos;s own payout rule. Optional, and worth thinking about before you add it: it puts your
+                affiliate payout in the advertiser&apos;s query string, so they can read what you pay per conversion.
               </span>
             </p>
             {/* The macro is resolved at redirect time, before the sale exists. On a

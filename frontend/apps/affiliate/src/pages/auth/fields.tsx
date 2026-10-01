@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { Check, ChevronDown } from 'lucide-react';
+import { useState, type InputHTMLAttributes, type ReactNode } from 'react';
+import { Check, ChevronDown, Eye, EyeOff } from 'lucide-react';
 
 /**
  * Form primitives for the signed-out screens.
@@ -14,6 +14,33 @@ export const FIELD =
   'w-full rounded-lg border border-white/10 bg-background/60 px-3.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 hover:border-white/20 focus:border-primary/60 focus:ring-2 focus:ring-ring/40';
 
 export const INPUT = `h-11 ${FIELD}`;
+
+/**
+ * A password field with a reveal toggle, in this screen's own visual language.
+ *
+ * The shared `@fatexia/ui` Input grew the same toggle, but these screens deliberately
+ * do not use it (see the note at the top of this file), so the behaviour is repeated
+ * here rather than the styling being compromised to share it. The icon is placed the
+ * same way `Select` below places its chevron, so the two controls line up.
+ */
+export function PasswordInput({ className, ...props }: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>) {
+  const [revealed, setRevealed] = useState(false);
+
+  return (
+    <div className="relative">
+      <input {...props} type={revealed ? 'text' : 'password'} className={`${INPUT} pr-11 ${className ?? ''}`} />
+      <button
+        type="button"
+        onClick={() => setRevealed((value) => !value)}
+        aria-label={revealed ? 'Hide password' : 'Show password'}
+        aria-pressed={revealed}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+      >
+        {revealed ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+      </button>
+    </div>
+  );
+}
 
 export const PRIMARY_BUTTON =
   'bg-brand btn-shine relative inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-lg px-4 py-3 text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50';

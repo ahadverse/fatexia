@@ -11,7 +11,7 @@ import { AccessRequestStatus } from '../offer-access-requests/offer-access-reque
 import { sendTemplateEmail, safeSendEmail } from '../../infra/email/brevo-mailer';
 import { EmailTemplateKey } from '../email-templates/email-template.entity';
 import { offerRepository } from './offer.repository';
-import { withTrackingMacros } from './destination-url';
+import { normalizeDestinationUrl } from './destination-url';
 import { Offer, OfferStatus } from './offer.entity';
 import { PayoutRule } from './payout-rule.entity';
 import { OfferCap } from './offer-cap.entity';
@@ -43,20 +43,29 @@ import {
 // modules/postback/postback.service.ts) — an observational signal an admin can check
 // on the offer, not a gate blocking approval.
 function assertActivationGate(offer: Offer): void {
-  // The macro half of this check is now belt-and-braces: withTrackingMacros() appends
-  // {click_id} on every save (issue #17), so the only way to reach APPROVED without one
-  // is an offer whose destination was never filled in at all.
-  if (!offer.destinationUrl || !offer.destinationUrl.includes('{click_id}')) {
+  // A destination is still required — an offer with nowhere to send traffic is a draft.
+  // The {click_id} macro inside it deliberately is not: its parameter name belongs to
+  // the advertiser, so there is no spelling this could check for that would not also
+  // reject a correct URL. The offer form warns about a missing macro instead, where the
+  // admin can see the URL they are editing. See destination-url.ts.
+  if (!offer.destinationUrl) {
     throw new ValidationError(
       'destinationUrl must be set before approving this offer',
     );
   }
-  if (!offer.postbackSecret) {
-    throw new ValidationError('postbackSecret must be set before approving this offer');
-  }
-  if (!offer.allowedPostbackIps) {
-    throw new ValidationError('allowedPostbackIps must be set before approving this offer');
-  }
+
+  // Per-offer postback credentials are deliberately NOT required.
+  //
+  // They were, on the reasoning that an offer with no secret can never be reported
+  // against. That stopped being true once inbound postbacks could authenticate against
+  // a network-level entry instead (see postback.service.ts's matchGlobalInbound): a
+  // network running one global postback for its whole catalogue has nothing to put in
+  // these fields, and demanding a per-offer secret there is asking for a credential
+  // that will never be used to block an offer that is correctly configured.
+  //
+  // Leaving them blank is now a supported setup, not an oversight. The offer still
+  // accepts its own secret + IP allowlist when one is set — the two paths are checked
+  // independently, and either is sufficient.
 }
 
 // Shared by createOffer and updateOffer — the two callers used to duplicate this
@@ -326,7 +335,7 @@ export const offerService = {
           remarksForAffiliateManager: dto.remarksForAffiliateManager ?? null,
           // Issue #17 — the {click_id}/{payout_amount} macros are appended here when
           // the form didn't carry them, so what's stored is always redirect-ready.
-          destinationUrl: withTrackingMacros(dto.destinationUrl),
+          destinationUrl: normalizeDestinationUrl(dto.destinationUrl),
           fallbackUrl: dto.fallbackUrl || null,
           postbackSecret: dto.postbackSecret ?? null,
           allowedPostbackIps: dto.allowedPostbackIps ?? null,
@@ -377,7 +386,7 @@ export const offerService = {
           allowDeepLinking: dto.allowDeepLinking,
           remarksForAdmin: dto.remarksForAdmin ?? null,
           remarksForAffiliateManager: dto.remarksForAffiliateManager ?? null,
-          destinationUrl: withTrackingMacros(dto.destinationUrl),
+          destinationUrl: normalizeDestinationUrl(dto.destinationUrl),
           fallbackUrl: dto.fallbackUrl || null,
           postbackSecret: dto.postbackSecret ?? null,
           allowedPostbackIps: dto.allowedPostbackIps ?? null,

@@ -207,17 +207,19 @@ export function Clicks() {
   }
 
   const columns: DataTableColumn<OwnClickLog>[] = [
+    { key: 'createdAt', header: 'Date', sortable: true, render: (row) => dateTime(row.createdAt) },
+    // The drawer opens from the offer name rather than the date, matching the admin's
+    // click log: the offer is what someone is looking at when they decide a row needs
+    // opening, and a date column reads as a timestamp, not as a link.
     {
-      key: 'createdAt',
-      header: 'Date',
-      sortable: true,
+      key: 'offer',
+      header: 'Offer',
       render: (row) => (
-        <button type="button" onClick={() => setDetail(row)} className="text-left hover:underline">
-          {dateTime(row.createdAt)}
+        <button type="button" onClick={() => setDetail(row)} className="text-left text-primary hover:underline">
+          {row.offerName ?? '—'}
         </button>
       ),
     },
-    { key: 'offer', header: 'Offer', render: (row) => row.offerName ?? '—' },
     {
       key: 'countryCode',
       header: 'Country',

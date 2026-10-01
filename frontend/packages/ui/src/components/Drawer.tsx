@@ -1,9 +1,10 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cn } from '../lib/cn';
+import { LayerContainerContext } from '../lib/layer-container';
 
 export interface DrawerProps {
   open: boolean;
@@ -24,11 +25,16 @@ export interface DrawerProps {
  * viewport to show the same content.
  */
 export function Drawer({ open, onOpenChange, title, description, children, footer, className }: DrawerProps) {
+  // Same reason as Modal's: a popover opened inside a Radix Dialog has to portal into
+  // the dialog's content or it renders unclickable. See lib/layer-container.ts.
+  const [content, setContent] = useState<HTMLDivElement | null>(null);
+
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-background/80 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
         <Dialog.Content
+          ref={setContent}
           className={cn(
             'fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-border bg-card text-card-foreground shadow-md outline-none',
             className,
@@ -47,9 +53,11 @@ export function Drawer({ open, onOpenChange, title, description, children, foote
             </Dialog.Close>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+          <LayerContainerContext.Provider value={content}>
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
 
-          {footer && <div className="shrink-0 border-t border-border px-5 py-3">{footer}</div>}
+            {footer && <div className="shrink-0 border-t border-border px-5 py-3">{footer}</div>}
+          </LayerContainerContext.Provider>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

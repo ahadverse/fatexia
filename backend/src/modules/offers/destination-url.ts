@@ -1,43 +1,39 @@
 /**
- * Issue #17 — the destination URL always carries the tracking macros, whether or not
- * whoever filled the form remembered to type them.
+ * The destination URL is stored exactly as the admin typed it.
  *
- * `{click_id}` is not optional: /click mints an id per click and the postback matches
- * a conversion back to it, so a destination without the macro produces traffic nobody
- * can ever get paid for. It used to be the admin's job to remember, enforced by
- * refusing to approve the offer — a late, confusing failure for something the server
- * can simply do itself.
+ * It used to have `click_id={click_id}` and `payout_amount={payout_amount}` appended on
+ * every save when they were absent (issue #17), on the theory that an admin who forgot
+ * the macros produced traffic nobody could get paid for. The theory was right; the fix
+ * was not, because only the *macro* is ours — the parameter **name** belongs to the
+ * advertiser, and we have no way to know it.
  *
- * `{payout_amount}` is appended on the same principle. Worth knowing what that means:
- * it puts the affiliate payout for the matched rule on the advertiser's landing page
- * URL, so an advertiser who reads their own query string learns the network's cost
- * per conversion, and the margin between it and their payout. That is the behaviour
- * asked for; an offer that shouldn't expose it can have the macro removed from its
- * destination URL by hand, and this only ever adds the macros when they are absent.
+ * Appending our own spelling produced a URL that looked complete and silently dropped
+ * the click id: a tracker that reads `s1` is handed `click_id=258963`, ignores it, and
+ * has nothing to report back. Every conversion on such an offer then arrives naming
+ * something else — a campaign id, a blank — and is logged as "Offer not found, and no
+ * click to resolve one from". A missing macro at least fails visibly at approval time;
+ * a macro under the wrong name fails weeks later, in production, as lost revenue.
  *
- * Both are substituted at redirect time from the offer's own payout rule — never from
- * anything an inbound call reports (see click.service.ts).
+ * So the admin writes it, under whichever name the advertiser's platform reads:
+ *
+ *     https://advertiser.example/lp?s1={click_id}
+ *
+ * The form warns when the macro is absent and approval no longer demands it — see
+ * `hasClickIdMacro` and offer.service.ts's activation gate.
  */
-const REQUIRED_MACROS: { macro: string; param: string }[] = [
-  { macro: '{click_id}', param: 'click_id' },
-  { macro: '{payout_amount}', param: 'payout_amount' },
-];
 
-export function withTrackingMacros(url: string | null | undefined): string | null {
-  const trimmed = url?.trim();
-  if (!trimmed) return null;
+/** Trimmed, or null for an offer whose destination has not been filled in yet. */
+export function normalizeDestinationUrl(url: string | null | undefined): string | null {
+  return url?.trim() || null;
+}
 
-  // Split the fragment off first: appending after a `#` would put the parameters
-  // inside the fragment, where no server ever sees them.
-  const hashAt = trimmed.indexOf('#');
-  const base = hashAt === -1 ? trimmed : trimmed.slice(0, hashAt);
-  const fragment = hashAt === -1 ? '' : trimmed.slice(hashAt);
-
-  const missing = REQUIRED_MACROS.filter((entry) => !trimmed.includes(entry.macro));
-  if (missing.length === 0) return trimmed;
-
-  const query = missing.map((entry) => `${entry.param}=${entry.macro}`).join('&');
-  // A base already ending in `?`/`&` would otherwise gain an empty parameter.
-  const separator = /[?&]$/.test(base) ? '' : base.includes('?') ? '&' : '?';
-  return `${base}${separator}${query}${fragment}`;
+/**
+ * Whether a destination carries the click-id macro, under any parameter name.
+ *
+ * Substring rather than a parsed query check on purpose: the macro is legitimately
+ * placed in a path segment or a fragment by some platforms, and all that matters is
+ * that the redirect has somewhere to substitute the id into.
+ */
+export function hasClickIdMacro(url: string | null | undefined): boolean {
+  return !!url && url.includes('{click_id}');
 }

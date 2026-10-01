@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { LogoMark, toast } from '@fatexia/ui';
 import { useSession } from '../../session/SessionContext';
-import { AuthShell, INPUT, PRIMARY_BUTTON } from './fields';
+import { AuthShell, INPUT, PasswordInput, PRIMARY_BUTTON } from './fields';
 import './auth-theme.css';
 
 export function Login() {
@@ -59,13 +59,11 @@ export function Login() {
                 Forgot password?
               </Link>
             </div>
-            <input
-              type="password"
+            <PasswordInput
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               autoComplete="current-password"
               placeholder="Your password"
-              className={INPUT}
             />
           </div>
           <button type="submit" disabled={!email || !password || submitting} className={PRIMARY_BUTTON}>

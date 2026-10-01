@@ -39,3 +39,4 @@ export * from './hooks/useDeferredFilters';
 export * from './lib/cn';
 export * from './lib/csv';
 export * from './lib/date';
+export * from './lib/layer-container';

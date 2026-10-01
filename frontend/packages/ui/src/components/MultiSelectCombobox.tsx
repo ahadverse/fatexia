@@ -4,6 +4,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { Check, ChevronDown, Search, X } from 'lucide-react';
 import { cn } from '../lib/cn';
+import { useLayerContainer } from '../lib/layer-container';
 
 export interface MultiSelectOption {
   value: string;
@@ -64,6 +65,7 @@ export interface MultiSelectComboboxProps {
 export function MultiSelectCombobox({ options, value, onChange, placeholder = 'Search…', emptyLabel = 'None selected', className }: MultiSelectComboboxProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const container = useLayerContainer();
 
   const selected = new Set(value);
   const selectedOptions = useMemo(() => options.filter((o) => selected.has(o.value)), [options, value]);
@@ -94,7 +96,10 @@ export function MultiSelectCombobox({ options, value, onChange, placeholder = 'S
             <ChevronDown className="size-4 text-muted-foreground" />
           </button>
         </Popover.Trigger>
-        <Popover.Portal>
+        {/* container: null outside a modal (so: document.body, as before). Inside one it
+            is the dialog's content, without which every click here is swallowed — see
+            lib/layer-container.ts. */}
+        <Popover.Portal container={container}>
           <Popover.Content
             align="start"
             sideOffset={4}
@@ -204,6 +209,7 @@ export function SelectCombobox({
 }: SelectComboboxProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const container = useLayerContainer();
 
   const selected = options.find((option) => option.value === value) ?? null;
 
@@ -246,7 +252,9 @@ export function SelectCombobox({
           <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
         </button>
       </Popover.Trigger>
-      <Popover.Portal>
+      {/* See the note on the multi-select's portal above — this is the picker that was
+          unusable in "Create invoice" and "Generate payout batch". */}
+      <Popover.Portal container={container}>
         <Popover.Content
           align="start"
           sideOffset={4}

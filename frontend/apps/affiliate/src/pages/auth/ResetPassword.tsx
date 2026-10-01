@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { LogoMark, toast } from '@fatexia/ui';
 import { resetPassword } from '../../lib/auth-api';
-import { AuthShell, INPUT, PRIMARY_BUTTON } from './fields';
+import { AuthShell, PasswordInput, PRIMARY_BUTTON } from './fields';
 import './auth-theme.css';
 
 // Matches the backend's own floor (resetPasswordSchema). Checked here as well so the
@@ -90,14 +90,12 @@ export function ResetPassword() {
               <label htmlFor="new-password" className="text-sm font-medium text-foreground">
                 New password
               </label>
-              <input
+              <PasswordInput
                 id="new-password"
-                type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 autoComplete="new-password"
                 placeholder={`At least ${MIN_LENGTH} characters`}
-                className={INPUT}
               />
               {tooShort && <p className="text-xs text-destructive">Use at least {MIN_LENGTH} characters.</p>}
             </div>
@@ -106,14 +104,12 @@ export function ResetPassword() {
               <label htmlFor="confirm-password" className="text-sm font-medium text-foreground">
                 Confirm password
               </label>
-              <input
+              <PasswordInput
                 id="confirm-password"
-                type="password"
                 value={confirm}
                 onChange={(event) => setConfirm(event.target.value)}
                 autoComplete="new-password"
                 placeholder="Type it again"
-                className={INPUT}
               />
               {mismatch && <p className="text-xs text-destructive">These do not match.</p>}
             </div>

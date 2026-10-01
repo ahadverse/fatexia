@@ -1,9 +1,10 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cn } from '../lib/cn';
+import { LayerContainerContext } from '../lib/layer-container';
 
 export interface ModalProps {
   open: boolean;
@@ -14,11 +15,17 @@ export interface ModalProps {
 }
 
 export function Modal({ open, onOpenChange, title, children, className }: ModalProps) {
+  // Held in state rather than a ref so that the one re-render after mount is what
+  // publishes the node to the context — a ref's `.current` changing would not notify
+  // the pickers inside, and they would portal to the body on the first open.
+  const [content, setContent] = useState<HTMLDivElement | null>(null);
+
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-background/80" />
         <Dialog.Content
+          ref={setContent}
           className={cn(
             // Width leaves a gutter rather than running edge to edge on a phone, where
             // `w-full` put the border and its rounded corners off-screen. Padding
@@ -35,7 +42,12 @@ export function Modal({ open, onOpenChange, title, children, className }: ModalP
             </Dialog.Close>
           </div>
           {/* -mx-2/px-2 keeps focus rings from being clipped by the scroll container. */}
-          <div className="-mx-2 mt-4 flex-1 overflow-y-auto px-2">{children}</div>
+          <div className="-mx-2 mt-4 flex-1 overflow-y-auto px-2">
+            {/* The container is Dialog.Content itself, not this scrolling div: a popover
+                portalled in here would be clipped by the overflow and would scroll away
+                from its own trigger. See lib/layer-container.ts for why it is needed. */}
+            <LayerContainerContext.Provider value={content}>{children}</LayerContainerContext.Provider>
+          </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

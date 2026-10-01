@@ -1,6 +1,41 @@
 import { z } from 'zod';
 import { isRefId, isUuid } from '../../common/ref-id';
 
+/**
+ * A macro the advertiser's platform was given but did not recognise, and so passed
+ * through verbatim: `#payout#`, `{sum}`, `[revenue]`, `%payout%`.
+ *
+ * This is what a typo in someone else's postback configuration looks like on the wire,
+ * and it is common — every tracking platform spells its tokens differently, and the URL
+ * is pasted into a field we never see. It is a *missing* amount, not a malformed one:
+ * nothing was substituted, so nothing was sent.
+ *
+ * Reading it that way matters because of where the two failures land. A value that does
+ * not parse is refused by this schema, in front of the service; "no amount sent" is
+ * refused inside it, after the click and offer have been resolved, so the log row names
+ * the offer and the affiliate and the message says what to change. The second is the
+ * one an admin can act on.
+ */
+function isUnsubstitutedMacro(value: string): boolean {
+  return /^(#[^#]*#|\{[^}]*\}|\[[^\]]*\]|%[a-z0-9_]*%)$/i.test(value);
+}
+
+/**
+ * The sale amount, as it survives contact with an advertiser's tracking platform.
+ *
+ * Only two things are normalised, both of which mean "no figure was sent": an empty
+ * value, and an unsubstituted macro. Number *formats* are deliberately left alone —
+ * "1,30" is 1.30 in half of Europe and a malformed 130 elsewhere, and this is the field
+ * every payout is calculated from, so guessing wrong here overpays by a factor of a
+ * hundred. Anything else that does not parse is still refused, and now logged.
+ */
+const saleAmount = z.preprocess((raw) => {
+  if (typeof raw !== 'string') return raw;
+  const trimmed = raw.trim();
+  if (trimmed === '' || isUnsubstitutedMacro(trimmed)) return undefined;
+  return trimmed;
+}, z.coerce.number().finite().nonnegative().max(9_999_999_999.99).optional());
+
 // Kept in sync with the optional fields on postbackQuerySchema below by hand — the
 // list every "here's your postback URL" builder (per-offer, global inbound) appends as
 // macros so the admin/advertiser can see them, without duplicating validation here.
@@ -73,8 +108,8 @@ export const postbackQuerySchema = z.object({
   // Presence is NOT enforced here, though the amount is required. That check lives in
   // the service, after authorisation, so a missing value is logged and attributable —
   // see the note there.
-  sum: z.coerce.number().finite().nonnegative().max(9_999_999_999.99).optional(),
-  revenue: z.coerce.number().finite().nonnegative().max(9_999_999_999.99).optional(),
+  sum: saleAmount,
+  revenue: saleAmount,
 
   // Extra tokens some advertiser tracking platforms carry on their postback (their own
   // macro picker's token names, lowercased). Same treatment as transaction_id above:

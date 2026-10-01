@@ -60,9 +60,18 @@ export async function seedContent(dataSource: DataSource, core: CoreSeedResult):
 
   const templateRepo = dataSource.getRepository(EmailTemplate);
   for (const fixture of EMAIL_TEMPLATES) {
+    // Matched on templateKey rather than on the deterministic id, because migrations
+    // already populate this table (1786400000000 and the copy revisions after it) with
+    // ids of their own. Saving by id alone asked Postgres to insert a second row for a
+    // key that was already there, so the seed failed on the unique constraint for every
+    // freshly migrated database — which is exactly the state it exists to fill.
+    const existing = await templateRepo.findOne({ where: { templateKey: fixture.templateKey } });
     await templateRepo.save(
       templateRepo.create({
-        id: ids.emailTemplate(fixture.templateKey),
+        // The row is overwritten when it exists, unlike prod-bootstrap.ts which leaves
+        // an existing template alone: that one must not clobber copy an admin has
+        // edited, while this one exists to produce a known state.
+        id: existing?.id ?? ids.emailTemplate(fixture.templateKey),
         templateKey: fixture.templateKey,
         name: fixture.name,
         subject: fixture.subject,

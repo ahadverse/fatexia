@@ -1,2 +1,9 @@
+# pnpm 10+ refuses to run a dependency's install scripts until it is listed here, and
+# leaves the placeholder it writes on first install as an unresolved value — which makes
+# every `pnpm <script>` fail its pre-run dependency check with ERR_PNPM_IGNORED_BUILDS,
+# before the script itself runs. That is what was breaking `pnpm seed`.
+#
+# esbuild is allowed because its install script is what links the platform binary that
+# tsx and vitest execute.
 allowBuilds:
-  esbuild: set this to true or false
+  esbuild: true
