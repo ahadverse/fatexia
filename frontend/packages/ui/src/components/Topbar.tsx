@@ -111,7 +111,7 @@ export function Topbar({
               <DropdownMenu.Content
                 align="end"
                 sideOffset={8}
-                className="z-50 w-80 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
+                className="z-50 w-80 max-w-[calc(100vw-1rem)] rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
               >
                 <div className="flex items-center justify-between gap-2 px-2 py-1.5">
                   <span className="text-xs font-semibold text-card-foreground">Notifications</span>

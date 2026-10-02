@@ -1,5 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { Toaster } from '@fatexia/ui';
+import { SplashScreen, Toaster } from '@fatexia/ui';
 import { Shell } from './Shell';
 import { Login } from './pages/auth/Login';
 import { Register } from './pages/auth/Register';
@@ -31,7 +31,7 @@ function App() {
   const { status } = useSession();
 
   if (status === 'loading') {
-    return <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">Loading…</div>;
+    return <SplashScreen />;
   }
 
   // Signed-out visitors get their own small router so /register is a real, linkable

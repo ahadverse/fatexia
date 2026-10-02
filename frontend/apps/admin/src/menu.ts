@@ -131,6 +131,7 @@ const MENU: GuardedGroup[] = [
     items: [
       { label: 'Notifications', path: '/notifications', icon: 'notifications' },
       { label: 'Settings', path: '/settings', icon: 'settings', adminOnly: true },
+      { label: 'Macros settings', path: '/macros-settings', icon: 'integrations', adminOnly: true },
       {
         label: 'Billing',
         path: '/billing',

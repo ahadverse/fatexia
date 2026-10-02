@@ -30,7 +30,7 @@ import { getOwnDashboard } from '../lib/portal-api';
 import { useSession } from '../session/SessionContext';
 import { useAsync } from '../hooks/useAsync';
 import { compactMoney, money, number, percent } from '../lib/format';
-import { DateRangeFilter, presetRange, toApiRange, type DateRange } from '../components/DateRangeFilter';
+import { DateRangeFilter, defaultRange, toApiRange, type DateRange } from '../components/DateRangeFilter';
 import { LatestNews } from '../components/LatestNews';
 
 // The comparison window is always the period immediately before the selected one, of
@@ -58,9 +58,8 @@ export function Dashboard() {
   const navigate = useNavigate();
   // The session holds only an email, so the local part stands in as a first name.
   const { user } = useSession();
-  // 30 days, not the shared default of today — see the same note on the admin
-  // dashboard: a one-day window has nothing for a sparkline or a delta to show.
-  const [range, setRange] = useState<DateRange>(presetRange('last30'));
+  // Every filter opens on today, like the admin dashboard.
+  const [range, setRange] = useState<DateRange>(defaultRange());
   const apiRange = toApiRange(range);
 
   const { data, error, reload } = useAsync(() => getOwnDashboard(apiRange), [apiRange.dateFrom, apiRange.dateTo]);

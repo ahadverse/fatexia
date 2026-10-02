@@ -31,12 +31,23 @@ export const payoutRuleInputSchema = z
     holdSchedule: holdScheduleSchema,
     commissionPercent: z.number().int().min(0).max(100),
   })
-  // Server-side backstop for the same rule OfferForm enforces in the UI: percentage
-  // payout only has a meaningful base for a sale — a lead/click/install has nothing to
-  // take a % of.
-  .refine((rule) => rule.payoutType !== PayoutType.PERCENTAGE || rule.payoutMode === PayoutMode.CPS, {
-    message: 'PERCENTAGE payout type is only valid with payoutMode CPS',
-    path: ['payoutType'],
+  // Server-side backstop for the same rule OfferForm enforces in the UI: a percentage
+  // payout needs a base the advertiser reports on the postback (`sum`). A sale has one,
+  // and so does an install on a content-locker offer, whose inner offers each pay the
+  // network a different amount — a click or plain lead has nothing to take a % of.
+  .refine(
+    (rule) =>
+      rule.payoutType !== PayoutType.PERCENTAGE ||
+      rule.payoutMode === PayoutMode.CPS ||
+      rule.payoutMode === PayoutMode.CPI,
+    {
+      message: 'PERCENTAGE payout type is only valid with payoutMode CPS or CPI',
+      path: ['payoutType'],
+    },
+  )
+  .refine((rule) => rule.payoutType !== PayoutType.PERCENTAGE || rule.amount <= 100, {
+    message: 'A percentage payout cannot exceed 100',
+    path: ['amount'],
   });
 
 export type PayoutRuleInputDto = z.infer<typeof payoutRuleInputSchema>;
@@ -80,6 +91,7 @@ export const createOfferSchema = z.object({
   disallowedTrafficTypes: z.array(z.string()).optional().default([]),
   featured: z.boolean(),
   networkOfferId: z.string().optional(),
+  advertiserNetworkId: z.string().uuid().nullable().optional(),
   autoApproveConversions: z.boolean(),
   allowDeepLinking: z.boolean(),
   remarksForAdmin: z.string().optional(),
@@ -222,6 +234,8 @@ export interface OfferDto {
   // of the URL. Never appears on AffiliateOfferDto; it's the credential that lets
   // someone create conversions, not something to hand to a traffic source.
   postbackUrl: string | null;
+  /** The advertiser platform whose click-id / payout tokens `postbackUrl` is written in. */
+  advertiserNetworkId: string | null;
   postbackVerifiedAt: string | null;
   blockedRedirectUrl: string | null;
 }
@@ -355,8 +369,19 @@ export function affiliateLinkId(affiliate: { publicId: string | null; id: string
 // platform's conversion-postback setting. {click_id} stays a macro — the advertiser's
 // platform substitutes it per conversion, the same way ours substitutes it into
 // destinationUrl per click.
-function postbackUrlFor(offerRefId: number, postbackSecret: string | null): string | null {
+//
+// With an advertiser network picked, the two macro slots are written in *that* platform's
+// own syntax instead (`#s1#`, `{aff_click_id}`, `[ml_sub1]` ...), verbatim from the admin's
+// Macros settings — the parameter names on our side (`click_id`, `sum`) never change.
+function postbackUrlFor(
+  offerRefId: number,
+  postbackSecret: string | null,
+  network?: { clickIdToken: string; payoutToken: string | null } | null,
+): string | null {
   if (!postbackSecret) return null;
+  if (network) {
+    return `${env.PUBLIC_TRACKING_URL}/postback?offerId=${offerRefId}&click_id=${network.clickIdToken}&secret=${postbackSecret}&sum=${network.payoutToken ?? '{sum}'}`;
+  }
   // `sum` is the sale's revenue and is required on every postback — an advertiser handed
   // a URL without it has every conversion rejected on their first call. The optional
   // tokens (timestamp, campaign_name, etc. — see OPTIONAL_POSTBACK_PARAMS) are NOT
@@ -489,7 +514,8 @@ export function toOfferDto(offer: Offer): OfferDto {
     fallbackUrl: offer.fallbackUrl,
     postbackSecret: offer.postbackSecret,
     allowedPostbackIps: offer.allowedPostbackIps,
-    postbackUrl: postbackUrlFor(offer.refId, offer.postbackSecret),
+    postbackUrl: postbackUrlFor(offer.refId, offer.postbackSecret, offer.advertiserNetwork),
+    advertiserNetworkId: offer.advertiserNetworkId,
     postbackVerifiedAt: offer.postbackVerifiedAt?.toISOString() ?? null,
     blockedRedirectUrl: offer.blockedRedirectUrl,
   };

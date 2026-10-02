@@ -1,16 +1,47 @@
-import { useEffect, useState } from 'react';
-import { Check, ChevronDown, X } from 'lucide-react';
-import type { Advertiser, Affiliate, CreateOfferInput, Offer, OfferCapInput, OfferCategory, OfferStatus, PayoutMode, PayoutRuleInput, PayoutType, RevenueModel } from '@fatexia/types';
+import { Children, isValidElement, useEffect, useState } from 'react';
+import { Check, ChevronDown, Plus, X } from 'lucide-react';
+import type { Advertiser, AdvertiserNetwork, Affiliate, CreateOfferInput, Offer, OfferCapInput, OfferCategory, OfferStatus, PayoutMode, PayoutRuleInput, PayoutType, RevenueModel } from '@fatexia/types';
 import { COUNTRY_CODES } from '@fatexia/types';
-import { CountryFlag, Input, MultiSelectCombobox, Toggle, cn, toast } from '@fatexia/ui';
+import { Button, CountryFlag, InfoTip, Input, MultiSelectCombobox, Toggle, cn, toast } from '@fatexia/ui';
 import { getAdvertisers, createAdvertiser } from '../../lib/advertisers-api';
 import { getOfferCategories, createOfferCategory } from '../../lib/offer-categories-api';
+import { getAdvertiserNetworks } from '../../lib/advertiser-networks-api';
 import { getAffiliates } from '../../lib/affiliates-api';
 import { uploadOfferThumbnail } from '../../lib/offers-api';
 import { RichTextEditor } from '../../components/RichTextEditor';
 
+// `#s1#` -> `s1`, `{aff_click_id}` -> `aff_click_id`, `[ml_sub1]` -> `ml_sub1`. A suggestion
+// only: the parameter name the advertiser's *link* reads is usually the token's name, but
+// not provably so, which is why the admin has to click Insert and can edit the result.
+function paramNameFromToken(token: string): string {
+  return token.replace(/^[^A-Za-z0-9_]+|[^A-Za-z0-9_]+$/g, '');
+}
+
+// Drops every query parameter whose value is the click-id macro, whatever its name. An
+// offer carries exactly one: a second one under another network's name means the
+// advertiser's platform would read one and ignore the other.
+function stripClickIdParams(url: string): string {
+  const trimmed = url.trim();
+  const queryAt = trimmed.indexOf('?');
+  if (queryAt === -1) return trimmed;
+  const base = trimmed.slice(0, queryAt);
+  const kept = trimmed
+    .slice(queryAt + 1)
+    .split('&')
+    .filter((pair) => pair !== '' && !/^[^=]+=\{click_id\}$/.test(pair));
+  return kept.length ? `${base}?${kept.join('&')}` : base;
+}
+
+function appendClickIdParam(url: string, param: string): string {
+  const base = stripClickIdParams(url);
+  if (!base) return `?${param}={click_id}`;
+  return `${base}${base.includes('?') ? '&' : '?'}${param}={click_id}`;
+}
+
 const PAYOUT_MODES: PayoutMode[] = ['CPA', 'CPC', 'CPL', 'CPI', 'CPS'];
 const PAYOUT_TYPES: PayoutType[] = ['FLAT', 'PERCENTAGE'];
+// Modes whose advertiser postback carries a money figure a percentage can be taken of.
+const PERCENT_MODES: PayoutMode[] = ['CPS', 'CPI'];
 const REVENUE_MODELS: RevenueModel[] = ['NONE', 'RPA', 'RPC', 'RPS'];
 // Matches UAParser's device.type taxonomy plus the "desktop" fallback click.service.ts
 // applies — the exact same values a click's deviceType is stored as.
@@ -81,6 +112,7 @@ export function offerToFormInput(offer: Offer): CreateOfferInput {
     disallowedTrafficTypes: offer.disallowedTrafficTypes,
     featured: offer.featured,
     networkOfferId: offer.networkOfferId,
+    advertiserNetworkId: offer.advertiserNetworkId,
     isPublic: offer.isPublic,
     autoApproveConversions: offer.autoApproveConversions,
     allowDeepLinking: offer.allowDeepLinking,
@@ -100,23 +132,38 @@ export function offerToFormInput(offer: Offer): CreateOfferInput {
 function SectionCard({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
     <section className="space-y-4 rounded-lg border border-border bg-card p-4">
-      <div>
+      <div className="flex items-center gap-1.5">
         <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-        {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+        {hint && <InfoTip>{hint}</InfoTip>}
       </div>
       {children}
     </section>
   );
 }
 
+/**
+ * Explanatory text for a field, shown behind a "?" next to its label rather than printed
+ * under it. Put a <Help> anywhere inside a <Field> and the Field lifts it up beside the
+ * label; warnings that need to be seen stay as ordinary visible paragraphs.
+ */
+function Help({ children }: { children: React.ReactNode }) {
+  return <InfoTip>{children}</InfoTip>;
+}
+
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  const nodes = Children.toArray(children);
+  const helps = nodes.filter((node) => isValidElement(node) && node.type === Help);
+  const rest = nodes.filter((node) => !helps.includes(node));
   return (
     <div className="space-y-1.5">
-      <label className="text-sm font-medium text-foreground">
-        {label}
-        {required && <span className="text-destructive"> *</span>}
-      </label>
-      {children}
+      <div className="flex items-center gap-1.5">
+        <label className="text-sm font-medium text-foreground">
+          {label}
+          {required && <span className="text-destructive"> *</span>}
+        </label>
+        {helps}
+      </div>
+      {rest}
     </div>
   );
 }
@@ -170,6 +217,10 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
   const [newTrafficSource, setNewTrafficSource] = useState('');
   const [featured, setFeatured] = useState(initial?.featured ?? false);
   const [networkOfferId, setNetworkOfferId] = useState(initial?.networkOfferId ?? '');
+  const [advertiserNetworkId, setAdvertiserNetworkId] = useState(initial?.advertiserNetworkId ?? '');
+  const [networks, setNetworks] = useState<AdvertiserNetwork[]>([]);
+  const selectedNetwork = networks.find((n) => n.id === advertiserNetworkId);
+  const suggestedParam = selectedNetwork ? paramNameFromToken(selectedNetwork.clickIdToken) : '';
   const [isPublic, setIsPublic] = useState(initial?.isPublic ?? true);
   const [iconUrl, setIconUrl] = useState(initial?.iconUrl ?? '');
   const [uploadingIcon, setUploadingIcon] = useState(false);
@@ -183,6 +234,10 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
 
   const [payoutRules, setPayoutRules] = useState<PayoutRuleInput[]>(initial?.payoutRules ?? []);
   const [draftRule, setDraftRule] = useState<PayoutRuleInput>(EMPTY_RULE);
+  // A percentage rule has no fixed base: every conversion is priced from the amount the
+  // advertiser reports on its postback (`sum`, required there), which differs per sale or
+  // per inner offer of a content locker. The figure here is only a margin-preview example.
+  const isVariableBase = draftRule.payoutType === 'PERCENTAGE';
 
   const [caps, setCaps] = useState<OfferCapInput[]>(initial?.caps ?? []);
 
@@ -194,6 +249,10 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
   useEffect(() => {
     getAdvertisers().then(setAdvertisers);
     getOfferCategories().then(setCategories);
+    // The networks API is admin-only; a manager just gets no picker.
+    getAdvertiserNetworks()
+      .then(setNetworks)
+      .catch(() => setNetworks([]));
     // Swallowed rather than surfaced: a manager can hold offers.create without
     // affiliates.view, and a 403 here should cost them the "dedicate to affiliate"
     // dropdown, not block the whole offer form with an error toast.
@@ -287,10 +346,10 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
       toast.error('Fill in "Affiliate gets" before adding the rule');
       return;
     }
-    // A percentage rule with no base silently computes a zero payout on every
-    // conversion, and nothing downstream would flag it.
-    if (draftRule.payoutType === 'PERCENTAGE' && draftRule.revenueAmount <= 0) {
-      toast.error('A percentage rule needs "Advertiser pays you" to take the percentage from');
+    // No "Advertiser pays you" check for a percentage rule: its base is the `sum` on each
+    // postback, and a postback without one is rejected rather than paid as zero.
+    if (draftRule.payoutType === 'PERCENTAGE' && draftRule.amount > 100) {
+      toast.error('A percentage cannot be more than 100');
       return;
     }
     setPayoutRules((rules) => [...rules, draftRule]);
@@ -341,6 +400,7 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
           disallowedTrafficTypes,
           featured,
           networkOfferId: networkOfferId || undefined,
+          advertiserNetworkId: advertiserNetworkId || null,
           autoApproveConversions,
           allowDeepLinking,
           remarksForAdmin: remarksForAdmin || undefined,
@@ -405,11 +465,11 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
                 onChange={(e) => setPreviewLink(e.target.value)}
                 placeholder="https://advertiser.com/landing-page"
               />
+              <Help>
+                The landing page as an affiliate should see it, without tracking. Shown as "Preview landing page" on the
+                offer — leave blank to hide that button.
+              </Help>
             </Field>
-            <p className="text-xs text-muted-foreground">
-              The landing page as an affiliate should see it, without tracking. Shown as "Preview landing page" on the
-              offer — leave blank to hide that button.
-            </p>
           </div>
 
           <div className="space-y-1.5 sm:col-span-2">
@@ -508,9 +568,7 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
           </Field>
           <Field label="Default Payout Amount">
             <Input type="number" step="0.01" value={defaultPayoutAmount} onChange={(e) => setDefaultPayoutAmount(e.target.value)} />
-            <p className="text-xs text-muted-foreground">
-              Informational only — the Offers list and actual payouts are driven by the payout rules below, not this field.
-            </p>
+            <Help>Informational only — the Offers list and actual payouts are driven by the payout rules below, not this field.</Help>
           </Field>
           <Field label="Status">
             <select value={status} onChange={(e) => setStatus(e.target.value as OfferStatus)} className={selectClass}>
@@ -521,17 +579,17 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
               ))}
             </select>
             {status === 'APPROVED' && (
-              <p className="text-xs text-muted-foreground">
+              <Help>
                 Approving requires the Destination URL below. The postback credentials are optional — leave them blank
                 when the advertiser reports against the network-wide global postback.
-              </p>
+              </Help>
             )}
           </Field>
 
         </div>
       </SectionCard>
 
-      <SectionCard title="Traffic Sources" hint="What affiliates may and may not send. Shown on the offer in their portal.">
+      <SectionCard title="Traffic Sources" hint="What affiliates may and may not send. Affiliates see these on the offer — allowed in green, not allowed in red. Leave a source unset if the advertiser has no rule about it.">
         <div className="grid gap-4 sm:grid-cols-2">
           {/* Three states per source, not a checkbox: allowed, disallowed, and unstated.
               A plain "Traffic Allowed" list could only say yes — an offer that forbids
@@ -539,11 +597,6 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
               when their conversions were voided. Unstated stays available for sources
               the advertiser genuinely has no rule about. */}
           <div className="space-y-1.5 sm:col-span-2">
-            <label className="text-sm font-medium text-foreground">Traffic sources</label>
-            <p className="text-xs text-muted-foreground">
-              Affiliates see these on the offer — allowed in green, not allowed in red. Leave a source unset if the
-              advertiser has no rule about it.
-            </p>
             <div className="space-y-1 rounded-md border border-border p-3">
               {trafficSourceOptions.map((t) => {
                 const state = trafficTypes.includes(t) ? 'allowed' : disallowedTrafficTypes.includes(t) ? 'disallowed' : 'unset';
@@ -646,17 +699,21 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
       <SectionCard title="Visibility" hint="Who can see this offer, and where it appears.">
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <Toggle checked={featured} onCheckedChange={setFeatured} label="Set as Featured Offer" />
-            <p className="mt-1 text-xs text-muted-foreground">Featured offers appear in the Featured Offers section of the affiliate dashboard.</p>
+            <div className="flex items-center gap-1.5">
+              <Toggle checked={featured} onCheckedChange={setFeatured} label="Set as Featured Offer" />
+              <InfoTip>Featured offers appear in the Featured Offers section of the affiliate dashboard.</InfoTip>
+            </div>
           </div>
 
           <div className="sm:col-span-2">
-            <Toggle checked={isPublic} onCheckedChange={setIsPublic} label="Public offer" />
-            <p className="mt-1 text-xs text-muted-foreground">
-              {isPublic
-                ? 'Any affiliate can see and run this offer once it is Approved.'
-                : 'Gated — only affiliates with an approved access request can see or run this offer.'}
-            </p>
+            <div className="flex items-center gap-1.5">
+              <Toggle checked={isPublic} onCheckedChange={setIsPublic} label="Public offer" />
+              <InfoTip>
+                {isPublic
+                  ? 'Any affiliate can see and run this offer once it is Approved.'
+                  : 'Gated — only affiliates with an approved access request can see or run this offer.'}
+              </InfoTip>
+            </div>
           </div>
 
           <div className="space-y-1.5 sm:col-span-2">
@@ -671,14 +728,58 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
         title="Destination & Postback"
         hint="Where the Tracker sends clicks, and the credentials the advertiser uses to report conversions back. Only the Destination URL is required to approve the offer."
       >
+        {/* Picked from Macros settings. Only used to write the postback URL (shown on the
+            offer's page) and to suggest the Destination URL parameter below — nothing is
+            added to the Destination URL until the admin clicks Insert. */}
+        <Field label="Advertiser network (optional)">
+          <select
+            value={advertiserNetworkId}
+            onChange={(e) => {
+              setAdvertiserNetworkId(e.target.value);
+              // The old network's click-id parameter no longer applies. Cleared here, not
+              // swapped for the new one: the admin adds that with the button below.
+              setDestinationUrl((url) => stripClickIdParams(url));
+            }}
+            className={selectClass}
+          >
+            <option value="">Other / generic {'{click_id}'}</option>
+            {networks.map((n) => (
+              <option key={n.id} value={n.id}>
+                {n.name}
+              </option>
+            ))}
+          </select>
+          <Help>
+            {selectedNetwork ? (
+              <>
+                {selectedNetwork.name} sends our click id back as <code className="text-foreground">{selectedNetwork.clickIdToken}</code>
+                {selectedNetwork.payoutToken && (
+                  <>
+                    {' '}and the payout as <code className="text-foreground">{selectedNetwork.payoutToken}</code>
+                  </>
+                )}
+                . The postback URL on the offer's page is written with these.
+              </>
+            ) : (
+              'Add networks under Macros settings in the menu. Picking one writes the postback URL in that platform’s syntax.'
+            )}
+          </Help>
+          {selectedNetwork && suggestedParam && !destinationUrl.includes(`${suggestedParam}={click_id}`) && (
+            <Button type="button" size="sm" onClick={() => setDestinationUrl((url) => appendClickIdParam(url, suggestedParam))}>
+              <Plus className="size-3.5" aria-hidden />
+              Add {suggestedParam}={'{click_id}'} to Destination URL
+            </Button>
+          )}
+        </Field>
+
         <Field label="Destination URL" required>
           <Input value={destinationUrl} onChange={(e) => setDestinationUrl(e.target.value)} placeholder="https://advertiser-tracking-link.com/?s1={click_id}" />
-          <p className="text-xs text-muted-foreground">
+          <Help>
             Stored exactly as you type it. Add {'{click_id}'} yourself, under whichever parameter name the advertiser's
             platform reads — <code className="text-foreground">?s1={'{click_id}'}</code>,{' '}
             <code className="text-foreground">?aff_sub={'{click_id}'}</code>, whatever they call it. Only the macro is
             ours; the parameter name is theirs.
-          </p>
+          </Help>
           {/* A warning, not a block: the parameter name is the advertiser's, so there is
               no spelling the server could require without also rejecting correct URLs.
               This is the one place the admin can see the URL while being told. */}
@@ -697,10 +798,10 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
             onChange={(e) => setFallbackUrl(e.target.value)}
             placeholder="Leave blank to use the Destination URL"
           />
-          <p className="text-xs text-muted-foreground">
+          <Help>
             Where a click goes if it doesn't match any payout rule's geo/device/OS targeting below. Leave blank to
             send unmatched traffic to the Destination URL anyway.
-          </p>
+          </Help>
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -715,16 +816,16 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
                 Generate
               </button>
             </div>
+            <Help>
+              Credentials for this offer alone. Skip both when the advertiser reports against the network-wide entry under
+              Others → Global Postbacks — that is checked independently, and either path is enough to authorise a
+              conversion.
+            </Help>
           </Field>
           <Field label="Allowed Postback IPs (optional)">
             <Input value={allowedPostbackIps} onChange={(e) => setAllowedPostbackIps(e.target.value)} placeholder="Comma-separated IPs allowed to call /postback" />
           </Field>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Credentials for this offer alone. Skip both when the advertiser reports against the network-wide entry under
-          Others → Global Postbacks — that is checked independently, and either path is enough to authorise a
-          conversion.
-        </p>
         {/* Both halves or neither: the service requires a secret *and* an allowlist
             together, so one on its own authorises nothing and silently falls through to
             the global entry — or to a rejection, if there isn't one. */}
@@ -742,10 +843,10 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
             onChange={(e) => setBlockedRedirectUrl(e.target.value)}
             placeholder="Leave blank to use the network default"
           />
-          <p className="text-xs text-muted-foreground">
+          <Help>
             Where clicks scored BLOCKED go instead of the destination URL. Set this only when the advertiser wants
             rejected traffic on a page of their own — otherwise the network-wide setting applies.
-          </p>
+          </Help>
         </Field>
 
         <button type="button" onClick={() => setShowMacros((s) => !s)} className="flex items-center gap-1 text-sm font-medium text-primary hover:underline">
@@ -815,10 +916,12 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="space-y-1">
                   <p>
-                    Payout Mode: <span className="font-medium text-foreground">{rule.payoutMode}</span> · Payout Type: {rule.payoutType} · Payout: ${rule.amount.toFixed(2)}
+                    Payout Mode: <span className="font-medium text-foreground">{rule.payoutMode}</span> · Payout Type: {rule.payoutType} · Payout:{' '}
+                    {rule.payoutType === 'PERCENTAGE' ? `${rule.amount}% of advertiser payout` : `$${rule.amount.toFixed(2)}`}
                   </p>
                   <p>
-                    Advertiser Payout Model: <span className="font-medium text-foreground">{rule.revenueModel}</span> · Advertiser payout: ${rule.revenueAmount.toFixed(2)}
+                    Advertiser Payout Model: <span className="font-medium text-foreground">{rule.revenueModel}</span> · Advertiser payout:{' '}
+                    {rule.revenueAmount > 0 ? `$${rule.revenueAmount.toFixed(2)}` : 'varies (from postback)'}
                   </p>
                   <p className="text-muted-foreground">
                     Manager Commission: {rule.managerCommissionPercent}% · Refer Affiliate Commission: {rule.referAffiliateCommissionPercent}%
@@ -848,10 +951,10 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
               value={draftRule.payoutMode}
               onChange={(e) => {
                 const payoutMode = e.target.value as PayoutMode;
-                // PERCENTAGE only makes sense for CPS (a sale has a value to take a %
-                // of; a lead/click/install doesn't) — switching away from CPS drops
-                // back to FLAT rather than leaving an invalid combination selected.
-                setDraftRule((r) => ({ ...r, payoutMode, payoutType: payoutMode === 'CPS' ? r.payoutType : 'FLAT' }));
+                // PERCENTAGE needs an advertiser-reported base: a sale (CPS) or an
+                // install (CPI). Switching to any other mode drops back to FLAT rather
+                // than leaving an invalid combination selected.
+                setDraftRule((r) => ({ ...r, payoutMode, payoutType: PERCENT_MODES.includes(payoutMode) ? r.payoutType : 'FLAT' }));
               }}
               className={selectClass}
             >
@@ -868,15 +971,13 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
               onChange={(e) => setDraftRule((r) => ({ ...r, payoutType: e.target.value as PayoutType }))}
               className={selectClass}
             >
-              {PAYOUT_TYPES.filter((t) => t !== 'PERCENTAGE' || draftRule.payoutMode === 'CPS').map((t) => (
+              {PAYOUT_TYPES.filter((t) => t !== 'PERCENTAGE' || PERCENT_MODES.includes(draftRule.payoutMode)).map((t) => (
                 <option key={t} value={t}>
                   {t}
                 </option>
               ))}
             </select>
-            {draftRule.payoutMode !== 'CPS' && (
-              <p className="text-xs text-muted-foreground">Percentage payout is only available for CPS (Cost Per Sale).</p>
-            )}
+            {!PERCENT_MODES.includes(draftRule.payoutMode) && <Help>Percentage payout is only available for CPS (sale) and CPI (install).</Help>}
           </Field>
           <Field label="Advertiser Payout Model">
             <select value={draftRule.revenueModel} onChange={(e) => setDraftRule((r) => ({ ...r, revenueModel: e.target.value as RevenueModel }))} className={selectClass}>
@@ -893,26 +994,26 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
               side of a dropdown, which said nothing about which side of the margin each
               one was. Everything above this line describes *how* the rule pays; this row
               is *how much*, both directions. */}
-          <Field label="Advertiser pays you" required={draftRule.payoutType === 'PERCENTAGE'}>
+          <Field label={isVariableBase ? 'Typical advertiser payout (optional)' : 'Advertiser pays you'}>
             <Input
               type="number"
               step="0.01"
               value={draftRule.revenueAmount || ''}
               onChange={(e) => setDraftRule((r) => ({ ...r, revenueAmount: Number(e.target.value) }))}
             />
-            <p className="text-xs text-muted-foreground">
-              {draftRule.payoutType === 'PERCENTAGE'
-                ? 'The sale value the affiliate percentage is taken from.'
+            <Help>
+              {isVariableBase
+                ? 'Leave empty: each conversion uses the amount the advertiser reports on its postback. Only used for the margin preview.'
                 : 'Revenue per conversion. Never shown to affiliates.'}
-            </p>
+            </Help>
           </Field>
           <Field label={draftRule.payoutType === 'PERCENTAGE' ? 'Affiliate gets (%)' : 'Affiliate gets'} required>
             <Input type="number" step="0.01" value={draftRule.amount || ''} onChange={(e) => setDraftRule((r) => ({ ...r, amount: Number(e.target.value) }))} />
-            <p className="text-xs text-muted-foreground">
+            <Help>
               {draftRule.payoutType === 'PERCENTAGE'
-                ? 'Percent of the advertiser amount, e.g. 20 = 20%.'
+                ? "Percent of whatever the advertiser reports per conversion, e.g. 70 = 70% of each conversion's payout."
                 : 'Payout per conversion. This is what the affiliate sees.'}
-            </p>
+            </Help>
           </Field>
 
           {/* Read-only, and only once both sides have a number — the whole point of
@@ -936,8 +1037,10 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
             </div>
           )}
           <div className="space-y-1.5 sm:col-span-3">
-            <label className="text-sm font-medium text-foreground">Dedicate to affiliate(s) (optional)</label>
-            <p className="text-xs text-muted-foreground">Leave empty to make this rule available to every affiliate. Search by name, email or id.</p>
+            <div className="flex items-center gap-1.5">
+              <label className="text-sm font-medium text-foreground">Dedicate to affiliate(s) (optional)</label>
+              <InfoTip>Leave empty to make this rule available to every affiliate. Search by name, email or id.</InfoTip>
+            </div>
             <MultiSelectCombobox
               options={affiliateOptions}
               value={draftRule.targeting.affiliateIds}
@@ -947,10 +1050,12 @@ export function OfferForm({ heading, submitLabel, submittingLabel, initial, init
             />
           </div>
           <div className="space-y-1.5 sm:col-span-3">
-            <label className="text-sm font-medium text-foreground">Geo targeting (optional)</label>
-            <p className="text-xs text-muted-foreground">
-              Leave empty for all countries. A click outside every rule's geo/device/OS targeting goes to the offer's Fallback URL.
-            </p>
+            <div className="flex items-center gap-1.5">
+              <label className="text-sm font-medium text-foreground">Geo targeting (optional)</label>
+              <InfoTip>
+                Leave empty for all countries. A click outside every rule's geo/device/OS targeting goes to the offer's Fallback URL.
+              </InfoTip>
+            </div>
             <MultiSelectCombobox
               options={COUNTRY_OPTIONS}
               value={draftRule.targeting.countries}

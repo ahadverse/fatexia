@@ -5,6 +5,16 @@ body,
   overflow: hidden;
 }
 
+/* `100%` on a phone is the tallest the viewport can get (URL bar hidden), so the bottom
+   of the app is clipped while the bar is showing. `dvh` tracks the visible height. */
+@supports (height: 100dvh) {
+  html,
+  body,
+  #root {
+    height: 100dvh;
+  }
+}
+
 :root {
   --background: 240 10% 6%;
   --foreground: 220 14% 92%;
@@ -224,26 +234,39 @@ html [data-sonner-toaster][data-theme] {
   --normal-border: hsl(var(--border));
   /* The ceiling a toast may grow to, not the width it takes — each one sizes to its
      own sentence below. `100vw - 2rem` keeps a gutter on a phone held in one hand. */
-  --width: min(26rem, calc(100vw - 2rem));
+  --width: min(22rem, calc(100vw - 2rem));
+}
+
+/* Sonner draws its close button as a small circle straddling the toast's top-left
+   corner, which our `overflow: hidden` would clip. Moved inside, to the right, always
+   visible (it is hover-only by default, and a touch screen has no hover). */
+html .fatexia-toast [data-close-button] {
+  left: auto;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.5rem;
+  height: 1.5rem;
+  opacity: 1;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+}
+
+html .fatexia-toast [data-close-button]:hover {
+  background: hsl(var(--toast-accent) / 0.18);
+  color: hsl(var(--foreground));
 }
 
 .fatexia-toast {
   --toast-accent: var(--primary);
   position: relative;
   overflow: hidden;
-  /* Hug the sentence. Sonner's fixed 356px turned "Sent to 1 recipient" into a
-     mostly-empty slab, and short confirmations are the bulk of what this shows.
-     Right-anchored explicitly: the toast is absolutely positioned, so without it a
-     fit-content box parks at the container's left edge instead of its right.
-     Below 600px Sonner's own higher-specificity rule takes back over and goes
-     edge-to-edge, which is the right call on a phone — left as its job, not redone. */
-  width: fit-content;
-  max-width: 100%;
-  left: auto;
-  right: 0;
-  /* Tighter than Sonner's uniform 16px now that the box is only as wide as its text,
-     and a wider icon/text gap because the icon is a badge rather than a bare glyph. */
-  padding: 0.75rem 0.875rem;
+  /* Width and side are left to Sonner (--width above, right-anchored by its own
+     data-x-position rules). A fit-content width with `left:auto; right:0` fought
+     Sonner's absolute positioning and parked the toast away from the right edge.
+     Right padding leaves room for the close button. */
+  padding: 0.75rem 2.5rem 0.75rem 0.875rem;
   gap: 0.625rem;
   border-color: hsl(var(--toast-accent) / 0.35) !important;
   /* The accent bleeds out of the stripe and is gone by a third of the way across.
@@ -319,6 +342,16 @@ html [data-sonner-toaster][data-theme] {
   }
   100% {
     transform: translateX(300%);
+  }
+}
+
+@keyframes fatexia-splash-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
   }
 }
 

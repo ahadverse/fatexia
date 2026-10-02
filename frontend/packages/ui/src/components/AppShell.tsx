@@ -60,7 +60,7 @@ export function AppShell({
           footer={sidebarFooter}
         />
       </div>
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar {...topbarProps} onMenuClick={() => setMobileNavOpen(true)} />
         {/* Tighter gutters on a phone: 24px a side costs 48px of a 360px screen, which
             is the difference between a stat tile's figure fitting on one line and not. */}

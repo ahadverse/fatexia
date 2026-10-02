@@ -9,6 +9,7 @@ import { AffiliatePoint } from '../../modules/affiliate-points/affiliate-point.e
 import { Manager } from '../../modules/managers/manager.entity';
 import { Advertiser } from '../../modules/advertisers/advertiser.entity';
 import { OfferCategory } from '../../modules/offer-categories/offer-category.entity';
+import { AdvertiserNetwork } from '../../modules/advertiser-networks/advertiser-network.entity';
 import { Offer } from '../../modules/offers/offer.entity';
 import { PayoutRule } from '../../modules/offers/payout-rule.entity';
 import { OfferCap } from '../../modules/offers/offer-cap.entity';
@@ -60,6 +61,7 @@ export const AppDataSource = new DataSource({
     Manager,
     Advertiser,
     OfferCategory,
+    AdvertiserNetwork,
     Offer,
     PayoutRule,
     OfferCap,

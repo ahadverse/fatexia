@@ -278,7 +278,7 @@ function InvoiceList({
             onChange={onAffiliateChange}
             placeholder="All affiliates"
             clearLabel="All affiliates"
-            className="w-64"
+            className="w-full sm:w-64"
           />
         </FilterField>
       </FilterBar>
@@ -379,7 +379,7 @@ function InvoiceDialog({
   return (
     <Modal open onOpenChange={(next) => !next && close()} title={invoice.invoiceNumber}>
       <div className="space-y-4">
-        <dl className="grid grid-cols-2 gap-3 text-sm">
+        <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
           <Field label="Affiliate" value={invoice.affiliateName ?? invoice.affiliateId} />
           <Field label="Amount" value={money(invoice.amount, invoice.currency)} />
           <Field label="Period" value={`${date(invoice.periodFrom)} – ${date(invoice.periodTo)}`} />

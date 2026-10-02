@@ -114,6 +114,14 @@ describe('computeAmounts', () => {
       expect(computeAmounts(percentage, null, 500)).toEqual({ revenueAmount: 500, payoutAmount: 100 });
     });
 
+    it('prices each install of a CPI percentage rule from its own reported payout', () => {
+      // Content-locker case: one offer, inner offers paying the network different
+      // amounts, no configured advertiser figure at all.
+      const install = rule({ payoutMode: PayoutMode.CPI, payoutType: PayoutType.PERCENTAGE, amount: '70', revenueAmount: '0.00' });
+      expect(computeAmounts(install, null, 1.5)).toEqual({ revenueAmount: 1.5, payoutAmount: 1.05 });
+      expect(computeAmounts(install, null, 0.4)).toEqual({ revenueAmount: 0.4, payoutAmount: 0.28 });
+    });
+
     it('lets a smart-link share follow the real sale value', () => {
       // The case the whole change exists for: one link, two sales, two payouts.
       const flat = rule({ payoutType: PayoutType.FLAT, amount: '5', revenueAmount: '10.00' });

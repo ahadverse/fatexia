@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import type { ManagerPermission } from '@fatexia/types';
-import { Toaster } from '@fatexia/ui';
+import { SplashScreen, Toaster } from '@fatexia/ui';
 import { Shell } from './Shell';
 import { Login } from './pages/Login';
 import { useSession } from './session/SessionContext';
@@ -54,6 +54,7 @@ import { PostbackLogs } from './pages/reports/PostbackLogs';
 
 import { Notifications } from './pages/others/Notifications';
 import { Settings } from './pages/others/Settings';
+import { MacrosSettings } from './pages/others/MacrosSettings';
 import { Invoices } from './pages/billing/Invoices';
 import { Transactions } from './pages/billing/Transactions';
 // Subscriptions is hidden from the nav for now (see menu.ts) — page kept on disk,
@@ -76,7 +77,7 @@ import { Profile } from './pages/others/Profile';
 function Guarded({ element, permission, adminOnly }: { element: ReactNode; permission?: ManagerPermission; adminOnly?: boolean }) {
   const { isAdmin, can, loading } = useAccess();
   if (loading) {
-    return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
+    return <SplashScreen />;
   }
   if (adminOnly && !isAdmin) return <Navigate to="/" replace />;
   if (permission && !can(permission)) return <Navigate to="/" replace />;
@@ -87,7 +88,7 @@ function App() {
   const { status } = useSession();
 
   if (status === 'loading') {
-    return <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">Loading…</div>;
+    return <SplashScreen />;
   }
 
   if (status === 'anonymous') {
@@ -169,6 +170,7 @@ function App() {
 
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/settings" element={<Guarded adminOnly element={<Settings />} />} />
+          <Route path="/macros-settings" element={<Guarded adminOnly element={<MacrosSettings />} />} />
           {/* Billing split into the invoice workspace and the money ledger. `/billing`
               itself was the old single page, so it redirects rather than 404s. */}
           <Route path="/billing" element={<Navigate to="/billing/invoices" replace />} />

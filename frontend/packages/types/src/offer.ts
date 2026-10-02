@@ -86,6 +86,7 @@ export interface Offer {
   postbackSecret: string | null;
   allowedPostbackIps: string | null;
   postbackUrl: string | null;
+  advertiserNetworkId?: string | null;
   postbackVerifiedAt: string | null;
   blockedRedirectUrl: string | null;
 }
@@ -127,6 +128,7 @@ export interface CreateOfferInput {
   disallowedTrafficTypes: string[];
   featured: boolean;
   networkOfferId?: string;
+  advertiserNetworkId?: string | null;
   autoApproveConversions: boolean;
   allowDeepLinking: boolean;
   remarksForAdmin?: string;
@@ -215,4 +217,23 @@ export interface AffiliateOffer {
   payoutRules: AffiliatePayoutRule[];
   caps: OfferCap[];
   createdAt: string;
+}
+
+/**
+ * An advertiser tracking platform and how its postback writes our values back. The
+ * tokens are stored exactly as the admin typed them, delimiters included
+ * (`#s1#`, `{aff_click_id}`, `[ml_sub1]`).
+ */
+export interface AdvertiserNetwork {
+  id: string;
+  name: string;
+  clickIdToken: string;
+  /** Null = the generic `{sum}`. */
+  payoutToken: string | null;
+}
+
+export interface AdvertiserNetworkInput {
+  name: string;
+  clickIdToken: string;
+  payoutToken?: string | null;
 }

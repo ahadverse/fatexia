@@ -22,7 +22,8 @@ import type { Affiliate, Transaction, TransactionType } from '@fatexia/types';
 import { deleteTransaction, getTransactionSummary, getTransactions, recordAdjustment } from '../../lib/billing-api';
 import { getAffiliates } from '../../lib/affiliates-api';
 import { runAction, useAsync } from '../../hooks/useAsync';
-import { compactMoney, dateTime, daysAgoIso, isoDate, money } from '../../lib/format';
+import { compactMoney, dateTime, money } from '../../lib/format';
+import { DateRangeFilter, defaultRange, toApiRange, type DateRange } from '../../components/DateRangeFilter';
 import { StatusPill } from '../../components/StatusPill';
 
 const PAGE_SIZE = 25;
@@ -73,8 +74,9 @@ export function Transactions() {
 
   const [affiliateId, setAffiliateId] = useState('');
   const [type, setType] = useState<TransactionType | ''>('');
-  const [dateFrom, setDateFrom] = useState(daysAgoIso(30));
-  const [dateTo, setDateTo] = useState(isoDate(new Date()));
+  const [range, setRange] = useState<DateRange>(defaultRange());
+  const apiRange = toApiRange(range);
+  const { dateFrom, dateTo } = apiRange;
   const [page, setPage] = useState(1);
   const [deleting, setDeleting] = useState<Transaction | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
@@ -86,8 +88,8 @@ export function Transactions() {
     : {
         affiliateId: affiliateId || undefined,
         type: type || undefined,
-        dateFrom: `${dateFrom}T00:00:00.000Z`,
-        dateTo: `${dateTo}T23:59:59.999Z`,
+        dateFrom,
+        dateTo,
       };
 
   const affiliates = useAsync<Affiliate[]>(() => getAffiliates(), []);
@@ -210,7 +212,7 @@ export function Transactions() {
               onChange={resetPage(setAffiliateId)}
               placeholder="All affiliates"
               clearLabel="All affiliates"
-              className="w-64"
+              className="w-full sm:w-64"
             />
           </FilterField>
           <FilterField label="Event">
@@ -227,11 +229,8 @@ export function Transactions() {
               ))}
             </Select>
           </FilterField>
-          <FilterField label="From">
-            <Input type="date" value={dateFrom} onChange={(event) => resetPage(setDateFrom)(event.target.value)} />
-          </FilterField>
-          <FilterField label="To">
-            <Input type="date" value={dateTo} onChange={(event) => resetPage(setDateTo)(event.target.value)} />
+          <FilterField label="Date">
+            <DateRangeFilter value={range} onChange={resetPage(setRange)} />
           </FilterField>
         </FilterBar>
       )}

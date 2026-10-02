@@ -399,7 +399,7 @@ export function Sidebar({
         <button
           type="button"
           onClick={() => onCollapsedChange(!collapsed)}
-          className="flex items-center justify-center border-t border-border py-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="hidden items-center justify-center border-t border-border py-2 text-muted-foreground md:flex hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {collapsed ? <ChevronRight className="size-4" /> : <ChevronLeft className="size-4" />}

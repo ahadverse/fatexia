@@ -10,6 +10,7 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { refIdTransformer } from '../../common/ref-id';
+import { AdvertiserNetwork } from '../advertiser-networks/advertiser-network.entity';
 import { Advertiser } from '../advertisers/advertiser.entity';
 import { PayoutRule } from './payout-rule.entity';
 import { OfferCap } from './offer-cap.entity';
@@ -110,6 +111,15 @@ export class Offer {
 
   @Column({ type: 'varchar', nullable: true })
   networkOfferId!: string | null;
+
+  // Eager so every offer read carries it — the postback URL shown to the admin is built
+  // from its tokens. (A query builder does not honour `eager`; findAll joins it by hand.)
+  @ManyToOne(() => AdvertiserNetwork, { nullable: true, onDelete: 'SET NULL', eager: true })
+  @JoinColumn({ name: 'advertiserNetworkId' })
+  advertiserNetwork!: AdvertiserNetwork | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  advertiserNetworkId!: string | null;
 
   @Column({ type: 'boolean', default: false })
   autoApproveConversions!: boolean;

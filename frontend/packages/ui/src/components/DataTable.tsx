@@ -62,7 +62,9 @@ export interface DataTableProps<T> {
  * column is about what a short value plus its padding needs.
  */
 function defaultMinWidth(columnCount: number): string | undefined {
-  return columnCount > 6 ? `${columnCount * 5}rem` : undefined;
+  // A floor from 4 columns up: below it a phone squeezes long values (emails, URLs)
+  // into unreadable slivers instead of letting the wrapper scroll sideways.
+  return columnCount > 3 ? `${columnCount * 5}rem` : undefined;
 }
 
 export function DataTable<T>({

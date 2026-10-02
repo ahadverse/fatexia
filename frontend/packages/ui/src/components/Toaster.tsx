@@ -33,6 +33,7 @@ export function Toaster() {
       // button that triggered it and swallows clicks until it fades — sending two
       // messages in a row, or correcting a form and re-saving, both hit this.
       position="top-right"
+      closeButton
       // Clears the header rather than sitting on top of it. Sonner's 32px default put
       // the toast across the topbar's notification and messages buttons — which is
       // exactly where someone looks after a "Sent" confirmation, and the toast eats

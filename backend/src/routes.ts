@@ -29,6 +29,7 @@ import { integrationRoutes } from './modules/integrations/integration.routes';
 import { uploadRoutes } from './modules/uploads/upload.routes';
 import { reportRoutes } from './modules/reports/report.routes';
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes';
+import { advertiserNetworkRoutes } from './modules/advertiser-networks/advertiser-network.routes';
 
 export function mountMainRoutes(app: Express): void {
   app.use('/auth', authRoutes);
@@ -36,6 +37,7 @@ export function mountMainRoutes(app: Express): void {
 
   app.use('/offers', offerRoutes);
   app.use('/offer-categories', offerCategoryRoutes);
+  app.use('/advertiser-networks', advertiserNetworkRoutes);
   app.use('/offer-access-requests', offerAccessRequestRoutes);
   app.use('/smart-links', smartLinkRoutes);
 

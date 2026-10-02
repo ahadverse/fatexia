@@ -39,7 +39,7 @@ import { useSession } from '../session/SessionContext';
 import { useAccess } from '../session/AccessContext';
 import { useAsync } from '../hooks/useAsync';
 import { compactMoney, money, number, percent } from '../lib/format';
-import { DateRangeFilter, presetRange, toApiRange, type DateRange } from '../components/DateRangeFilter';
+import { DateRangeFilter, defaultRange, toApiRange, type DateRange } from '../components/DateRangeFilter';
 
 // The comparison window is always the period immediately before the selected one, of
 // the same length — see previousWindow() in the backend's dashboard module.
@@ -76,11 +76,9 @@ export function Dashboard() {
   // An admin account carries only an email, so the local part stands in rather than
   // costing a request for a name this page shows once.
   const displayName = manager?.fullName?.split(' ')[0] || nameFromEmail(user?.email);
-  // 30 days rather than the shared `defaultRange()` of today. A single-day window has
-  // one trend point, and a sparkline needs two — so on "Today" every tile loses its
-  // line, and a quiet morning also zeroes both sides of the comparison, which makes the
-  // deltas null and hides "vs. previous period" with them. Other pages keep today.
-  const [range, setRange] = useState<DateRange>(presetRange('last30'));
+  // Every filter opens on today. A single-day window has one trend point, so tiles show
+  // no sparkline until a wider range is picked.
+  const [range, setRange] = useState<DateRange>(defaultRange());
   const apiRange = toApiRange(range);
 
   const { data, error, reload } = useAsync(() => getDashboard(apiRange), [apiRange.dateFrom, apiRange.dateTo]);
@@ -117,7 +115,7 @@ export function Dashboard() {
           ))}
         </div>
       ) : (
-        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="grid items-start gap-6 2xl:grid-cols-[minmax(0,1fr)_20rem]">
           {/* min-w-0: a grid item's default `min-width: auto` is its content's
               min-content width, so one wide child (the trend chart) can stretch the
               whole column past the viewport instead of being made to fit it. */}
@@ -145,7 +143,7 @@ export function Dashboard() {
             formatValue={(value) => compactMoney(value)}
           />
 
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <RankedList
               title="Top offers by clicks"
               items={toRankedItems(data.topOffers, (row) => number(row.clicks), (row) => row.clicks)}
@@ -162,7 +160,7 @@ export function Dashboard() {
 
           <div>
             <h2 className="mb-3 text-sm font-medium text-muted-foreground">Needs attention</h2>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {/* No deltas on this row: these are current-state queues, not a
                   measurement over the selected window, so a period-over-period change
                   would be meaningless.

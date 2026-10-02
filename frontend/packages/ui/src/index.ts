@@ -11,6 +11,8 @@ export * from './components/Textarea';
 export * from './components/Button';
 export * from './components/Toaster';
 export * from './components/LogoMark';
+export * from './components/SplashScreen';
+export * from './components/InfoTip';
 export * from './components/Toggle';
 export * from './components/Modal';
 export * from './components/Drawer';

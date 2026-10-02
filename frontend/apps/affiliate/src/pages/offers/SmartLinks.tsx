@@ -1,4 +1,5 @@
-import { Button, DataTable, EmptyState, ExternalLinkButton, PageHeader, RichText, TableSkeleton, toast, type DataTableColumn } from '@fatexia/ui';
+import { useState } from 'react';
+import { Button, DataTable, EmptyState, ExternalLinkButton, Modal, PageHeader, RichText, TableSkeleton, toast, type DataTableColumn } from '@fatexia/ui';
 import type { AffiliateSmartLink } from '@fatexia/types';
 import { getSmartLinks } from '../../lib/portal-api';
 import { useAsync } from '../../hooks/useAsync';
@@ -8,17 +9,15 @@ import { StatusPill } from '../../components/StatusPill';
 // and runs it.
 export function SmartLinks() {
   const links = useAsync<AffiliateSmartLink[]>(() => getSmartLinks(), []);
+  const [details, setDetails] = useState<AffiliateSmartLink | null>(null);
 
   const columns: DataTableColumn<AffiliateSmartLink>[] = [
     {
       key: 'name',
       header: 'Smart-link',
-      render: (row) => (
-        <div>
-          <p className="text-card-foreground">{row.name}</p>
-          <RichText html={row.description} className="text-xs text-muted-foreground" />
-        </div>
-      ),
+      // Name only: the description is rich text of any length, and rendering it in the
+      // row made the row as tall as the whole write-up. It opens from "Details" instead.
+      render: (row) => <p className="max-w-[16rem] truncate text-card-foreground">{row.name}</p>,
     },
     { key: 'offers', header: 'Offers in rotation', render: (row) => String(row.offerCount) },
     { key: 'geo', header: 'Geo', render: (row) => (row.countries.length ? row.countries.join(', ') : 'All') },
@@ -29,6 +28,11 @@ export function SmartLinks() {
       header: '',
       render: (row) => (
         <div className="flex justify-end gap-1.5">
+          {row.description && (
+            <Button size="sm" variant="outline" onClick={() => setDetails(row)}>
+              Details
+            </Button>
+          )}
           <ExternalLinkButton href={row.smartLinkUrl} label="Open smart-link in new tab" />
           <Button
             size="sm"
@@ -64,6 +68,10 @@ export function SmartLinks() {
       ) : (
         <DataTable columns={columns} rows={links.data ?? []} getRowKey={(row) => row.id} />
       )}
+
+      <Modal open={!!details} onOpenChange={(open) => !open && setDetails(null)} title={details?.name}>
+        {details && <RichText html={details.description} className="text-muted-foreground" />}
+      </Modal>
     </div>
   );
 }

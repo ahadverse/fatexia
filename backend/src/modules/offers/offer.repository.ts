@@ -56,7 +56,8 @@ export const offerRepository = {
     const qb = repository
       .createQueryBuilder('offer')
       .leftJoinAndSelect('offer.payoutRules', 'payoutRules')
-      .leftJoinAndSelect('offer.caps', 'caps');
+      .leftJoinAndSelect('offer.caps', 'caps')
+      .leftJoinAndSelect('offer.advertiserNetwork', 'advertiserNetwork');
     if (filters.advertiserId) {
       qb.andWhere('offer."advertiserId" = :advertiserId', { advertiserId: filters.advertiserId });
     }

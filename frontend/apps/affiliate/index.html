@@ -3,10 +3,40 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f0f12" />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="preload" as="image" href="/logo.png" />
     <title>Affiliate — Fatexia</title>
+    <!-- Applies the saved theme before first paint (ThemeProvider only does it after
+         React mounts), so the splash below never flashes the wrong colours. -->
+    <script>
+      try {
+        if (localStorage.getItem('fatexia-theme') === 'light') document.documentElement.classList.add('light');
+      } catch (e) {}
+    </script>
+    <!-- Pre-React splash: mirrors <SplashScreen /> in @fatexia/ui. Colours are
+         hard-coded because the app stylesheet has not loaded yet. -->
+    <style>
+      html, body, #root { height: 100%; margin: 0; }
+      #splash { display: flex; height: 100%; flex-direction: column; align-items: center; justify-content: center; gap: 24px; background: hsl(240 10% 6%); }
+      .light #splash { background: hsl(240 6% 96%); }
+      #splash img { height: 40px; width: auto; animation: splash-pulse 1.8s ease-in-out infinite; }
+      #splash .bar { width: 160px; height: 2px; overflow: hidden; border-radius: 9999px; background: hsl(240 6% 18%); }
+      .light #splash .bar { background: hsl(240 6% 88%); }
+      #splash .bar i { display: block; width: 33%; height: 100%; border-radius: 9999px; background: hsl(243 75% 65%); animation: splash-bar 1.2s ease-in-out infinite; }
+      .light #splash .bar i { background: hsl(243 75% 55%); }
+      @keyframes splash-pulse { 0%, 100% { opacity: .55 } 50% { opacity: 1 } }
+      @keyframes splash-bar { 0% { transform: translateX(-100%) } 100% { transform: translateX(300%) } }
+      @media (prefers-reduced-motion: reduce) { #splash img, #splash .bar i { animation: none } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="splash" role="status" aria-label="Loading">
+        <img src="/logo.png" alt="Fatexia" />
+        <div class="bar"><i></i></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
