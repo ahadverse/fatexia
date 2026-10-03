@@ -1,5 +1,6 @@
 export type ReportDimension =
   | 'date'
+  | 'hour'
   | 'offer'
   | 'affiliate'
   | 'advertiser'

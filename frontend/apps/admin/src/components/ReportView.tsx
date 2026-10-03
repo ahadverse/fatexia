@@ -78,6 +78,7 @@ export interface ReportViewProps {
 
 const DIMENSION_LABELS: Record<ReportDimension, string> = {
   date: 'Date',
+  hour: 'Hour',
   offer: 'Offer',
   affiliate: 'Affiliate',
   advertiser: 'Advertiser',
@@ -167,6 +168,26 @@ export function ReportView({ title, description, dimension, initialPreset, selec
   );
 
   const report = useAsync(() => getGroupedReport(activeDimension, filters, ROW_LIMIT), [activeDimension, filters]);
+
+  // One day of data is a single point on a per-date chart, so that case is charted by
+  // hour instead. Only fetched then — a multi-day range never needs the extra query.
+  const hourly = Boolean(showTrend) && activeDimension === 'date' && report.data?.rows.length === 1;
+  const hourlyReport = useAsync(
+    () => (hourly ? getGroupedReport('hour', filters, 24) : Promise.resolve(null)),
+    [hourly, filters],
+  );
+
+  const trendPoints = useMemo(() => {
+    if (!hourly) return (report.data?.rows ?? []).map((row) => ({ label: row.label, values: [row.clicks, row.conversions] }));
+    const byHour = new Map((hourlyReport.data?.rows ?? []).map((row) => [row.key, row]));
+    // All 24 hours, zero-filled, so the line spans the whole day rather than only the
+    // hours that happened to have traffic.
+    return Array.from({ length: 24 }, (_, hour) => {
+      const key = String(hour).padStart(2, '0');
+      const row = byHour.get(key);
+      return { label: `${key}:00`, values: [row?.clicks ?? 0, row?.conversions ?? 0] };
+    });
+  }, [hourly, hourlyReport.data, report.data]);
 
   // Filter option lists are loaded once and reused across every filter change.
   const offers = useAsync<Offer[]>(() => getOffers(), []);
@@ -363,7 +384,8 @@ export function ReportView({ title, description, dimension, initialPreset, selec
 
       {showTrend && report.data && (
         <TrendChart
-          points={allRows.map((row) => ({ label: row.label, values: [row.clicks, row.conversions] }))}
+          points={trendPoints}
+          formatLabel={hourly ? (label) => label : undefined}
           seriesNames={['Clicks', 'Conversions']}
           formatValue={(value) => number(Math.round(value))}
         />

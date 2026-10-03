@@ -19,6 +19,7 @@ import type { ReportDimension, ReportFiltersDto } from './report.dto';
 // SQL expression each dimension groups by, per source table.
 const CLICK_DIMENSION: Record<ReportDimension, string> = {
   date: `to_char(click."createdAt", 'YYYY-MM-DD')`,
+  hour: `to_char(click."createdAt", 'HH24')`,
   offer: 'click."offerId"::text',
   affiliate: 'click."affiliateId"::text',
   advertiser: 'offer."advertiserId"::text',
@@ -39,6 +40,7 @@ const CLICK_DIMENSION: Record<ReportDimension, string> = {
 
 const CONVERSION_DIMENSION: Record<ReportDimension, string> = {
   date: `to_char(conversion."createdAt", 'YYYY-MM-DD')`,
+  hour: `to_char(conversion."createdAt", 'HH24')`,
   offer: 'conversion."offerId"::text',
   affiliate: 'conversion."affiliateId"::text',
   advertiser: 'offer."advertiserId"::text',

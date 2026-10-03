@@ -233,7 +233,7 @@ function affiliateTotalsOf(rows: AffiliateReportRowDto[]): AffiliateReportTotals
 // Date rows read chronologically (a trend chart); every other dimension is a ranking,
 // so it reads by volume with the biggest contributor first.
 function sortRows(dimension: ReportDimension, rows: ReportRowDto[]): ReportRowDto[] {
-  if (dimension === 'date') {
+  if (dimension === 'date' || dimension === 'hour') {
     return rows.sort((a, b) => a.key.localeCompare(b.key));
   }
   return rows.sort((a, b) => b.clicks - a.clicks || b.conversions - a.conversions);

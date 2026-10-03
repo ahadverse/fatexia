@@ -21,6 +21,9 @@ export type ReportFiltersDto = z.infer<typeof reportFiltersSchema>;
 // the per-entity report tables.
 export const REPORT_DIMENSIONS = [
   'date',
+  // Hour of day (00–23) within the range — feeds the trend chart when only one day is
+  // selected, where a per-date series would be a single point.
+  'hour',
   'offer',
   'affiliate',
   'advertiser',

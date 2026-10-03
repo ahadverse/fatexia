@@ -22,6 +22,8 @@ export interface TrendChartProps {
   points: TrendPoint[];
   seriesNames: string[];
   formatValue?: (value: number) => string;
+  /** X-axis label for a point. Defaults to the date without its year ("10-03"). */
+  formatLabel?: (label: string) => string;
   height?: number;
   className?: string;
   emptyMessage?: string;
@@ -63,6 +65,7 @@ export function TrendChart({
   points,
   seriesNames,
   formatValue = defaultFormat,
+  formatLabel = (label) => label.slice(5),
   height = 260,
   className,
   emptyMessage = 'No data for this period.',
@@ -200,7 +203,7 @@ export function TrendChart({
                   textAnchor="middle"
                   className="fill-muted-foreground text-[10px] [font-variant-numeric:tabular-nums]"
                 >
-                  {point.label.slice(5)}
+                  {formatLabel(point.label)}
                 </text>
               ) : null,
             )}
@@ -227,6 +230,22 @@ export function TrendChart({
                 strokeLinejoin="round"
               />
             ))}
+
+            {/* A line needs two points to exist: with a single day in range the path is a
+                lone "M x,y", which paints nothing, so the chart looked empty while the
+                table beside it had data. Draw the point itself instead. */}
+            {points.length === 1 &&
+              seriesNames.map((name, seriesIndex) => (
+                <circle
+                  key={name}
+                  cx={chart.xFor(0)}
+                  cy={chart.yFor(points[0]!.values[seriesIndex] ?? 0)}
+                  r={4}
+                  fill={SERIES_VARS[seriesIndex]}
+                  stroke="hsl(var(--card))"
+                  strokeWidth={2}
+                />
+              ))}
 
             {/* Surface ring keeps the hovered markers legible where the two lines cross. */}
             {hoverIndex !== null &&
