@@ -99,6 +99,23 @@ export function Performance() {
   );
 
   const report = useAsync(() => getOwnReport(groupBy, filters, ROW_LIMIT), [groupBy, filters]);
+  // One day is a single point on a per-date chart, so that case is charted by hour
+  // instead (zero-filled to 24 so the line spans the day).
+  const hourly = groupBy === 'date' && report.data?.rows.length === 1;
+  const hourlyReport = useAsync(
+    () => (hourly ? getOwnReport('hour', filters, 24) : Promise.resolve(null)),
+    [hourly, filters],
+  );
+  const trendPoints = useMemo(() => {
+    if (!hourly) return (report.data?.rows ?? []).map((row) => ({ label: row.label, values: [row.clicks, row.conversions] }));
+    const byHour = new Map((hourlyReport.data?.rows ?? []).map((row) => [row.key, row]));
+    return Array.from({ length: 24 }, (_, hour) => {
+      const key = String(hour).padStart(2, '0');
+      const row = byHour.get(key);
+      return { label: `${key}:00`, values: [row?.clicks ?? 0, row?.conversions ?? 0] };
+    });
+  }, [hourly, hourlyReport.data, report.data]);
+
   const offers = useAsync<AffiliateOffer[]>(() => getRunnableOffers(), []);
   const countries = useAsync<string[]>(() => getOwnClickCountries(), []);
 
@@ -240,7 +257,8 @@ export function Performance() {
 
       {groupBy === 'date' && report.data && (
         <TrendChart
-          points={allRows.map((row) => ({ label: row.label, values: [row.clicks, row.conversions] }))}
+          points={trendPoints}
+          formatLabel={hourly ? (label) => label : undefined}
           seriesNames={['Clicks', 'Conversions']}
           formatValue={(value) => number(Math.round(value))}
         />

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ActivityFeed,
@@ -34,7 +34,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import type { ActivityEvent, ReportRow } from '@fatexia/types';
-import { getDashboard } from '../lib/reports-api';
+import { getDashboard, getGroupedReport } from '../lib/reports-api';
 import { useSession } from '../session/SessionContext';
 import { useAccess } from '../session/AccessContext';
 import { useAsync } from '../hooks/useAsync';
@@ -91,7 +91,25 @@ export function Dashboard() {
     return () => clearInterval(timer);
   }, [reload]);
 
-  const spark = (pick: (row: ReportRow) => number) => data?.trend.map(pick) ?? [];
+  // A single-day window has one trend point, which draws nothing, so that case is
+  // charted by hour instead (zero-filled to all 24 so the line spans the day).
+  const hourly = data?.trend.length === 1;
+  const hourlyReport = useAsync(
+    () => (hourly ? getGroupedReport('hour', apiRange, 24) : Promise.resolve(null)),
+    [hourly, apiRange.dateFrom, apiRange.dateTo],
+  );
+  const trend = useMemo<ReportRow[]>(() => {
+    if (!hourly) return data?.trend ?? [];
+    const byHour = new Map((hourlyReport.data?.rows ?? []).map((row) => [row.key, row]));
+    return Array.from({ length: 24 }, (_, hour) => {
+      const key = String(hour).padStart(2, '0');
+      const row = byHour.get(key);
+      const empty = { clicks: 0, uniqueClicks: 0, conversions: 0, conversionRate: 0, revenue: 0, payout: 0, profit: 0, epc: 0 } as ReportRow;
+      return { ...(row ?? empty), key, label: `${key}:00` };
+    });
+  }, [hourly, hourlyReport.data, data]);
+
+  const spark = (pick: (row: ReportRow) => number) => trend.map(pick);
 
   return (
     <div className="space-y-6">
@@ -138,7 +156,8 @@ export function Dashboard() {
           </div>
 
           <TrendChart
-            points={data.trend.map((row) => ({ label: row.label, values: [row.revenue, row.payout] }))}
+            points={trend.map((row) => ({ label: row.label, values: [row.revenue, row.payout] }))}
+            formatLabel={hourly ? (label) => label : undefined}
             seriesNames={['Revenue', 'Payout']}
             formatValue={(value) => compactMoney(value)}
           />

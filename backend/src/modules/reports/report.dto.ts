@@ -187,6 +187,7 @@ export interface AffiliateGroupedReportResultDto {
 // advertiser sits behind an offer is network-commercial information.
 export const AFFILIATE_REPORT_DIMENSIONS = [
   'date',
+  'hour',
   'offer',
   'country',
   'city',

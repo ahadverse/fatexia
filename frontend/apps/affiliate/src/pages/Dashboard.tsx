@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ActivityFeed,
@@ -26,7 +26,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import type { ActivityEvent, AffiliateReportRow } from '@fatexia/types';
-import { getOwnDashboard } from '../lib/portal-api';
+import { getOwnDashboard, getOwnReport } from '../lib/portal-api';
 import { useSession } from '../session/SessionContext';
 import { useAsync } from '../hooks/useAsync';
 import { compactMoney, money, number, percent } from '../lib/format';
@@ -69,7 +69,25 @@ export function Dashboard() {
     return () => clearInterval(timer);
   }, [reload]);
 
-  const spark = (pick: (row: AffiliateReportRow) => number) => data?.trend.map(pick) ?? [];
+  // A single-day window has one trend point, which draws nothing, so that case is
+  // charted by hour instead (zero-filled to all 24 so the line spans the day).
+  const hourly = data?.trend.length === 1;
+  const hourlyReport = useAsync(
+    () => (hourly ? getOwnReport('hour', apiRange, 24) : Promise.resolve(null)),
+    [hourly, apiRange.dateFrom, apiRange.dateTo],
+  );
+  const trend = useMemo<AffiliateReportRow[]>(() => {
+    if (!hourly) return data?.trend ?? [];
+    const byHour = new Map((hourlyReport.data?.rows ?? []).map((row) => [row.key, row]));
+    return Array.from({ length: 24 }, (_, hour) => {
+      const key = String(hour).padStart(2, '0');
+      const row = byHour.get(key);
+      const empty = { clicks: 0, uniqueClicks: 0, conversions: 0, approvedConversions: 0, rejectedConversions: 0, conversionRate: 0, payout: 0, epc: 0 } as AffiliateReportRow;
+      return { ...(row ?? empty), key, label: `${key}:00` };
+    });
+  }, [hourly, hourlyReport.data, data]);
+
+  const spark = (pick: (row: AffiliateReportRow) => number) => trend.map(pick);
 
   const topOffers = (data?.topOffers ?? []).map((row) => ({
     key: row.key,
@@ -119,7 +137,8 @@ export function Dashboard() {
             </div>
 
             <TrendChart
-              points={data.trend.map((row) => ({ label: row.label, values: [row.clicks, row.conversions] }))}
+              points={trend.map((row) => ({ label: row.label, values: [row.clicks, row.conversions] }))}
+              formatLabel={hourly ? (label) => label : undefined}
               seriesNames={['Clicks', 'Conversions']}
               formatValue={(value) => number(Math.round(value))}
             />
