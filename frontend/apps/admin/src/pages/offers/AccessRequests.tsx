@@ -22,6 +22,25 @@ interface Decision {
   status: 'APPROVED' | 'REJECTED';
 }
 
+const NOTE_PREVIEW_CHARS = 50;
+
+// One-line preview of a long note, with a toggle to show the whole thing.
+function ExpandableNote({ text }: { text?: string | null }) {
+  const [open, setOpen] = useState(false);
+  if (!text) return <span className="text-xs text-muted-foreground">—</span>;
+  const long = text.length > NOTE_PREVIEW_CHARS;
+  return (
+    <div className="max-w-xs text-xs text-muted-foreground">
+      <p className={open || !long ? 'whitespace-pre-wrap break-words' : 'truncate'}>{text}</p>
+      {long && (
+        <button type="button" onClick={() => setOpen((v) => !v)} className="mt-0.5 text-primary hover:underline">
+          {open ? 'See less' : 'See more'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 // Affiliates asking for access to a gated offer. Both the Approvals and Access
 // Requests nav items land here — they are the same queue, filtered differently.
 export function AccessRequests({ defaultStatus = '' as AccessRequestStatus | '' }: { defaultStatus?: AccessRequestStatus | '' }) {
@@ -63,7 +82,7 @@ export function AccessRequests({ defaultStatus = '' as AccessRequestStatus | '' 
     {
       key: 'note',
       header: 'Their note',
-      render: (row) => <span className="text-xs text-muted-foreground">{row.affiliateNote ?? '—'}</span>,
+      render: (row) => <ExpandableNote text={row.affiliateNote} />,
     },
     { key: 'status', header: 'Status', render: (row) => <StatusPill status={row.status} /> },
     { key: 'createdAt', header: 'Requested', render: (row) => dateTime(row.createdAt) },

@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import type { AffiliateManagerContact } from '@fatexia/types';
+import type { Affiliate, AffiliateManagerContact } from '@fatexia/types';
 import { AppShell } from '@fatexia/ui';
 import { affiliateMenu } from './menu';
 import { ManagerCard } from './components/ManagerCard';
 import { useAsync } from './hooks/useAsync';
-import { getOwnManager } from './lib/portal-api';
+import { getOwnManager, getOwnProfile } from './lib/portal-api';
 import { useSession } from './session/SessionContext';
 import { useRealtime } from './realtime/RealtimeContext';
 import { useNotificationBell } from './hooks/useNotificationBell';
@@ -22,6 +22,9 @@ export function Shell({ children }: { children: ReactNode }) {
   // shell, and an assignment change mid-session is rare enough to wait for a reload.
   const manager = useAsync<AffiliateManagerContact | null>(() => getOwnManager(), []);
 
+  const profile = useAsync<Affiliate>(() => getOwnProfile(), []);
+  const publicId = profile.data?.publicId;
+
   function handleNavigate(path: string) {
     if (path === '/logout') {
       logout();
@@ -35,7 +38,7 @@ export function Shell({ children }: { children: ReactNode }) {
       menu={affiliateMenu}
       currentPath={location.pathname}
       onNavigate={handleNavigate}
-      userLabel="Affiliate"
+      userLabel={publicId ? `Affiliate · ID ${publicId}` : 'Affiliate'}
       userName={user?.email ?? 'Affiliate'}
       unreadMessages={unreadMessages}
       onMessagesClick={() => navigate('/messages')}

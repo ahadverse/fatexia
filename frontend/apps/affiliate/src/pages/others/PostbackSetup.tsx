@@ -10,6 +10,11 @@ const MACROS: { token: string; paramKey: string; meaning: string }[] = [
   { token: '{currency}', paramKey: 'currency', meaning: 'Currency of the payout, e.g. USD.' },
   { token: '{status}', paramKey: 'status', meaning: 'Conversion status at the time we fired the postback.' },
   { token: '{offer_id}', paramKey: 'offer_id', meaning: 'The offer the conversion belongs to.' },
+  ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({
+    token: `{sub${n}}`,
+    paramKey: `sub${n}`,
+    meaning: `The sub ID (sub${n}) you passed on the click — handy for tying a conversion back to your own source or campaign.`,
+  })),
 ];
 
 /**
