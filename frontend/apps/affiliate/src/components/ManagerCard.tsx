@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, Copy, Mail, MessagesSquare, Phone, Send } from 'lucide-react';
+import { Check, Copy, Mail, Phone, Send } from 'lucide-react';
 import type { AffiliateManagerContact } from '@fatexia/types';
 
 const ROLE_LABELS: Record<'GENERAL' | 'ACCOUNT' | 'AFFILIATE', string> = {
@@ -48,6 +48,22 @@ function arcStyle(index: number, count: number): React.CSSProperties {
   };
 }
 
+/** Microsoft Teams mark (monochrome): the "T" tile with the two attendee heads. lucide has no brand icons. */
+function TeamsLogo({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <circle cx="16.5" cy="5.5" r="2.5" />
+      <path d="M13 9h9v5.5a4.5 4.5 0 0 1-4.5 4.5h-.3A4.2 4.2 0 0 1 13 14.8V9Z" opacity=".7" />
+      <circle cx="9" cy="5" r="3" />
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M2 8.5A1.5 1.5 0 0 1 3.5 7h11A1.5 1.5 0 0 1 16 8.5v8a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 2 16.5v-8Zm4.2 1.8v1.2h1.6v4.3h1.4v-4.3h1.6v-1.2H6.2Z"
+      />
+    </svg>
+  );
+}
+
 function TeamsButton({ address, label, style }: { address: string; label: string; style: React.CSSProperties }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -69,7 +85,7 @@ function TeamsButton({ address, label, style }: { address: string; label: string
         onFocus={() => setOpen(true)}
         className={`${BUTTON_CLASS} size-full`}
       >
-        <MessagesSquare className="size-3.5" />
+        <TeamsLogo className="size-4" />
       </button>
       {open && (
         // Padded on the left (not margined) so the pointer can cross from the button
@@ -163,12 +179,6 @@ export function ManagerCard({
               {initials(name)}
             </div>
           )}
-          <span
-            className="absolute inset-x-0 bottom-0 truncate bg-black/50 px-2 pb-1.5 pt-1 text-center text-xs font-semibold text-white"
-            title={name}
-          >
-            {name}
-          </span>
         </div>
 
         {contacts.map((contact, index) => {
@@ -192,6 +202,10 @@ export function ManagerCard({
           );
         })}
       </div>
+
+      <p className="mt-2 break-words text-sm font-semibold leading-tight text-card-foreground" title={name}>
+        {name}
+      </p>
     </div>
   );
 }

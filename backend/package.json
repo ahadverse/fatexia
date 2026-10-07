@@ -7,10 +7,10 @@
     "node": ">=22 <25"
   },
   "scripts": {
-    "dev": "tsx watch src/main.ts",
+    "dev": "node api.js && tsx watch src/main.ts",
     "dev:tracking": "tsx watch src/tracking.ts",
-    "build": "tsc -p tsconfig.json",
-    "start": "node dist/main.js",
+    "build": "node api.js && tsc -p tsconfig.json",
+    "start": "node api.js && node dist/main.js",
     "start:tracking": "node dist/tracking.js",
     "lint": "eslint .",
     "format": "prettier --write .",

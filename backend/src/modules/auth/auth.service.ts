@@ -17,6 +17,7 @@ import { notificationService } from '../notifications/notification.service';
 import { NotificationCategory, NotificationLevel } from '../notifications/notification.entity';
 import { sendTemplateEmail, safeSendEmail } from '../../infra/email/brevo-mailer';
 import { EmailTemplateKey } from '../email-templates/email-template.entity';
+import { managerRepository } from '../managers/manager.repository';
 import type { ForgotPasswordDto, RegisterDto, ResendVerificationDto, ResetPasswordDto, VerifyEmailDto } from './auth.dto';
 
 const VERIFICATION_CODE_TTL_MS = 15 * 60 * 1000;
@@ -138,7 +139,7 @@ export const authService = {
           monthlyVolume: dto.monthlyVolume ?? null,
           referralSource: dto.referralSource ?? null,
           referredByAffiliateId: referrer?.id ?? null,
-          assignedManagerId: referrer?.assignedManagerId ?? null,
+          assignedManagerId: referrer?.assignedManagerId ?? (await managerRepository.findDefaultActiveId()),
           referralCode: generateReferralCode(),
           notes: dto.notes ?? null,
         }),

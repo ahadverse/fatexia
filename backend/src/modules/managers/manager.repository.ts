@@ -1,5 +1,6 @@
 import { AppDataSource } from '../../infra/database/data-source';
 import { Affiliate } from '../affiliates/affiliate.entity';
+import { UserStatus } from '../users/user.entity';
 import { Manager } from './manager.entity';
 import type { ManagerFiltersDto } from './manager.dto';
 
@@ -29,6 +30,19 @@ export const managerRepository = {
 
   findById(id: string): Promise<Manager | null> {
     return repository.findOne({ where: { id }, relations: ['user'] });
+  },
+
+  // The network runs on one manager, so "the active manager" is unambiguous in practice;
+  // if there are ever several, the longest-serving one is the default.
+  async findDefaultActiveId(): Promise<string | null> {
+    const row = await repository
+      .createQueryBuilder('manager')
+      .innerJoin('manager.user', 'user')
+      .where('user.status = :status', { status: UserStatus.ACTIVE })
+      .orderBy('manager."createdAt"', 'ASC')
+      .select('manager.id', 'id')
+      .getRawOne<{ id: string }>();
+    return row?.id ?? null;
   },
 
   findByUserId(userId: string): Promise<Manager | null> {

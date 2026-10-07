@@ -7,7 +7,7 @@
     "dev:admin": "pnpm --filter admin dev",
     "dev:affiliate": "pnpm --filter affiliate dev",
     "dev:public": "pnpm --filter public-site dev",
-    "build": "pnpm -r build",
+    "build": "node api.js && pnpm -r build",
     "lint": "eslint .",
     "format": "prettier --write .",
     "typecheck": "pnpm -r typecheck"

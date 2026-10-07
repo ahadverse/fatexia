@@ -4,6 +4,7 @@ import { env } from '../../common/env';
 import { signAccessToken, signRefreshToken } from '../../common/jwt';
 import { nextPublicId } from '../../common/public-id';
 import { managerService } from '../managers/manager.service';
+import { managerRepository } from '../managers/manager.repository';
 import type { AffiliateManagerContactDto } from '../managers/manager.dto';
 import { User, UserRole, UserStatus } from '../users/user.entity';
 import { userProvisioningService } from '../users/user-provisioning.service';
@@ -135,7 +136,8 @@ export const affiliateService = {
     // create an unassigned one that would land under the admin. An admin (scope null)
     // keeps the free choice, including "nobody", which is what "under admin directly"
     // is stored as.
-    const assignedManagerId = scope ?? dto.assignedManagerId ?? null;
+    // Left blank, the affiliate goes to the network's active manager rather than the admin.
+    const assignedManagerId = scope ?? dto.assignedManagerId ?? (await managerRepository.findDefaultActiveId());
 
     const affiliateId = await AppDataSource.transaction(async (manager) => {
       const user = await userProvisioningService.createUser(manager, {
