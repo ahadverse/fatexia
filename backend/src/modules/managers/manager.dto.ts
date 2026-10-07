@@ -143,15 +143,15 @@ export interface AffiliateManagerContactDto {
   fullName: string | null;
   email: string;
   phone: string | null;
-  skype: string | null;
   telegram: string | null;
+  /** The network's Teams address — the same for every contact, manager or support desk. */
   teams: string | null;
   avatarUrl: string | null;
   /** Null for the SUPPORT fallback, which is a desk rather than a person. */
   managerRole: ManagerRole | null;
 }
 
-export function toManagerContactDto(manager: Manager): AffiliateManagerContactDto {
+export function toManagerContactDto(manager: Manager, supportTeams: string | null = null): AffiliateManagerContactDto {
   return {
     kind: 'MANAGER',
     publicId: manager.publicId,
@@ -160,9 +160,9 @@ export function toManagerContactDto(manager: Manager): AffiliateManagerContactDt
     // has set one — an affiliate should never be pointed at a sign-in credential.
     email: manager.contactEmail ?? manager.user?.email ?? '',
     phone: manager.phone,
-    skype: manager.skype,
     telegram: manager.telegram,
-    teams: manager.teams,
+    // One Teams address for the whole network, not the manager's own field.
+    teams: supportTeams,
     avatarUrl: manager.avatarUrl,
     managerRole: manager.managerRole,
   };
@@ -180,7 +180,6 @@ export function toSupportContactDto(
     fullName: `${networkName} Support`,
     email: supportEmail ?? '',
     phone: null,
-    skype: null,
     telegram: supportTelegram,
     teams: supportTeams,
     avatarUrl: null,

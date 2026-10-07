@@ -145,13 +145,13 @@ export const managerService = {
    * for the majority who sit under the admin directly.
    */
   async getContactForAffiliate(assignedManagerId: string | null): Promise<AffiliateManagerContactDto> {
+    const settings = await networkSettingService.getSettings();
     if (assignedManagerId) {
       const manager = await managerRepository.findById(assignedManagerId);
       if (manager && manager.user?.status === UserStatus.ACTIVE) {
-        return toManagerContactDto(manager);
+        return toManagerContactDto(manager, settings.supportTeams);
       }
     }
-    const settings = await networkSettingService.getSettings();
     return toSupportContactDto(settings.networkName, settings.supportEmail, settings.supportTelegram, settings.supportTeams);
   },
 };

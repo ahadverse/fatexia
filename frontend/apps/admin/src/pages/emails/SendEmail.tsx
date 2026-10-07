@@ -1,17 +1,34 @@
 import { useMemo, useState } from 'react';
-import { Button, ConfirmModal, Input, Modal, PageHeader, Select, Textarea, toast } from '@fatexia/ui';
+import { useNavigate } from 'react-router-dom';
+import { Button, ConfirmModal, Input, Modal, PageHeader, Select, Textarea, Toggle, toast } from '@fatexia/ui';
 import type { EmailTemplate } from '@fatexia/types';
 import {
+  createEmailCampaign,
+  getAudienceCounts,
   getEmailTemplates,
   previewManualEmail,
   sendManualEmail,
   MAX_MANUAL_RECIPIENTS,
+  type AudienceCounts,
+  type CampaignAudience,
   type SendEmailResult,
 } from '../../lib/platform-api';
 import { useAsync } from '../../hooks/useAsync';
 
 // Resolved by the server from network settings, so they are never asked for here.
 const AUTO_MACROS = ['network_name', 'support_email'];
+// Filled in per person when sending to an audience; there is no single value to ask for.
+const RECIPIENT_MACROS = ['first_name', 'full_name', 'email', 'public_id'];
+const SAMPLE_RECIPIENT = { first_name: 'Alex', full_name: 'Alex Morgan', email: 'alex@example.com', public_id: 'AFF-1001' };
+
+const AUDIENCES: { value: CampaignAudience; label: string; hint: string }[] = [
+  { value: 'AFFILIATES', label: 'All affiliates', hint: 'Every affiliate account' },
+  { value: 'ADVERTISERS', label: 'All advertisers', hint: "Each advertiser's contact email" },
+  { value: 'MANAGERS', label: 'All managers', hint: 'Every manager login' },
+  { value: 'ALL', label: 'Everyone', hint: 'Affiliates, advertisers and managers, each once' },
+];
+
+type Mode = 'audience' | 'manual';
 
 function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -29,6 +46,16 @@ function parseRecipients(raw: string): string[] {
 }
 
 export function SendEmail() {
+  const navigate = useNavigate();
+  const [mode, setMode] = useState<Mode>('audience');
+  const [audience, setAudience] = useState<CampaignAudience>('AFFILIATES');
+  const [activeOnly, setActiveOnly] = useState(true);
+  const [typedCount, setTypedCount] = useState('');
+  const counts = useAsync<AudienceCounts>(() => getAudienceCounts(activeOnly), [activeOnly]);
+  const audienceSize = counts.data?.[audience] ?? 0;
+  const audienceLabel = AUDIENCES.find((row) => row.value === audience)?.label.toLowerCase() ?? '';
+  const broadcast = mode === 'audience';
+
   const templates = useAsync<EmailTemplate[]>(() => getEmailTemplates(), []);
 
   const [templateId, setTemplateId] = useState('');
@@ -51,8 +78,9 @@ export function SendEmail() {
   // macro typed by hand still gets an input instead of sending blank.
   const macrosNeeded = useMemo(() => {
     const used = [...new Set([...`${subject}\n${body}`.matchAll(/\{([a-z0-9_]+)\}/gi)].map((match) => match[1]!))];
-    return used.filter((name) => !AUTO_MACROS.includes(name));
-  }, [subject, body]);
+    const auto = broadcast ? [...AUTO_MACROS, ...RECIPIENT_MACROS] : AUTO_MACROS;
+    return used.filter((name) => !auto.includes(name));
+  }, [subject, body, broadcast]);
 
   function applyTemplate(id: string) {
     setTemplateId(id);
@@ -76,7 +104,11 @@ export function SendEmail() {
     if (!subject.trim() || !body.trim()) return void toast.error('Add a subject and body first');
     setPreviewing(true);
     try {
-      const preview = await previewManualEmail(content());
+      // A broadcast preview shows a sample person, so per-recipient macros read naturally.
+      const base = content();
+      const preview = await previewManualEmail(
+        broadcast ? { ...base, macros: { ...SAMPLE_RECIPIENT, ...base.macros } } : base,
+      );
       if (preview.unresolved.length > 0) {
         toast.error(`Still empty: ${preview.unresolved.map((name) => `{${name}}`).join(', ')}`);
       }
@@ -106,7 +138,28 @@ export function SendEmail() {
     }
   }
 
+  async function sendBroadcast() {
+    setSending(true);
+    try {
+      await createEmailCampaign({ ...content(), audience, activeOnly, expectedRecipients: audienceSize });
+      toast.success('Sending started — follow progress in Campaigns');
+      navigate('/emails/campaigns');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to start the send');
+      counts.reload();
+    } finally {
+      setSending(false);
+    }
+  }
+
   function validateThenConfirm() {
+    if (broadcast) {
+      if (audienceSize === 0) return void toast.error('That audience has no one to send to');
+      if (!subject.trim()) return void toast.error('Add a subject');
+      if (!body.trim()) return void toast.error('Add a message body');
+      setTypedCount('');
+      return void setConfirming(true);
+    }
     if (recipients.length === 0) return void toast.error('Add at least one recipient');
     if (invalid.length > 0) return void toast.error(`Not a valid address: ${invalid[0]}`);
     if (recipients.length > MAX_MANUAL_RECIPIENTS) {
@@ -138,6 +191,73 @@ export function SendEmail() {
         </Select>
       </Section>
 
+      <div className="inline-flex rounded-md border border-border bg-card p-1 text-sm">
+        {(
+          [
+            ['audience', 'Send to an audience'],
+            ['manual', 'Specific addresses'],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setMode(value)}
+            className={`rounded px-3 py-1.5 font-medium transition-colors ${
+              mode === value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {broadcast && (
+        <Section
+          title="Audience"
+          hint="Everyone in the group gets their own copy and cannot see the others. The list is fixed the moment you send."
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            {AUDIENCES.map((row) => (
+              <label
+                key={row.value}
+                className={`flex cursor-pointer items-start gap-3 rounded-md border p-3 ${
+                  audience === row.value ? 'border-primary bg-primary/5' : 'border-border'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="audience"
+                  checked={audience === row.value}
+                  onChange={() => setAudience(row.value)}
+                  className="mt-1"
+                />
+                <span className="flex-1">
+                  <span className="block text-sm font-medium text-card-foreground">{row.label}</span>
+                  <span className="block text-xs text-muted-foreground">{row.hint}</span>
+                </span>
+                <span className="text-sm font-semibold text-card-foreground">
+                  {counts.data ? counts.data[row.value].toLocaleString() : '—'}
+                </span>
+              </label>
+            ))}
+          </div>
+          <div className="mt-4 flex items-center gap-3">
+            <Toggle checked={activeOnly} onCheckedChange={setActiveOnly} label="Active accounts only" />
+            <p className="text-xs text-muted-foreground">
+              {activeOnly
+                ? 'Pending, inactive, blocked and rejected accounts are skipped.'
+                : 'Pending and inactive accounts are included. Blocked and rejected accounts are never emailed.'}
+            </p>
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Personalise with <span className="font-mono">{'{first_name}'}</span>,{' '}
+            <span className="font-mono">{'{full_name}'}</span>, <span className="font-mono">{'{email}'}</span> and{' '}
+            <span className="font-mono">{'{public_id}'}</span> — filled in for each person.
+          </p>
+        </Section>
+      )}
+
+      {!broadcast && (
       <Section
         title="Recipients"
         hint={`One or more email addresses, separated by commas, spaces or new lines. Each person is sent their own copy and cannot see the others. Limit ${MAX_MANUAL_RECIPIENTS}.`}
@@ -156,6 +276,7 @@ export function SendEmail() {
           {invalid.length > 0 && <span className="text-destructive">Invalid: {invalid.join(', ')}</span>}
         </div>
       </Section>
+      )}
 
       <Section title="Message">
         <div className="space-y-4">
@@ -196,7 +317,7 @@ export function SendEmail() {
         </Section>
       )}
 
-      {result && (
+      {!broadcast && result && (
         <Section title="Result">
           <div className="space-y-2 text-sm">
             {result.sent.length > 0 && (
@@ -218,7 +339,7 @@ export function SendEmail() {
           {previewing ? 'Rendering…' : 'Preview'}
         </Button>
         <Button disabled={sending} onClick={validateThenConfirm}>
-          {sending ? 'Sending…' : 'Send email'}
+          {sending ? 'Sending…' : broadcast ? `Send to ${audienceSize.toLocaleString()}` : 'Send email'}
         </Button>
       </div>
 
@@ -248,8 +369,37 @@ export function SendEmail() {
         </div>
       </Modal>
 
+      <Modal
+        open={confirming && broadcast}
+        onOpenChange={(open) => !open && setConfirming(false)}
+        title={`Send to ${audienceSize.toLocaleString()} recipients?`}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            "{subject}" will go to <strong className="text-card-foreground">{audienceSize.toLocaleString()}</strong>{' '}
+            {audienceLabel}
+            {activeOnly ? ' (active accounts)' : ''} from your network's sending address. This is real email and cannot be
+            recalled; you can cancel while it is still sending.
+          </p>
+          <label className="block">
+            <span className="text-xs font-medium text-muted-foreground">
+              Type <span className="font-mono text-card-foreground">{audienceSize}</span> to confirm
+            </span>
+            <Input value={typedCount} onChange={(event) => setTypedCount(event.target.value)} className="mt-1" autoFocus />
+          </label>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setConfirming(false)}>
+              Cancel
+            </Button>
+            <Button disabled={sending || typedCount.trim() !== String(audienceSize)} onClick={sendBroadcast}>
+              {sending ? 'Starting…' : 'Send now'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       <ConfirmModal
-        open={confirming}
+        open={confirming && !broadcast}
         onOpenChange={(open) => !open && setConfirming(false)}
         title={`Send to ${recipients.length} recipient${recipients.length === 1 ? '' : 's'}?`}
         description={`"${subject}" goes out from your network's sending address now. Real email — this can't be recalled.`}

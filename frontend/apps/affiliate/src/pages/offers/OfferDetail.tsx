@@ -8,7 +8,6 @@ import {
   Gauge,
   Globe2,
   Link2,
-  MonitorSmartphone,
   Shield,
   Target,
   TrendingUp,
@@ -18,7 +17,7 @@ import { Button, CountryFlag, RichText, Skeleton, TrafficSourceList, toast } fro
 import type { AffiliateOffer } from '@fatexia/types';
 import { getAvailableOffer, setOfferFavourite } from '../../lib/offers-api';
 import { useAsync } from '../../hooks/useAsync';
-import { date, money, percent } from '../../lib/format';
+import { money, percent } from '../../lib/format';
 import { payoutAmountLabel, payoutLabels, payoutModes, targetingUnion } from '../../lib/offer-display';
 import { SubIdBuilder } from './SubIdBuilder';
 
@@ -416,23 +415,6 @@ export function OfferDetail() {
               </ul>
             </Panel>
           )}
-
-          <Panel title="Details" icon={<MonitorSmartphone className="size-4" />} accent="primary">
-            <dl className="space-y-3">
-              {[
-                ['Currency', data.currency],
-                ['Deep linking', data.allowDeepLinking ? 'Allowed' : 'Not allowed'],
-                ['Runs from', date(data.startDate ?? null)],
-                ['Runs until', data.endDate ? date(data.endDate) : 'No end date'],
-                ['Added', date(data.createdAt)],
-              ].map(([label, value]) => (
-                <div key={label} className="flex items-center justify-between gap-3 text-sm">
-                  <dt className="text-muted-foreground">{label}</dt>
-                  <dd className="text-right font-medium text-card-foreground">{value}</dd>
-                </div>
-              ))}
-            </dl>
-          </Panel>
         </div>
       </div>
     </div>

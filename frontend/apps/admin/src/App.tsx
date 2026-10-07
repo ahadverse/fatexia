@@ -63,6 +63,7 @@ import { Transactions } from './pages/billing/Transactions';
 import { EmailTemplates } from './pages/emails/EmailTemplates';
 import { EmailSettings } from './pages/emails/EmailSettings';
 import { SendEmail } from './pages/emails/SendEmail';
+import { EmailCampaigns } from './pages/emails/EmailCampaigns';
 import { News } from './pages/others/News';
 import { Integrations } from './pages/others/Integrations';
 import { Profile } from './pages/others/Profile';
@@ -182,6 +183,7 @@ function App() {
           <Route path="/emails" element={<Navigate to="/emails/templates" replace />} />
           <Route path="/emails/templates" element={<Guarded adminOnly element={<EmailTemplates />} />} />
           <Route path="/emails/send" element={<Guarded adminOnly element={<SendEmail />} />} />
+          <Route path="/emails/campaigns" element={<Guarded adminOnly element={<EmailCampaigns />} />} />
           <Route path="/emails/settings" element={<Guarded adminOnly element={<EmailSettings />} />} />
           {/* The templates page used to live here — kept as a redirect so bookmarks
               and any linked-to URL still resolve. */}

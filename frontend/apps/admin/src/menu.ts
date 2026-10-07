@@ -154,6 +154,7 @@ const MENU: GuardedGroup[] = [
         children: [
           { label: 'Templates', path: '/emails/templates' },
           { label: 'Send Email', path: '/emails/send' },
+          { label: 'Campaigns', path: '/emails/campaigns' },
           { label: 'Settings', path: '/emails/settings' },
         ],
       },

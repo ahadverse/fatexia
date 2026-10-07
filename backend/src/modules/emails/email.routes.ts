@@ -5,6 +5,7 @@ import { requireRole } from '../../common/guards/role.guard';
 import { UserRole } from '../users/user.entity';
 import { emailController } from './email.controller';
 import { previewEmailSchema, sendEmailSchema } from './email.dto';
+import { emailCampaignRoutes } from '../email-campaigns/email-campaign.routes';
 
 export const emailRoutes = Router();
 
@@ -15,3 +16,4 @@ emailRoutes.use(requireAuth, requireRole(UserRole.ADMIN));
 
 emailRoutes.post('/send', validate(sendEmailSchema), emailController.send);
 emailRoutes.post('/preview', validate(previewEmailSchema), emailController.preview);
+emailRoutes.use('/campaigns', emailCampaignRoutes);

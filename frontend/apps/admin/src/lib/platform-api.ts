@@ -327,3 +327,70 @@ export function updateGlobalPostback(id: string, input: Partial<GlobalPostbackIn
 export function deleteGlobalPostback(id: string): Promise<void> {
   return apiFetch<void>(`/global-postbacks/${id}`, { method: 'DELETE' });
 }
+
+// Broadcast campaigns
+
+export type CampaignAudience = 'ALL' | 'AFFILIATES' | 'ADVERTISERS' | 'MANAGERS';
+export type CampaignStatus = 'SENDING' | 'COMPLETED' | 'CANCELLED';
+export type CampaignRecipientStatus = 'PENDING' | 'SENT' | 'FAILED' | 'SKIPPED';
+
+export type AudienceCounts = Record<CampaignAudience, number>;
+
+export interface EmailCampaign {
+  id: string;
+  subject: string;
+  body: string;
+  audience: CampaignAudience;
+  activeOnly: boolean;
+  status: CampaignStatus;
+  totalRecipients: number;
+  sentCount: number;
+  failedCount: number;
+  pendingCount: number;
+  createdByEmail: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+}
+
+export interface CampaignRecipient {
+  id: string;
+  email: string;
+  kind: string;
+  fullName: string | null;
+  status: CampaignRecipientStatus;
+  error: string | null;
+  sentAt: string | null;
+}
+
+export function getAudienceCounts(activeOnly: boolean): Promise<AudienceCounts> {
+  return apiFetch<AudienceCounts>(`/emails/campaigns/audiences${toQuery({ activeOnly: String(activeOnly) })}`);
+}
+
+export function createEmailCampaign(
+  input: ManualEmailContent & { audience: CampaignAudience; activeOnly: boolean; expectedRecipients: number },
+): Promise<EmailCampaign> {
+  return apiFetch<EmailCampaign>('/emails/campaigns', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function getEmailCampaigns(filters: { page?: number; pageSize?: number } = {}): Promise<Paginated<EmailCampaign>> {
+  return apiFetch<Paginated<EmailCampaign>>(`/emails/campaigns${toQuery({ ...filters })}`);
+}
+
+export function getEmailCampaign(id: string): Promise<EmailCampaign> {
+  return apiFetch<EmailCampaign>(`/emails/campaigns/${id}`);
+}
+
+export function getCampaignRecipients(
+  id: string,
+  filters: { status?: CampaignRecipientStatus; page?: number; pageSize?: number } = {},
+): Promise<Paginated<CampaignRecipient>> {
+  return apiFetch<Paginated<CampaignRecipient>>(`/emails/campaigns/${id}/recipients${toQuery({ ...filters })}`);
+}
+
+export function cancelEmailCampaign(id: string): Promise<EmailCampaign> {
+  return apiFetch<EmailCampaign>(`/emails/campaigns/${id}/cancel`, { method: 'POST' });
+}
+
+export function retryEmailCampaign(id: string): Promise<EmailCampaign> {
+  return apiFetch<EmailCampaign>(`/emails/campaigns/${id}/retry`, { method: 'POST' });
+}

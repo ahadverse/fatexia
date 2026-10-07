@@ -28,6 +28,7 @@ import { Notification } from '../../modules/notifications/notification.entity';
 import { NewsPost } from '../../modules/news/news-post.entity';
 import { BlogPost } from '../../modules/blog/blog-post.entity';
 import { EmailTemplate } from '../../modules/email-templates/email-template.entity';
+import { EmailCampaign, EmailCampaignRecipient } from '../../modules/email-campaigns/email-campaign.entity';
 import { NetworkSetting } from '../../modules/network-settings/network-setting.entity';
 import { GlobalPostback } from '../../modules/global-postbacks/global-postback.entity';
 import { Integration } from '../../modules/integrations/integration.entity';
@@ -80,6 +81,8 @@ export const AppDataSource = new DataSource({
     NewsPost,
     BlogPost,
     EmailTemplate,
+    EmailCampaign,
+    EmailCampaignRecipient,
     NetworkSetting,
     Integration,
     GeoipDatabase,

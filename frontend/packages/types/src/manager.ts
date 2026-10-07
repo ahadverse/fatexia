@@ -111,8 +111,8 @@ export interface AffiliateManagerContact {
   fullName: string | null;
   email: string;
   phone: string | null;
-  skype: string | null;
   telegram: string | null;
+  /** The network's Teams address, identical for every contact. */
   teams: string | null;
   avatarUrl: string | null;
   /** Null for the SUPPORT fallback, which is a desk rather than a person. */
